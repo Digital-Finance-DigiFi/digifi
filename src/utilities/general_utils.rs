@@ -25,6 +25,6 @@ mod tests {
     fn unit_test_rolling_window() {
         let vec = vec![1.0, 2.0, 3.0, 4.0];
         let result = rolling_window(&vec, 3);
-        assert_eq!(result, vec![&[1.0, 2.0, 3.0][..], &[2.0, 3.0, 4.0][..]]);
+        assert_eq!(result, vec! [&[1.0, 2.0, 3.0][..], &[2.0, 3.0, 4.0][..]]);
     }
 }
