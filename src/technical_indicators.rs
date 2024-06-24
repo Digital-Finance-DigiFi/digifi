@@ -4,7 +4,8 @@ use crate::utilities::compare_array_len;
 
 
 /// # Description
-/// Measure of the decline of the asset from its historical peak.\n
+/// Measure of the decline of the asset from its historical peak.
+/// 
 /// Maximum Drawdown = (Peak Value - Trough Value) / Peak Value
 /// 
 /// # Input

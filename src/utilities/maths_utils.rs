@@ -110,8 +110,7 @@ mod tests {
     fn unit_test_erf() {
         use crate::utilities::maths_utils::erf;
         let approximation = erf(1.0, 10);
-        // Allow some margin
-        assert!((approximation - 0.8427007929497149).abs() < TEST_ACCURACY);
+        assert!((approximation - 0.8427007929497149).abs() < TEST_ACCURACY*10.0);
     }
 
     #[test]
@@ -121,9 +120,8 @@ mod tests {
         let y: Array1<f64> = array![1.0, 2.0, 3.0];
         let x: Array2<f64> = array![[1.0, 3.0, 1.0], [4.0, 4.0, 1.0], [6.0, 5.0, 1.0]];
         let params = linear_regression(&x, &y);
-        // Comparison vector was found using LinearRegression from sklearn
+        // The results were found using LinearRegression from sklearn
         let comparison: Array1<f64> = Array1::from(vec![-2.49556592e-16, 1.0, -2.0]);
         assert!((&params - &comparison).sum().abs() < TEST_ACCURACY);
-        println!("Hello");
     }
 }

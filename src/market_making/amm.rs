@@ -18,7 +18,8 @@ pub struct AMMToken {
 
 
 /// # Description
-/// Liquidity data for an AMM.\n
+/// Liquidity data for an AMM.
+/// 
 /// Characteristic Number = Token 1 Supply * Token 2 Supply
 /// 
 /// # LaTeX Formula
@@ -128,7 +129,8 @@ impl AMMTransactionData {
 
 
 /// # Description
-/// Contains computational methods for an AMM with the liquidity pool given by\n
+/// Contains computational methods for an AMM with the liquidity pool given by:
+/// 
 /// Characteristic Number = Token 1 Supply * Token 2 Supply
 /// 
 /// # LaTeX Formula
@@ -144,7 +146,8 @@ pub struct SimpleAMM {
 
 impl SimpleAMM {
     /// # Description
-    /// Buy a quntity of a token from the AMM by submitting the buy order quoted in terms of the token to putchase.\n
+    /// Buy a quntity of a token from the AMM by submitting the buy order quoted in terms of the token to putchase.
+    /// 
     /// Transaction includes fee as the percentage of the quantity purchased.
     /// 
     /// # Input

@@ -22,7 +22,8 @@ pub trait ProbabilityDistribution {
     fn mgf() -> Array1<f64>;
 
     /// # Description
-    /// Characteristic function (CF).\n
+    /// Characteristic function (CF).
+    /// 
     /// Characteristic function is the Fourier transform of the PDF.
     fn cf() -> Array1<f64>;
 
@@ -33,8 +34,10 @@ pub trait ProbabilityDistribution {
 
 
 /// # Description
-/// Calculates the skewness of a given data array. Skewness measures the asymmetry of the probability distribution of a real-valued random variable about its mean.\n
-/// The skewness value can be positive, zero, negative, or undefined.\n
+/// Calculates the skewness of a given data array. Skewness measures the asymmetry of the probability distribution of a real-valued random variable about its mean.
+/// 
+/// The skewness value can be positive, zero, negative, or undefined.
+/// 
 /// Fisher-Pearson coefficient of skewness is used.
 /// 
 /// # Input
@@ -62,8 +65,10 @@ pub fn skewness(array: &Array1<f64>) -> f64 {
 
 
 /// # Description
-/// Computes the kurtosis of a given data array. Kurtosis is a measure of the "tailedness" of the probability distribution of a real-valued random variable.\n
-/// Higher kurtosis implies a heavier tail.\n
+/// Computes the kurtosis of a given data array. Kurtosis is a measure of the "tailedness" of the probability distribution of a real-valued random variable.
+/// 
+/// Higher kurtosis implies a heavier tail.
+/// 
 /// The calculation here does not subtract 3, hence this is the 'excess kurtosis'.
 /// 
 /// # Input
@@ -91,7 +96,8 @@ pub fn kurtosis(array: &Array1<f64>) -> f64 {
 
 
 /// # Description
-/// Measure of joint variability of two random variables.\n
+/// Measure of joint variability of two random variables.
+/// 
 /// Cov(X,Y) = E[(X-E[X])(Y-E[Y])]
 /// 
 /// # Input

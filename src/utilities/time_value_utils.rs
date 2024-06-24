@@ -221,7 +221,8 @@ impl Compounding {
     }
 
     /// # Description
-    /// Defines a compounding term with either continuous or periodic compounding.\n
+    /// Defines a compounding term with either continuous or periodic compounding.
+    /// 
     /// Note: Compounding term is defined as the discounting terms for future cashflows.
     /// 
     /// # Input
@@ -560,7 +561,6 @@ mod tests {
         let fv_continuous = future_value(100.0, 0.03, 3.0, continuous_compounding);
         assert!((fv_periodic - 100.0*(1.03_f64).powf(3.0)).abs() < TEST_ACCURACY);
         assert!((fv_continuous - 100.0*(0.03*3.0_f64).exp()).abs() < TEST_ACCURACY);
-        println!("{} \t {}", fv_periodic, 100.0*(1.03_f64).powf(3.0));
     }
 
     #[test]

@@ -2,7 +2,8 @@ pub mod capm;
 
 
 /// # Description
-/// Measure of how revenue growth translates to growth of income.\n
+/// Measure of how revenue growth translates to growth of income.
+/// 
 /// Degree of Operating Leverage = (% Change in Profits) / (% Change in Sales) = 1 + Total Fixed Cost / (Quantity of Goods Sold * (Price per Unit - Variable Cost per Unit) - Total Fixed Cost)
 /// 
 /// # Input
@@ -26,7 +27,8 @@ pub fn dol(quantity_of_goods: f64, price_per_unit: f64, variable_cost_per_unit: 
 
 
 /// # Description
-/// The ratio of market price to earnings.\n
+/// The ratio of market price to earnings.
+/// 
 /// Price-to-Earnings Ratio = Share Price / Earnings per Share
 /// 
 /// # Input
@@ -48,7 +50,8 @@ pub fn pe_ratio(share_price: f64, eps: f64) -> f64 {
 
 
 /// # Deescription
-/// The ratio of market price to book value.\n
+/// The ratio of market price to book value.
+/// 
 /// Price-to-Book Ratio = Market Capitalization / Book Value
 /// 
 /// # Input
@@ -70,7 +73,8 @@ pub fn pb_ratio(market_cap: f64, book_value: f64) -> f64 {
 
 
 /// # Description
-/// The ratio of dividend issued by the company to share price.\n
+/// The ratio of dividend issued by the company to share price.
+/// 
 /// Dividend Yield = 100 * Dividend / Share Price
 /// 
 /// # Input
@@ -92,7 +96,8 @@ pub fn dividend_yield(share_price: f64, dividend: f64) -> f64 {
 
 
 /// # Description
-/// Value of assets of the company minus its liabilities.\n
+/// Value of assets of the company minus its liabilities.
+/// 
 /// Book Value = Assets - Liabilities
 /// 
 /// # Input
@@ -114,7 +119,8 @@ pub fn book_value(assets: f64, liabilities: f64) -> f64 {
 
 
 /// # Description
-/// Cost of equity capital (Market capitalization rate).\n
+/// Cost of equity capital (Market capitalization rate).
+/// 
 /// Cost of Equity Capital = (Expected Dividend + Expected Share Price - Share Price) / Share Price
 /// 
 /// # Input
@@ -137,7 +143,8 @@ pub fn cost_of_equity_capital(share_price: f64, expected_dividend: f64, expected
 
 
 /// # Description
-/// Measure of profitability of the company in relation to its equity.\n
+/// Measure of profitability of the company in relation to its equity.
+/// 
 /// ROE = Total Earnings / Book Value
 /// 
 /// # Input
@@ -159,7 +166,8 @@ pub fn roe(total_earning: f64, book_value: f64) -> f64 {
 
 
 /// # Description
-/// Ratio of dividends to earnings per share.\n
+/// Ratio of dividends to earnings per share.
+/// 
 /// Payout Ratio = Dividend per Share / Earnings per Share
 /// 
 /// # Input
@@ -181,7 +189,8 @@ pub fn payout_ratio(dividend_per_share: f64, earnings_per_share: f64) -> f64 {
 
 
 /// # Description
-/// One minus payout ratio.\n
+/// One minus payout ratio.
+/// 
 /// Plowback Ratio = 1 - (Dividend per Share / Earnings per Share)
 /// 
 /// # Input
@@ -227,7 +236,8 @@ pub fn altman_z_score(ebit: f64, total_assets: f64, sales: f64, equity: f64, tot
 
 
 /// # Description
-/// Computes the weighted average cost of capital (WACC), which is the expected return on the company's assets.\n
+/// Computes the weighted average cost of capital (WACC), which is the expected return on the company's assets.
+/// 
 /// WACC = (Debt / (Debt+Equity) * (1 - Corporate Tax Rate) * Return on Debt) + (Equity / (Debt+Equity) * Return on Equity)
 /// 
 /// # Input
@@ -252,7 +262,8 @@ pub fn weighted_average_cost_of_capital(equity: f64, debt: f64, return_on_equity
 
 
 /// # Description
-/// Computes expected return on the equity (ROE) portion of the company.\n
+/// Computes expected return on the equity (ROE) portion of the company.
+/// 
 /// ROE = Return on Assets + (Return on Assets - Return on Debt * (1 - Corporate Tax Rate)) * Debt / Equity
 /// 
 /// # Input
@@ -277,7 +288,8 @@ pub fn expected_return_on_equity(equity: f64, debt: f64, return_on_assets: f64, 
 
 
 /// # Description
-/// Unlevered beta, which is the systematic risk of the company's assets.\n
+/// Unlevered beta, which is the systematic risk of the company's assets.
+/// 
 /// Unlevered Beta = (Debt / (Debt+Equity) * Beta of Debt) + (Equity / (Debt+Equity) * Beta of Equity)
 /// 
 /// # Input
@@ -297,7 +309,8 @@ pub fn unlevered_beta(equity: f64, debt: f64, beta_equity: f64, beta_debt: f64) 
 
 
 /// # Description
-/// Levered beta, which is the equity-only beta of the company.\n
+/// Levered beta, which is the equity-only beta of the company.
+/// 
 /// Levered Beta = Beta of Assets + (Beta of Assets - Beta of Debt) * (Debt / Equity)
 /// 
 /// # Input
@@ -317,7 +330,8 @@ pub fn levered_beta(equity: f64, debt: f64, beta_assets: f64, beta_debt: f64) ->
 
 
 /// # Description
-/// Calculates an advantage of debt financing for a company as opposed to equity financing from perspective of tax optimization.\n
+/// Calculates an advantage of debt financing for a company as opposed to equity financing from perspective of tax optimization.
+/// 
 /// Relative Tax Advantage of Debt = (1 - Personal Tax on Interest Income) / ((1 - Effective Personal Tax) * (1 - Corporate Tax))
 /// 
 /// # Input

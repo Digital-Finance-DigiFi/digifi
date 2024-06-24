@@ -184,7 +184,8 @@ pub fn adjusted_r_square(beta: f64, sigma_market: f64, sigma_epsilon: f64, sampl
 
 
 /// # Description
-/// CAPM, three-factor and five-factor Famma-French models.\n
+/// CAPM, three-factor and five-factor Famma-French models.
+/// 
 /// Contains methods for finding asset beta and predicting expected asset returns with the given beta.
 /// 
 /// # Links
@@ -315,7 +316,7 @@ mod tests {
                                                 Some(sample_data.get("rmw").unwrap().clone()), Some(sample_data.get("cma").unwrap().clone()));
         let capm: CAPM = CAPM::new(capm_data);
         let params: HashMap<String, f64> = capm.get_parameters(sample_data.get("aapl").unwrap().clone());
-        // // Results were found using LinearRegression from sklearn
+        // The results were found using LinearRegression from sklearn
         assert!((params.get("alpha").unwrap() - 0.013530149403422963).abs() < TEST_ACCURACY);
         assert!((params.get("beta").unwrap() - 1.37731033).abs() < TEST_ACCURACY);
         assert!((params.get("beta_s").unwrap() - -0.38490771).abs() < TEST_ACCURACY);
