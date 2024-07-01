@@ -1,5 +1,5 @@
 use ndarray::Array1;
-use crate::utilities::maths_utils::n_choose_r;
+use crate::statistics::n_choose_r;
 use crate::lattice_models::LatticeModel;
 use crate::financial_instruments::Payoff;
 

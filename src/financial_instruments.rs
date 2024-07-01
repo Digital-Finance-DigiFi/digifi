@@ -1,3 +1,6 @@
+pub mod rates_and_swaps;
+
+
 use ndarray::Array1;
 
 
@@ -44,6 +47,13 @@ pub trait FinancialInstrument {
     /// Computes the future value of the financial instrument.
     fn future_value(&self) -> f64;
 
+    /// # Description
+    /// Simulates the paths of price action for the financial instrument.
+    fn stochastic_simulation(&self) -> Vec<Array1<f64>>;
+
+    /// # Description
+    /// Genrates and updates the historica data about the asset.
+    fn generate_historic_data(&self) -> ();
 }
 
 

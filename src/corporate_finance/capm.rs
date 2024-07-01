@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 use ndarray::{Array1, Array2};
 use crate::utilities::compare_array_len;
-use crate::utilities::maths_utils::linear_regression;
-use crate::probability_distributions::covariance;
+use crate::statistics::{covariance, linear_regression};
 
 
 #[derive(Clone)]
@@ -134,52 +133,6 @@ impl CAPMData {
     pub fn cma(&self) -> Option<Array1<f64>> {
         self.cma.clone()
     }
-}
-
-
-/// # Description
-/// The ratio of the systematic variance to the total variance.
-/// 
-/// # Input
-/// - beta: Beta coefficient of the model
-/// - sigma_market: Standard deviation of market returns
-/// - sigma_epsilon: Standard deviation of the error in the model
-/// 
-/// # Output
-/// - r_square: The ratio of exaplained variance to all variance
-/// 
-/// # LaTeX Formula
-/// - R^{2} = \\frac{\\beta^{2}\\sigma^{2}_{M}}{\\beta^{2}\\sigma^{2}_{M} + \\sigma^{2}(\\epsilon)}
-/// 
-/// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Coefficient_of_determination
-/// - Original Source: N/A
-pub fn r_square(beta: f64, sigma_market: f64, sigma_epsilon: f64) -> f64 {
-    (beta.powi(2) * sigma_market.powi(2)) / ((beta.powi(2)*sigma_market.powi(2)) + sigma_epsilon.powi(2))
-}
-
-
-/// # Description
-/// Adjusted R-square for the upward bias in the R-square due to estimated values of the parameters used.
-/// 
-/// # Input
-/// - beta: Beta coefficient of the model
-/// - sigma_market: Standard deviation of market returns
-/// - sigma_epsilon: Standard deviation of the error in the model
-/// - sample_size: Number of points used in the model
-/// - k_variables: Number of variables in the model
-/// 
-/// # Output
-/// - adjusted_r_square: R-square adjusted for upward estimation bias
-/// 
-/// # LaTeX Formula
-/// - R^{2}_{A} = 1 - (1-R^{2})\\frac{n-1}{n-k-1}
-/// 
-/// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Coefficient_of_determination#Adjusted_R2
-/// - Original Source: N/A
-pub fn adjusted_r_square(beta: f64, sigma_market: f64, sigma_epsilon: f64, sample_size: usize, k_variables: usize) -> f64 {
-    1.0 - (1.0-r_square(beta, sigma_market, sigma_epsilon)) * (sample_size as f64 - 1.0) / ((sample_size-k_variables) as f64 - 1.0)
 }
 
 
