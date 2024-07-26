@@ -1,4 +1,6 @@
+use std::io::Error;
 use ndarray::Array1;
+use crate::utilities::{input_error, data_error};
 use crate::financial_instruments::Payoff;
 use crate::lattice_models::LatticeModel;
 
@@ -17,9 +19,9 @@ use crate::lattice_models::LatticeModel;
 /// 
 /// # Exceptions
 /// - Panics if the value of u or d is non-positive
-pub fn trinomial_tree_nodes(s_0: f64, u: f64, d: f64, n_steps: usize) -> Vec<Array1<f64>> {
+pub fn trinomial_tree_nodes(s_0: f64, u: f64, d: f64, n_steps: usize) -> Result<Vec<Array1<f64>>, Error> {
     if (u <= 0.0) || (d <= 0.0) {
-        panic!("The arguments u and d must be positive multiplicative factors of the trinomial model.");
+        return Err(input_error( "The arguments u and d must be positive multiplicative factors of the trinomial model."));
     }
     let s: f64 = (u * d).sqrt();
     let mut trinomial_tree: Vec<Array1<f64>> = vec![Array1::from_vec(vec![s_0])];
@@ -32,7 +34,7 @@ pub fn trinomial_tree_nodes(s_0: f64, u: f64, d: f64, n_steps: usize) -> Vec<Arr
         current_layer.push(u_node);
         trinomial_tree.push(Array1::from_vec(current_layer));
     }
-    trinomial_tree
+    Ok(trinomial_tree)
 }
 
 
@@ -61,31 +63,31 @@ pub fn trinomial_tree_nodes(s_0: f64, u: f64, d: f64, n_steps: usize) -> Vec<Arr
 /// - Panics if the value of p_u or p_d is not in the range [0,1]
 /// - Panics if the sum of probabilities p_u and p_d exceeds 1
 /// - Panics if the length of exercise_time_steps is not of length n_steps
-pub fn trinomial_model(payoff_object: Box<dyn Payoff>, s_0: f64, u: f64, d: f64, p_u: f64, p_d: f64, n_steps: usize, exercise_time_steps: Option<Vec<bool>>) -> f64 {
+pub fn trinomial_model(payoff_object: Box<dyn Payoff>, s_0: f64, u: f64, d: f64, p_u: f64, p_d: f64, n_steps: usize, exercise_time_steps: Option<Vec<bool>>) -> Result<f64, Error> {
     // Data validation.
-    payoff_object.validate_payoff(5);
+    payoff_object.validate_payoff(5)?;
     if (u <= 0.0) || (d <= 0.0) {
-        panic!("The arguments u and d must be positive multiplicative factors of the trinomial model.");
+        return Err(input_error("The arguments u and d must be positive multiplicative factors of the trinomial model."));
     }
     if (p_u <= 0.0) || (1.0 <= p_u) || (p_d <= 0.0) || (1.0 <= p_d) {
-        panic!("The arguments p_u and p_d must be a defined over a range [0,1].");
+        return Err(input_error("The arguments p_u and p_d must be a defined over a range [0,1]."));
     }
     if 1.0 < (p_u + p_d) {
-        panic!("The probabilities p_u, p_d and (1-p_u-p_d) must add up to 1.");
+        return Err(input_error("The probabilities p_u, p_d and (1-p_u-p_d) must add up to 1."));
     }
     let p_s: f64 = 1.0 - p_u - p_d;
     let exercise_time_steps_: Vec<bool>;
     match exercise_time_steps {
         Some(exercise_time_steps_vec) => {
             if exercise_time_steps_vec.len() != n_steps {
-                panic!("The argument exercise_time_steps should be of length n_steps.");
+                return Err(data_error("The argument exercise_time_steps should be of length n_steps."));
             }
             exercise_time_steps_ = exercise_time_steps_vec
         },
         None => { exercise_time_steps_ = vec![true; n_steps]; },
     }
     // Trinomial model.
-    let mut trinomial_tree: Vec<Array1<f64>> = trinomial_tree_nodes(s_0, u, d, n_steps);
+    let mut trinomial_tree: Vec<Array1<f64>> = trinomial_tree_nodes(s_0, u, d, n_steps)?;
     let final_payoff_step: usize = trinomial_tree.len() - 1;
     trinomial_tree[final_payoff_step] = payoff_object.payoff(&trinomial_tree[final_payoff_step]);
     for i in (0..(trinomial_tree.len()-1)).rev() {
@@ -101,7 +103,7 @@ pub fn trinomial_model(payoff_object: Box<dyn Payoff>, s_0: f64, u: f64, d: f64,
         }
         trinomial_tree[i] = Array1::from_vec(layer);
     }
-    trinomial_tree[0][0]
+    Ok(trinomial_tree[0][0])
 }
 
 
@@ -146,17 +148,17 @@ impl BrownianMotionTrinomialModel {
     /// - sigma: Volatility of the underlying asset
     /// - q: Dividend yield
     /// - n_steps: Number of steps in the trinomial model
-    pub fn new(payoff_object: Box<dyn Payoff>, s_0: f64, time_to_maturity: f64, r: f64, sigma: f64, q: f64, n_steps: usize) -> Self {
-        payoff_object.validate_payoff(5);
+    pub fn new(payoff_object: Box<dyn Payoff>, s_0: f64, time_to_maturity: f64, r: f64, sigma: f64, q: f64, n_steps: usize) -> Result<Self, Error> {
+        payoff_object.validate_payoff(5)?;
         let dt: f64 = time_to_maturity / (n_steps as f64);
         if (2.0 * sigma.powi(2) / (r-q).powi(2)) <= dt {
-            panic!("With the given arguments, the condition \\Delta t<\\frac{{\\sigma^{{2}}}}{{(r-q)^{{2}}}} is not satisfied.");
+            return Err(data_error("With the given arguments, the condition \\Delta t<\\frac{{\\sigma^{{2}}}}{{(r-q)^{{2}}}} is not satisfied."));
         }
         let u: f64 = (sigma * (2.0*dt).sqrt()).exp();
         let d: f64 = (-sigma * (2.0*dt).sqrt()).exp();
         let p_u: f64 = (((dt*(r-q)/2.0).exp() - (-sigma*(dt/2.0).sqrt()).exp()) / ((sigma*(dt/2.0).sqrt()).exp() - (-sigma*(dt/2.0).sqrt()).exp())).powi(2);
         let p_d: f64 = (((sigma*(dt/2.0).sqrt()).exp() - ((dt*(r-q)/2.0).exp())) / ((sigma*(dt/2.0).sqrt()).exp() - (-sigma*(dt/2.0).sqrt()).exp())).powi(2);
-        BrownianMotionTrinomialModel { payoff_object, s_0, time_to_maturity, r, _sigma: sigma, _q: q, n_steps, _dt: dt, u, d, p_u, p_d }
+        Ok(BrownianMotionTrinomialModel { payoff_object, s_0, time_to_maturity, r, _sigma: sigma, _q: q, n_steps, _dt: dt, u, d, p_u, p_d })
     }
 }
 
@@ -166,12 +168,12 @@ impl LatticeModel for BrownianMotionTrinomialModel {
     /// 
     /// # Output
     /// - The present value of an instrument with the European exercise style
-    fn european(&self) -> f64 {
+    fn european(&self) -> Result<f64, Error> {
         let mut exercise_time_steps: Vec<bool> = Vec::<bool>::new();
         for _ in 0..self.n_steps {
             exercise_time_steps.push(false);
         }
-        (-self.r*self.time_to_maturity).exp() * trinomial_model(self.payoff_object.clone_box(), self.s_0, self.u, self.d, self.p_u, self.p_d, self.n_steps, Some(exercise_time_steps))
+        Ok((-self.r*self.time_to_maturity).exp() * trinomial_model(self.payoff_object.clone_box(), self.s_0, self.u, self.d, self.p_u, self.p_d, self.n_steps, Some(exercise_time_steps))?)
     }
 
     /// # Description
@@ -179,12 +181,12 @@ impl LatticeModel for BrownianMotionTrinomialModel {
     /// 
     /// # Output
     /// - The present value of an instrument with the American exercise style
-    fn american(&self) -> f64 {
+    fn american(&self) -> Result<f64, Error> {
         let mut exercise_time_steps: Vec<bool> = Vec::<bool>::new();
         for _ in 0..self.n_steps {
             exercise_time_steps.push(true);
         }
-        (-self.r*self.time_to_maturity).exp() * trinomial_model(self.payoff_object.clone_box(), self.s_0, self.u, self.d, self.p_u, self.p_d, self.n_steps, Some(exercise_time_steps))
+        Ok((-self.r*self.time_to_maturity).exp() * trinomial_model(self.payoff_object.clone_box(), self.s_0, self.u, self.d, self.p_u, self.p_d, self.n_steps, Some(exercise_time_steps))?)
     }
 
     /// # Description
@@ -195,8 +197,8 @@ impl LatticeModel for BrownianMotionTrinomialModel {
     /// 
     /// # Output
     /// - The present value of an instrument with the Bermudan exercise style
-    fn bermudan(&self, exercise_time_steps: Vec<bool>) -> f64 {
-        (-self.r*self.time_to_maturity).exp() * trinomial_model(self.payoff_object.clone_box(), self.s_0, self.u, self.d, self.p_u, self.p_d, self.n_steps, Some(exercise_time_steps))
+    fn bermudan(&self, exercise_time_steps: Vec<bool>) -> Result<f64, Error> {
+        Ok((-self.r*self.time_to_maturity).exp() * trinomial_model(self.payoff_object.clone_box(), self.s_0, self.u, self.d, self.p_u, self.p_d, self.n_steps, Some(exercise_time_steps))?)
     }
 }
 
@@ -209,7 +211,7 @@ mod tests {
     #[test]
     fn unit_test_trinomial_tree_nodes() -> () {
         use crate::lattice_models::trinomial_models::trinomial_tree_nodes;
-        let tree: Vec<Array1<f64>> = trinomial_tree_nodes(10.0, 1.2, 0.9, 2);
+        let tree: Vec<Array1<f64>> = trinomial_tree_nodes(10.0, 1.2, 0.9, 2).unwrap();
         let s: f64 = 1.0392304845;
         assert!((&tree[0] - Array1::from_vec(vec![10.0])).sum().abs() < TEST_ACCURACY);
         assert!((&tree[1] - Array1::from_vec(vec![9.0, 10.0*s, 12.0])).sum().abs() < TEST_ACCURACY);
@@ -221,7 +223,7 @@ mod tests {
         use crate::lattice_models::trinomial_models::trinomial_model;
         use crate::financial_instruments::LongCall;
         let long_call: LongCall = LongCall { k: 11.0, cost: 0.0 };
-        let fair_value: f64 = trinomial_model(Box::new(long_call), 10.0, 1.2, 0.9, 0.25, 0.25, 2, Some(vec![false, false]));
+        let fair_value: f64 = trinomial_model(Box::new(long_call), 10.0, 1.2, 0.9, 0.25, 0.25, 2, Some(vec![false, false])).unwrap();
         let s: f64 = 1.0392304845;
         let analytic_solution: f64 = 0.25*(0.25*3.4 + 0.5*(12.0*s - 11.0) + 0.25*0.0) + 0.5*(0.25*(12.0*s - 11.0) + 0.5*0.0 + 0.25*0.0) + 0.25*(0.25*0.0 + 0.5*0.0 + 0.25*0.0);
         assert!((fair_value - analytic_solution).abs() < TEST_ACCURACY);
@@ -232,7 +234,7 @@ mod tests {
         use crate::lattice_models::trinomial_models::trinomial_model;
         use crate::financial_instruments::Straddle;
         let straddle: Straddle = Straddle { k: 11.0, cost_c: 0.0, cost_p: 0.0 };
-        let fair_value: f64 = trinomial_model(Box::new(straddle), 10.0, 1.2, 0.9, 0.25, 0.25, 2, Some(vec![false, false]));
+        let fair_value: f64 = trinomial_model(Box::new(straddle), 10.0, 1.2, 0.9, 0.25, 0.25, 2, Some(vec![false, false])).unwrap();
         let s: f64 = 1.0392304845;
         let analytic_solution: f64 = 0.25*(0.25*3.4 + 0.5*(12.0*s - 11.0) + 0.25*(11.0 - 10.0*s*s)) + 0.5*(0.25*(12.0*s - 11.0) + 0.5*(11.0 - 10.0*s*s) + 0.25*(11.0 - 9.0*s)) + 0.25*(0.25*(11.0 - 10.0*s*s) + 0.5*(11.0 - 9.0*s) + 0.25*2.9);
         assert!((fair_value - analytic_solution).abs() < TEST_ACCURACY);
@@ -244,8 +246,8 @@ mod tests {
         use crate::lattice_models::LatticeModel;
         use crate::financial_instruments::LongCall;
         let long_call: LongCall = LongCall { k: 11.0, cost: 0.0 };
-        let bmbm: BrownianMotionTrinomialModel = BrownianMotionTrinomialModel::new(Box::new(long_call), 10.0, 1.0, 0.02, 0.2, 0.0, 30);
-        let fair_value = bmbm.european();
+        let bmbm: BrownianMotionTrinomialModel = BrownianMotionTrinomialModel::new(Box::new(long_call), 10.0, 1.0, 0.02, 0.2, 0.0, 30).unwrap();
+        let fair_value = bmbm.european().unwrap();
         // Test accuracy depends on the conversion between Brownian-scaled binomial model and Black-Scholes analytic solution
         // The result were found using Black-Scholes calculator online
         assert!((fair_value - 0.49).abs() < 1_000_000.0*TEST_ACCURACY);

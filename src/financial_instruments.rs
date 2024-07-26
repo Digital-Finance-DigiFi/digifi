@@ -1,7 +1,9 @@
 pub mod rates_and_swaps;
 
 
+use std::io::Error;
 use ndarray::Array1;
+use crate::utilities::{input_error, data_error};
 
 
 pub enum FinancialInstrumentType {
@@ -49,7 +51,7 @@ pub trait FinancialInstrument {
 
     /// # Description
     /// Simulates the paths of price action for the financial instrument.
-    fn stochastic_simulation(&self) -> Vec<Array1<f64>>;
+    fn stochastic_simulation(&self) -> Result<Vec<Array1<f64>>, Error>;
 
     /// # Description
     /// Genrates and updates the historica data about the asset.
@@ -81,12 +83,13 @@ pub trait Payoff: PayoffClone {
     /// 
     /// # Input
     /// - length_value: Number of test data points to validate payoff method on
-    fn validate_payoff(&self, val_length: usize) -> () {
+    fn validate_payoff(&self, val_length: usize) -> Result<(), Error> {
         let s: Array1<f64> = Array1::from_vec(vec![1.0; val_length]);
         let result: Array1<f64> = self.payoff(&s);
         if result.len() != val_length {
-            panic!("The payoff does not produce an array of length {}.", val_length);
+            return Err(data_error(format!("The payoff does not produce an array of length {}.", val_length)));
         }
+        Ok(())
     }
 
     /// # Description
@@ -300,11 +303,11 @@ impl BullCollar {
     /// 
     /// # Panics
     /// - Panics if the long put strike price is larger than the short call strike price
-    pub fn new(k_p: f64, k_c: f64, cost_p: f64, cost_c: f64, cost_s: f64) -> Self {
+    pub fn new(k_p: f64, k_c: f64, cost_p: f64, cost_c: f64, cost_s: f64) -> Result<Self, Error> {
         if k_c < k_p {
-            panic!("The argument k_p must be smaller or equal to k_c.");
+            return Err(input_error("The argument k_p must be smaller or equal to k_c."));
         }
-        BullCollar { k_p, k_c, cost_p, cost_c, cost_s }
+        Ok(BullCollar { k_p, k_c, cost_p, cost_c, cost_s })
     }
 }
 
@@ -372,11 +375,11 @@ impl BearCollar {
     /// 
     /// # Panics
     /// - Panics if the short put strike price is larger than the long call strike price
-    pub fn new(k_p: f64, k_c: f64, cost_p: f64, cost_c: f64, cost_s: f64) -> Self {
+    pub fn new(k_p: f64, k_c: f64, cost_p: f64, cost_c: f64, cost_s: f64) -> Result<Self, Error> {
         if k_c < k_p {
-            panic!("The argument k_p must be smaller or equal to k_c.");
+            return Err(input_error("The argument k_p must be smaller or equal to k_c."));
         }
-        BearCollar { k_p, k_c, cost_p, cost_c, cost_s }
+        Ok(BearCollar { k_p, k_c, cost_p, cost_c, cost_s })
     }
 }
 
@@ -441,11 +444,11 @@ impl BullSpread {
     /// 
     /// # Panics
     /// - Panics if the short call strike price is smaller than the long call strike price
-    pub fn new(k_l: f64, k_s: f64, cost_l: f64, cost_s: f64) -> Self {
+    pub fn new(k_l: f64, k_s: f64, cost_l: f64, cost_s: f64) -> Result<Self, Error> {
         if k_s < k_l {
-            panic!("The argument k_l must be smaller or equal to k_s.");
+            return Err(input_error("The argument k_l must be smaller or equal to k_s."));
         }
-        BullSpread { k_l, k_s, cost_l, cost_s }
+        Ok(BullSpread { k_l, k_s, cost_l, cost_s })
     }
 }
 
@@ -510,11 +513,11 @@ impl BearSpread {
     /// 
     /// # Panics
     /// - Panics if the long put strike price is smaller than the short put strike price
-    pub fn new(k_l: f64, k_s: f64, cost_l: f64, cost_s: f64) -> Self {
+    pub fn new(k_l: f64, k_s: f64, cost_l: f64, cost_s: f64) -> Result<Self, Error> {
         if k_l < k_s {
-            panic!("The argument k_s must be smaller or equal to k_l.");
+            return Err(input_error("The argument k_s must be smaller or equal to k_l."));
         }
-        BearSpread { k_l, k_s, cost_l, cost_s }
+        Ok(BearSpread { k_l, k_s, cost_l, cost_s })
     }
 }
 
@@ -585,15 +588,15 @@ impl LongButterfly {
     /// 
     /// # Panics
     /// - Panics if the long put strike price is smaller than the short put strike price
-    pub fn new(k1_c: f64, k2_c: f64, k_p: f64, cost1_c: f64, cost2_c: f64, cost_p: f64) -> Self {
+    pub fn new(k1_c: f64, k2_c: f64, k_p: f64, cost1_c: f64, cost2_c: f64, cost_p: f64) -> Result<Self, Error> {
         // Check that k1_c <= k_p <= k2_c
         if k2_c < k_p {
-            panic!("The argument k_p must be smaller or equal to k1_c.");
+            return Err(input_error("The argument k_p must be smaller or equal to k1_c."));
         }
         if k_p < k1_c {
-            panic!("The argument k1_c must be smaller or equal to k_p.");
+            return Err(input_error("The argument k1_c must be smaller or equal to k_p."));
         }
-        LongButterfly { k1_c, k2_c, k_p, cost1_c, cost2_c, cost_p }
+        Ok(LongButterfly { k1_c, k2_c, k_p, cost1_c, cost2_c, cost_p })
     }
 }
 
@@ -665,11 +668,11 @@ impl BoxSpread {
     /// 
     /// # Panics
     /// - Panics if the k_2 strike price is smaller than the k_1 strike price
-    pub fn new(k_1: f64, k_2: f64, cost_lc: f64, cost_sp: f64, cost_sc: f64, cost_lp: f64) -> Self {
+    pub fn new(k_1: f64, k_2: f64, cost_lc: f64, cost_sp: f64, cost_sc: f64, cost_lp: f64) -> Result<Self, Error> {
         if k_2 < k_1 {
-            panic!("The argument k_1 must be smaller or equal to k_2.");
+            return Err(input_error("The argument k_1 must be smaller or equal to k_2."));
         }
-        BoxSpread { k_1, k_2, cost_lc, cost_sp, cost_sc, cost_lp }
+        Ok(BoxSpread { k_1, k_2, cost_lc, cost_sp, cost_sc, cost_lp })
     }
 }
 
@@ -782,11 +785,11 @@ impl Strangle {
     /// 
     /// # Panics
     /// - Panics if the k_c strike price is smaller or equal to the k_p strike price
-    pub fn new(k_c: f64, k_p: f64, cost_c: f64, cost_p: f64) -> Self {
+    pub fn new(k_c: f64, k_p: f64, cost_c: f64, cost_p: f64) -> Result<Self, Error> {
         if k_c <= k_p {
-            panic!("The argument k_p must be smaller than k_c.");
+            return Err(input_error("The argument k_p must be smaller than k_c."));
         }
-        Strangle { k_c, k_p, cost_c, cost_p }
+        Ok(Strangle { k_c, k_p, cost_c, cost_p })
     }
 }
 
@@ -959,7 +962,7 @@ mod tests {
     fn unit_test_bull_collar() -> () {
         use crate::financial_instruments::BullCollar;
         let s: Array1<f64> = Array1::range(3.0, 7.0, 0.5);
-        let bull_collar: BullCollar = BullCollar::new(4.0, 6.0, 1.0, 1.0, 5.0);
+        let bull_collar: BullCollar = BullCollar::new(4.0, 6.0, 1.0, 1.0, 5.0).unwrap();
         assert!((bull_collar.profit(&s) - Array1::from_vec(vec![-1.0, -1.0, -1.0, -0.5, 0.0, 0.5, 1.0, 1.0])).sum().abs() < TEST_ACCURACY);
     }
 
@@ -967,7 +970,7 @@ mod tests {
     fn unit_test_bear_collar() -> () {
         use crate::financial_instruments::BearCollar;
         let s: Array1<f64> = Array1::range(3.0, 7.0, 0.5);
-        let bear_collar: BearCollar = BearCollar::new(4.0, 6.0, 1.0, 1.0, 5.0);
+        let bear_collar: BearCollar = BearCollar::new(4.0, 6.0, 1.0, 1.0, 5.0).unwrap();
         assert!((bear_collar.profit(&s) - Array1::from_vec(vec![1.0, 1.0, 1.0, 0.5, 0.0, -0.5, -1.0, -1.0])).sum().abs() < TEST_ACCURACY);
     }
 
@@ -975,7 +978,7 @@ mod tests {
     fn unit_test_bull_spread() -> () {
         use crate::financial_instruments::BullSpread;
         let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
-        let bull_spread: BullSpread = BullSpread::new(4.0, 6.0, 1.0, 1.0);
+        let bull_spread: BullSpread = BullSpread::new(4.0, 6.0, 1.0, 1.0).unwrap();
         assert!((bull_spread.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, 1.0, 2.0, 2.0])).sum().abs() < TEST_ACCURACY)
     }
 
@@ -983,7 +986,7 @@ mod tests {
     fn unit_test_bear_spread() -> () {
         use crate::financial_instruments::BearSpread;
         let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
-        let bear_spread: BearSpread = BearSpread::new(6.0, 4.0, 1.0, 1.0);
+        let bear_spread: BearSpread = BearSpread::new(6.0, 4.0, 1.0, 1.0).unwrap();
         assert!((bear_spread.payoff(&s) - Array1::from_vec(vec![2.0, 2.0, 1.0, 0.0, 0.0])).sum().abs() < TEST_ACCURACY)
     }
 
@@ -991,7 +994,7 @@ mod tests {
     fn unit_test_long_butterfly() -> () {
         use crate::financial_instruments::LongButterfly;
         let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
-        let long_butterfly: LongButterfly = LongButterfly::new(4.0, 6.0, 5.0, 1.0, 1.0, 1.0);
+        let long_butterfly: LongButterfly = LongButterfly::new(4.0, 6.0, 5.0, 1.0, 1.0, 1.0).unwrap();
         assert!((long_butterfly.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, 1.0, 0.0, 0.0])).sum().abs() < TEST_ACCURACY);
     }
 
@@ -999,7 +1002,7 @@ mod tests {
     fn unit_test_box_spread() -> () {
         use crate::financial_instruments::BoxSpread;
         let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
-        let box_spread: BoxSpread = BoxSpread::new(4.0, 6.0, 1.0, 1.0, 1.0, 1.0);
+        let box_spread: BoxSpread = BoxSpread::new(4.0, 6.0, 1.0, 1.0, 1.0, 1.0).unwrap();
         assert!((box_spread.payoff(&s) - Array1::from_vec(vec![2.0, 2.0, 2.0, 2.0, 2.0])).sum().abs() < TEST_ACCURACY);
     }
 
@@ -1015,7 +1018,7 @@ mod tests {
     fn unit_test_strangle() -> () {
         use crate::financial_instruments::Strangle;
         let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
-        let strangle: Strangle = Strangle::new(6.0, 4.0, 1.0, 1.0);
+        let strangle: Strangle = Strangle::new(6.0, 4.0, 1.0, 1.0).unwrap();
         assert!((strangle.payoff(&s) - Array1::from_vec(vec![1.0, 0.0, 0.0, 0.0, 1.0])).sum().abs() < TEST_ACCURACY);
     }
 

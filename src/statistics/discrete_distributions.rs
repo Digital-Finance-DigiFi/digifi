@@ -1,6 +1,7 @@
+use std::io::Error;
 use ndarray::Array1;
 use num::complex::Complex;
-use crate::utilities::maths_utils::factorial;
+use crate::utilities::{input_error, data_error, maths_utils::factorial};
 use crate::statistics::{ProbabilityDistribution, ProbabilityDistributionType, n_choose_r};
 use crate::statistics::continuous_distributions::NormalDistribution;
 
@@ -27,11 +28,11 @@ impl BernoulliDistribution {
     /// 
     /// # Panics
     /// - Panics if p is not in the [0,1] range
-    pub fn new(p: f64) -> Self {
+    pub fn new(p: f64) -> Result<Self, Error> {
         if (p < 0.0) || (1.0 < p) {
-            panic!("The argument p must be in the [0, 1] range.");
+            return Err(input_error("The argument p must be in the [0, 1] range."));
         }
-        BernoulliDistribution { p, _distribution_type: ProbabilityDistributionType::Discrete }
+        Ok(BernoulliDistribution { p, _distribution_type: ProbabilityDistributionType::Discrete })
     }
 }
 
@@ -72,8 +73,20 @@ impl ProbabilityDistribution for BernoulliDistribution {
     /// 
     /// # Output
     /// - PMF values at the given x
-    fn pdf(&self, x: &Array1<f64>) -> Array1<f64> {
-        x.map(|x_| if *x_ == 0.0 { 1.0 - self.p } else if *x_ == 1.0 { self.p } else { panic!("The argument x must be in the {{0, 1}} set.") } )
+    fn pdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, Error> {
+        let mut result: Vec<f64> = Vec::<f64>::new();
+        for i in x {
+            let x_: f64;
+            if *i == 0.0 {
+                x_ = 1.0 - self.p
+            } else if *i == 1.0 {
+                x_ = self.p
+            } else {
+                return Err(data_error("The argument x must be in the {{0, 1}} set."));
+            }
+            result.push(x_)
+        }
+        Ok(Array1::from_vec(result))
     }
 
     /// # Description
@@ -84,8 +97,8 @@ impl ProbabilityDistribution for BernoulliDistribution {
     /// 
     /// # Output
     /// - CDF values at the given x
-    fn cdf(&self, x: &Array1<f64>) -> Array1<f64> {
-        x.map(|x_| if *x_ < 0.0 { 0.0 } else if 1.0 <= *x_ { 1.0 } else { 1.0 - self.p } )
+    fn cdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, Error> {
+        Ok(x.map(|x_| if *x_ < 0.0 { 0.0 } else if 1.0 <= *x_ { 1.0 } else { 1.0 - self.p } ))
     }
 
     /// # Description
@@ -96,9 +109,9 @@ impl ProbabilityDistribution for BernoulliDistribution {
     /// 
     /// # Output
     /// - Inverse CDF values for the given probabilities
-    fn inverse_cdf(&self, p: &Array1<f64>) -> Array1<f64> {
+    fn inverse_cdf(&self, p: &Array1<f64>) -> Result<Array1<f64>, Error> {
         let p: Array1<f64> = p.map(|p_| if (*p_ < 0.0) || (1.0 < *p_) { f64::NAN } else {*p_});
-        p.map(|p_| if *p_ == 1.0 { 1.0 } else { 0.0 } )
+        Ok(p.map(|p_| if *p_ == 1.0 { 1.0 } else { 0.0 } ))
     }
 
     /// # Description
@@ -152,11 +165,11 @@ impl BinomialDistribution {
     /// 
     /// # Panics
     /// - Panics if p is not in the [0,1] range
-    pub fn new(n: usize, p: f64) -> Self {
+    pub fn new(n: usize, p: f64) -> Result<Self, Error> {
         if (p < 0.0) || (1.0 < p) {
-            panic!("The argument p must be in the [0, 1] range.");
+            return Err(input_error("The argument p must be in the [0, 1] range."));
         }
-        BinomialDistribution { n, p, _distribution_type: ProbabilityDistributionType::Discrete }
+        Ok(BinomialDistribution { n, p, _distribution_type: ProbabilityDistributionType::Discrete })
     }
 }
 
@@ -198,8 +211,13 @@ impl ProbabilityDistribution for BinomialDistribution {
     /// 
     /// # Output
     /// - PMF values at the given x
-    fn pdf(&self, x: &Array1<f64>) -> Array1<f64> {
-        x.map(|x_| (n_choose_r(self.n as u128, *x_ as u128) as f64) * self.p.powi(*x_ as i32) * (1.0 - self.p).powi(self.n as i32 - *x_ as i32) )
+    fn pdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, Error> {
+        let mut result: Vec<f64> = Vec::<f64>::new();
+        for i in x {
+            let x_: f64 = (n_choose_r(self.n as u128, *i as u128)? as f64) * self.p.powi(*i as i32) * (1.0 - self.p).powi(self.n as i32 - *i as i32);
+            result.push(x_);
+        }
+        Ok(Array1::from_vec(result))
     }
 
 
@@ -211,14 +229,14 @@ impl ProbabilityDistribution for BinomialDistribution {
     /// 
     /// # Output
     /// - CDF values at the given x
-    fn cdf(&self, x: &Array1<f64>) -> Array1<f64> {
+    fn cdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, Error> {
         let x_floor: Array1<f64> = x.map(|x_| x_.floor() );
         let a : Array1<f64> = self.n as f64 - &x_floor;
         let b: Array1<f64> = 1.0 - &x_floor;
         let upper_integral_limit: Array1<f64> = (1.0 - self.p) * Array1::from_vec(vec![1.0; x_floor.len()]);
         // TODO: Implement incomplete beta function
         // betainc(a, b, upper_integral_limit)
-        a
+        Ok(a)
     }
 
     /// # Description
@@ -229,20 +247,20 @@ impl ProbabilityDistribution for BinomialDistribution {
     /// 
     /// # Output
     /// - Inverse CDF values for the given probabilities
-    fn inverse_cdf(&self, p: &Array1<f64>) -> Array1<f64> {
+    fn inverse_cdf(&self, p: &Array1<f64>) -> Result<Array1<f64>, Error> {
         let p: Array1<f64> = p.map(|p_| if (*p_ < 0.0) || (1.0 < *p_) { f64::NAN } else {*p_});
         let mut result: Vec<f64> = Vec::<f64>::new();
         for p_ in p {
-            if p_ == f64::NAN {
+            if p_.is_nan() {
                 result.push(p_);
                 continue
             }
-            let quantile = |rv: f64| { self.cdf(&Array1::from_vec(vec![rv])).map(|cdf_| if *cdf_ == f64::NAN { 0.0 } else { *cdf_ } )[0] - p_ };
+            let quantile = |rv: f64| { self.cdf(&Array1::from_vec(vec![rv])).unwrap().map(|cdf_| if cdf_.is_nan() { 0.0 } else { *cdf_ } )[0] - p_ };
             let x_0: f64 = 0.5;
-            // TODO: Implement numerical solver
+            // TODO: Implement numerical solver and remove .unwrap()
             // result.push(fsolve(quantile, x_0));
         }
-        Array1::from_vec(result)
+        Ok(Array1::from_vec(result))
     }
 
     /// # Description
@@ -291,11 +309,11 @@ impl DiscreteUniformDistribution {
     /// 
     /// # Panics
     /// - Panics if b is smaller than a
-    pub fn new(a: i32, b: i32) -> Self {
+    pub fn new(a: i32, b: i32) -> Result<Self, Error> {
         if b < a {
-            panic!("The argument a must be smaller or equal to the argument b.");
+            return Err(input_error("The argument a must be smaller or equal to the argument b."));
         }
-        DiscreteUniformDistribution { a, b, n: ((b - a + 1) as f64), _distribution_type: ProbabilityDistributionType::Discrete }
+        Ok(DiscreteUniformDistribution { a, b, n: ((b - a + 1) as f64), _distribution_type: ProbabilityDistributionType::Discrete })
     }
 }
 
@@ -336,8 +354,8 @@ impl ProbabilityDistribution for DiscreteUniformDistribution {
     /// 
     /// # Output
     /// - PMF values for the discrete uniform distribution
-    fn pdf(&self, x: &Array1<f64>) -> Array1<f64> {
-        Array1::from_vec(vec![1.0; x.len()]) / self.n
+    fn pdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, Error> {
+        Ok(Array1::from_vec(vec![1.0; x.len()]) / self.n)
     }
 
     /// # Description
@@ -348,8 +366,8 @@ impl ProbabilityDistribution for DiscreteUniformDistribution {
     /// 
     /// # Output
     /// - CDF values at the given x
-    fn cdf(&self, x: &Array1<f64>) -> Array1<f64> {
-        x.map(|x_| if ((self.a as f64) <= *x_) || (*x_ <= (self.b as f64)) { (x_.floor() - (self.a as f64) + 1.0) / self.n } else { f64::NAN } )
+    fn cdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, Error> {
+        Ok(x.map(|x_| if ((self.a as f64) <= *x_) || (*x_ <= (self.b as f64)) { (x_.floor() - (self.a as f64) + 1.0) / self.n } else { f64::NAN } ))
     }
 
     /// # Description
@@ -360,9 +378,9 @@ impl ProbabilityDistribution for DiscreteUniformDistribution {
     /// 
     /// # Output
     /// - Inverse CDF values for the given probabilities
-    fn inverse_cdf(&self, p: &Array1<f64>) -> Array1<f64> {
+    fn inverse_cdf(&self, p: &Array1<f64>) -> Result<Array1<f64>, Error> {
         let p: Array1<f64> = p.map(|p_| if (*p_ < 0.0) || (1.0 < *p_) { f64::NAN } else {*p_});
-        p * self.n - 1.0 + (self.a as f64)
+        Ok(p * self.n - 1.0 + (self.a as f64))
     }
 
     /// # Description
@@ -416,11 +434,11 @@ impl PoissonDistribution {
     /// 
     /// # Input
     /// - lambda: Expected number of events in a given interval
-    pub fn new(lambda: f64) -> Self {
+    pub fn new(lambda: f64) -> Result<Self, Error> {
         if lambda <= 0.0 {
-            panic!("The argument lambda must be positive.");
+            return Err(input_error("The argument lambda must be positive."));
         }
-        PoissonDistribution { lambda, _distribution_type: ProbabilityDistributionType::Discrete }
+        Ok(PoissonDistribution { lambda, _distribution_type: ProbabilityDistributionType::Discrete })
     }
 }
 
@@ -461,8 +479,16 @@ impl ProbabilityDistribution for PoissonDistribution {
     /// 
     /// # Output
     /// - PMF values at the given x
-    fn pdf(&self, x: &Array1<f64>) -> Array1<f64> {
-        x.map(|x_| if *x_ < 0.0 { panic!("The argument x must be positive."); } else { (self.lambda.powi(*x_ as i32) * (-self.lambda).exp()) / factorial(*x_ as u128) as f64 } )
+    fn pdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, Error> {
+        let mut result: Vec<f64> = Vec::<f64>::new();
+        for i in x {
+            if *i < 0.0 {
+                return Err(data_error("The argument x must be positive."));
+            } else {
+                result.push((self.lambda.powi(*i as i32) * (-self.lambda).exp()) / factorial(*i as u128) as f64)
+            }
+        }
+        Ok(Array1::from_vec(result))
     }
 
     /// # Description
@@ -473,17 +499,19 @@ impl ProbabilityDistribution for PoissonDistribution {
     /// 
     /// # Output
     /// - CDF values at the given x
-    fn cdf(&self, x: &Array1<f64>) -> Array1<f64> {
-        x.map(|x_| {
-            if *x_ < 0.0 {
-                panic!("The argument x must be positive.");
+    fn cdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, Error> {
+        let mut result: Vec<f64> = Vec::<f64>::new();
+        for i in x {
+            if *i < 0.0 {
+                return Err(data_error("The argument x must be positive."));
             }
-            let mut result: f64 = 0.0;
-            for i in 0..(x_.floor() as i32) {
-                result += self.lambda.powi(i) / factorial(i as u128) as f64;
+            let mut proxy: f64 = 0.0;
+            for j in 0..(i.floor() as i32) {
+                proxy += self.lambda.powi(j) / factorial(j as u128) as f64;
             }
-            result * (-self.lambda).exp()
-        } )
+            result.push(proxy * (-self.lambda).exp());
+        }
+        Ok(Array1::from_vec(result))
     }
 
     /// # Description
@@ -494,13 +522,13 @@ impl ProbabilityDistribution for PoissonDistribution {
     /// 
     /// # Output
     /// - Inverse CDF values for the givenprobabilities
-    fn inverse_cdf(&self, p: &Array1<f64>) -> Array1<f64> {
+    fn inverse_cdf(&self, p: &Array1<f64>) -> Result<Array1<f64>, Error> {
         let p: Array1<f64> = p.map(|p_| if (*p_ < 0.0) || (1.0 < *p_) { f64::NAN } else {*p_});
-        let w: Array1<f64> = NormalDistribution::new(0.0, 1.0).inverse_cdf(&p);
+        let w: Array1<f64> = NormalDistribution::new(0.0, 1.0)?.inverse_cdf(&p)?;
         let w_2: Array1<f64> = w.map(|w_| w_.powi(2) );
         let w_3: Array1<f64> = w.map(|w_| w_.powi(3) );
         let w_4: Array1<f64> = w.map(|w_| w_.powi(4) );
-        self.lambda + self.lambda.sqrt()*&w + (1.0/3.0 + &w_2/6.0) + (-&w/36.0 - w_3/72.0)/self.lambda.sqrt() + (-8.0/405.0 + 7.0*&w_2/810.0 + w_4/270.0)/self.lambda
+        Ok(self.lambda + self.lambda.sqrt()*&w + (1.0/3.0 + &w_2/6.0) + (-&w/36.0 - w_3/72.0)/self.lambda.sqrt() + (-8.0/405.0 + 7.0*&w_2/810.0 + w_4/270.0)/self.lambda)
     }
 
     /// # Description

@@ -1,5 +1,6 @@
+use std::io::Error;
 use ndarray::Array1;
-use crate::utilities::time_value_utils::{CompoundingType, Compounding};
+use crate::utilities::{input_error, time_value_utils::{CompoundingType, Compounding}};
 use crate::financial_instruments::{FinancialInstrument, FinancialInstrumentId};
 use crate::portfolio_applications::AssetHistData;
 use crate::stochastic_processes::StochasticProcess;
@@ -185,15 +186,15 @@ impl ForwardRate {
     /// 
     /// # LaTeX Formula
     /// - \\textit{Forward Rate} = \\textit{Futures Rate} - \\textit{C}
-    pub fn rate_adjustment(&mut self, futures_rate: f64, convexity_adjustment: f64, in_place: bool) -> f64 {
+    pub fn rate_adjustment(&mut self, futures_rate: f64, convexity_adjustment: f64, in_place: bool) -> Result<f64, Error> {
         if convexity_adjustment <= 0.0 {
-            panic!("The argument convexity adjustment must be positive.");
+            return Err(input_error("The argument convexity adjustment must be positive."));
         }
         let forward_rate: f64 = futures_rate - convexity_adjustment;
         if in_place {
             self.current_forward_rate = forward_rate;
         }
-        forward_rate
+        Ok(forward_rate)
     }
 }
 
@@ -239,7 +240,7 @@ impl FinancialInstrument for ForwardRate {
     /// 
     /// # Output
     /// - Simulated spot prices of the forward rate agreement
-    fn stochastic_simulation(&self) -> Vec<Array1<f64>> {
+    fn stochastic_simulation(&self) -> Result<Vec<Array1<f64>>, Error> {
         self.stochastic_model.get_paths()
     }
 

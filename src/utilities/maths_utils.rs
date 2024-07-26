@@ -26,7 +26,6 @@ pub fn erf(x: f64, n_terms: usize) -> f64 {
     let mut total: f64 = 0.0;
     let mut sign: f64 = 1.0;
     for n in 0..n_terms {
-        // Safe conversion of usize to i32, panic if it doesn't fit
         let exp: i32 = (2 * n + 1) as i32;
         total += sign * x.powi(exp) / (factorial(n as u128) as f64 * (2 * n + 1) as f64);
         // Flip the sign for the next term

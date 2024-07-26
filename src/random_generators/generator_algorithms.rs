@@ -1,3 +1,4 @@
+use std::io::Error;
 use ndarray::Array1;
 use crate::statistics::ProbabilityDistribution;
 use crate::statistics::continuous_distributions::NormalDistribution;
@@ -25,19 +26,19 @@ use crate::random_generators::{RandomGenerator, uniform_generators::{LinearCongr
 /// # Links
 /// - Wikipedia: https://en.wikipedia.org/wiki/Rejection_sampling
 /// - Original Source: N/A
-pub fn accept_reject(f_x: impl Fn(&Array1<f64>) -> Array1<f64>, g_x : impl Fn(&Array1<f64>) -> Array1<f64>, y_sample: &Array1<f64>,
-                            m: f64, uniform_sample: &Array1<f64>) -> Array1<f64> {
-    let g: Array1<f64> = g_x(y_sample);
-    let f: Array1<f64> = f_x(y_sample);
-    compare_array_len(&g, &f, "g", "f");
-    compare_array_len(&g, y_sample, "g", "sample");
+pub fn accept_reject(f_x: &impl ProbabilityDistribution, g_x : &impl ProbabilityDistribution, y_sample: &Array1<f64>,
+                            m: f64, uniform_sample: &Array1<f64>) -> Result<Array1<f64>, Error> {
+    let g: Array1<f64> = g_x.pdf(y_sample)?;
+    let f: Array1<f64> = f_x.pdf(y_sample)?;
+    compare_array_len(&g, &f, "g", "f")?;
+    compare_array_len(&g, y_sample, "g", "sample")?;
     let mut x_sample: Vec<f64> = Vec::<f64>::new();
     for i in 0..y_sample.len() {
         if (uniform_sample[i] * m * g[i]) <= f[i] {
             x_sample.push(y_sample[i]);
         }
     }
-    Array1::from_vec(x_sample)
+    Ok(Array1::from_vec(x_sample))
 }
 
 
@@ -57,9 +58,9 @@ pub fn accept_reject(f_x: impl Fn(&Array1<f64>) -> Array1<f64>, g_x : impl Fn(&A
 /// # Links
 /// - Wikipedia: https://en.wikipedia.org/wiki/Inverse_transform_sampling
 /// - Original SOurce: N/A
-pub fn inverse_transform(f_x: impl Fn(&Array1<f64>) -> Array1<f64>, sample_size: usize) -> Array1<f64> {
-    let u: Array1<f64> = FibonacciGenerator::new_shuffle(sample_size).generate();
-    f_x(&u)
+pub fn inverse_transform(f_x: &impl ProbabilityDistribution, sample_size: usize) -> Result<Array1<f64>, Error> {
+    let u: Array1<f64> = FibonacciGenerator::new_shuffle(sample_size).generate()?;
+    f_x.inverse_cdf(&u)
 }
 
 
@@ -106,19 +107,19 @@ pub fn box_muller(uniform_ample_1: &Array1<f64>, unfiform_sample_2: &Array1<f64>
 /// # Links
 /// - Wikipedia: https://en.wikipedia.org/wiki/Marsaglia_polar_method
 /// - Original Source: https://doi.org/10.1137%2F1006063
-pub fn marsaglia(max_iterations: usize) -> Option<(f64, f64)> {
-    let w_1: Array1<f64> = 2.0 * FibonacciGenerator::new_shuffle(max_iterations).generate() - 1.0;
-    let w_2: Array1<f64> = 2.0 * FibonacciGenerator::new_shuffle(max_iterations).generate() - 1.0;
+pub fn marsaglia(max_iterations: usize) -> Result<Option<(f64, f64)>, Error> {
+    let w_1: Array1<f64> = 2.0 * FibonacciGenerator::new_shuffle(max_iterations).generate()? - 1.0;
+    let w_2: Array1<f64> = 2.0 * FibonacciGenerator::new_shuffle(max_iterations).generate()? - 1.0;
     let mut i: usize = 0;
     while i < max_iterations {
         let s: f64 = w_1[i].powi(2) + w_2[i].powi(2);
         if s < 1.0 {
             let t: f64 = (-2.0 * s.ln() / s).sqrt();
-            return Some((w_1[i]*t, w_2[i]*t));
+            return Ok(Some((w_1[i]*t, w_2[i]*t)));
         }
         i += 1;
     }
-    None
+    Ok(None)
 }
 
 
@@ -136,23 +137,23 @@ pub fn marsaglia(max_iterations: usize) -> Option<(f64, f64)> {
 /// # Links
 /// - Wikipedia: https://en.wikipedia.org/wiki/Ziggurat_algorithm
 /// - Original Source: https://doi.org/10.1145/1464291.1464310
-pub fn ziggurat(x_guess: &Array1<f64>, sample_size: usize, max_iterations: usize) -> Array1<f64> {
-    let normal_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0);
-    let y: Array1<f64> = normal_dist.pdf(&x_guess);
+pub fn ziggurat(x_guess: &Array1<f64>, sample_size: usize, max_iterations: usize) -> Result<Array1<f64>, Error> {
+    let normal_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0)?;
+    let y: Array1<f64> = normal_dist.pdf(&x_guess)?;
     let mut z: Array1<f64> = Array1::from_vec(vec![1.0; sample_size]);
     for j in 0..sample_size {
-        let u_1: Array1<f64> = 2.0 * FibonacciGenerator::new_shuffle(max_iterations).generate() - 1.0;
-        let u_2: Array1<f64> = FibonacciGenerator::new_shuffle(max_iterations).generate();
+        let u_1: Array1<f64> = 2.0 * FibonacciGenerator::new_shuffle(max_iterations).generate()? - 1.0;
+        let u_2: Array1<f64> = FibonacciGenerator::new_shuffle(max_iterations).generate()?;
         let mut i: usize = 0;
         while (z[j]==1.0) && (i < max_iterations) {
             // Generates a random index and ensures that it is in the range [1, x_guess.len()-1]
-            let rand_index: usize = (((x_guess.len() - 2) as f64) * LinearCongruentialGenerator::new_shuffle(1).generate()[0]).ceil() as usize + 1;
+            let rand_index: usize = (((x_guess.len() - 2) as f64) * LinearCongruentialGenerator::new_shuffle(1).generate()?[0]).ceil() as usize + 1;
             let x: f64 = u_1[rand_index] * x_guess[rand_index];
             if x.abs() < x_guess[rand_index-1] {
                 z[j] = x;
             } else {
                 let y_: f64 = y[rand_index] + u_2[rand_index] * (y[rand_index-1] - y[rand_index]);
-                let point: f64 = normal_dist.pdf(&Array1::from_vec(vec![x]))[0];
+                let point: f64 = normal_dist.pdf(&Array1::from_vec(vec![x]))?[0];
                 if y_ < point {
                     z[j] = x;
                 }
@@ -160,5 +161,5 @@ pub fn ziggurat(x_guess: &Array1<f64>, sample_size: usize, max_iterations: usize
             i += 1;
         }
     }
-    z
+    Ok(z)
 }

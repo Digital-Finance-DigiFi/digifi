@@ -1,6 +1,7 @@
+use std::io::Error;
 use std::{collections::HashMap, vec};
 use ndarray::{Array1, s};
-use crate::utilities::compare_array_len;
+use crate::utilities::{compare_array_len, input_error, data_error, some_or_error};
 
 
 /// # Description
@@ -21,7 +22,7 @@ use crate::utilities::compare_array_len;
 /// - Wikipedia: https://en.wikipedia.org/wiki/Drawdown_(economics)
 /// - Original Source: N/A
 pub fn maximum_drawdown(asset_value: &Array1<f64>) -> f64 {
-    let mut maximum_drowdown = 0.0;
+    let mut maximum_drowdown: f64 = 0.0;
     let mut drawdowns: Vec<f64> = vec![0.0];
     let mut peak = asset_value[0];
     // Selection of maximum drawdown candidates
@@ -29,9 +30,10 @@ pub fn maximum_drawdown(asset_value: &Array1<f64>) -> f64 {
         if peak < *i {
             peak = *i;
         }
-        drawdowns.push(100.0 * (peak-*i) / peak);
-        if maximum_drowdown < *drawdowns.last().unwrap() {
-            maximum_drowdown = *drawdowns.last().unwrap();
+        let last_drawdown: f64 = 100.0 * (peak - *i) / peak;
+        drawdowns.push(last_drawdown);
+        if maximum_drowdown < last_drawdown {
+            maximum_drowdown = last_drawdown;
         }
     }
     maximum_drowdown
@@ -51,13 +53,13 @@ pub fn maximum_drawdown(asset_value: &Array1<f64>) -> f64 {
 /// # Links
 /// - Wikipedia: https://en.wikipedia.org/wiki/Moving_average#Simple_moving_average
 /// - Original Source: N/A
-pub fn sma(price_array: &Array1<f64>, period: usize) -> Array1<f64> {
+pub fn sma(price_array: &Array1<f64>, period: usize) -> Result<Array1<f64>, Error> {
     let mut sma: Vec<f64> = vec![f64::NAN; period - 1];
     let windows = price_array.windows(period).to_owned();
     for window in windows {
-        sma.push(window.mean().expect("Mean of SMA slice is not computed."));
+        sma.push(some_or_error(window.mean(), "Mean of SMA slice is not computed.")?);
     }
-    Array1::from_vec(sma)
+    Ok(Array1::from_vec(sma))
 }
 
 
@@ -76,14 +78,14 @@ pub fn sma(price_array: &Array1<f64>, period: usize) -> Array1<f64> {
 /// # Links
 /// - Wikipedia: https://en.wikipedia.org/wiki/Moving_average#Exponential_moving_average
 /// - Original Source: N/A
-pub fn ema(price_array: &Array1<f64>, period: usize, smoothing: i32) -> Array1<f64> {
+pub fn ema(price_array: &Array1<f64>, period: usize, smoothing: i32) -> Result<Array1<f64>, Error> {
     let multiplier: f64 = smoothing as f64 / (1.0 + period as f64);
     let mut ema: Vec<f64> = vec![f64::NAN; period - 1];
-    ema.push(price_array.slice(s![0..period]).mean().expect("Mean of price array slice is not computed."));
+    ema.push(some_or_error(price_array.slice(s![0..period]).mean(), "Mean of price array slice is not computed.")?);
     for i in period..price_array.len() {
         ema.push(price_array[i]*multiplier + ema[i-1]*(1.0-multiplier));
     }
-    Array1::from_vec(ema)
+    Ok(Array1::from_vec(ema))
 }
 
 
@@ -110,21 +112,21 @@ pub fn ema(price_array: &Array1<f64>, period: usize, smoothing: i32) -> Array1<f
 /// # Links
 /// - Wikipedia: https://en.wikipedia.org/wiki/MACD
 /// - Original Source: N/A
-pub fn macd(price_array: &Array1<f64>, small_ema_period: usize, large_ema_period: usize, signal_line: usize, smoothing: i32) -> HashMap<String, Array1<f64>> {
+pub fn macd(price_array: &Array1<f64>, small_ema_period: usize, large_ema_period: usize, signal_line: usize, smoothing: i32) -> Result<HashMap<String, Array1<f64>>, Error> {
     if large_ema_period <= small_ema_period {
-        panic!("The argument large_ema_period must be bigger than the argument small_ema_period.");
+        return Err(input_error("The argument large_ema_period must be bigger than the argument small_ema_period."));
     }
     let signal_line_mult: f64 = smoothing as f64 / (1.0 + signal_line as f64);
     // Small EMA
-    let small_ema: Array1<f64> = ema(&price_array, small_ema_period, smoothing);
+    let small_ema: Array1<f64> = ema(&price_array, small_ema_period, smoothing)?;
     // Large Ema
-    let large_ema: Array1<f64> = ema(&price_array, large_ema_period, smoothing);
+    let large_ema: Array1<f64> = ema(&price_array, large_ema_period, smoothing)?;
     // MACD
     let macd: Array1<f64> = &small_ema - &large_ema;
     // Signal Line
     let mut signal_line_: Vec<f64> = vec![f64::NAN; price_array.len()];
-    signal_line_[large_ema_period-2+signal_line] = macd.slice(s![large_ema_period-1..large_ema_period-1+signal_line]).mean()
-                                                       .expect("Mean of MACD slice is not computed.");
+    signal_line_[large_ema_period-2+signal_line] = some_or_error(macd.slice(s![large_ema_period-1..large_ema_period-1+signal_line]).mean(),
+                                                                 "Mean of MACD slice is not computed.")?;
     for i in (large_ema_period-1+signal_line)..small_ema.len() {
         signal_line_[i] = macd[i]*signal_line_mult + signal_line_[i-1]*(1.0-signal_line_mult);
     }
@@ -137,7 +139,7 @@ pub fn macd(price_array: &Array1<f64>, small_ema_period: usize, large_ema_period
     macd_info.insert(String::from("macd"), macd);
     macd_info.insert(String::from("signal_line"), signal_line_);
     macd_info.insert(String::from("macd_hist"), macd_hist);
-    macd_info
+    Ok(macd_info)
 }
 
 
@@ -157,8 +159,8 @@ pub fn macd(price_array: &Array1<f64>, small_ema_period: usize, large_ema_period
 /// # Links
 /// - Wikipedia: https://en.wikipedia.org/wiki/Bollinger_Bands
 /// - Original Source: N/A
-pub fn bollinger_bands(price_array: &Array1<f64>, period: usize, n_std: i32) -> HashMap<String, Array1<f64>> {
-    let sma: Array1<f64> = sma(price_array, period);
+pub fn bollinger_bands(price_array: &Array1<f64>, period: usize, n_std: i32) -> Result<HashMap<String, Array1<f64>>, Error> {
+    let sma: Array1<f64> = sma(price_array, period)?;
     let mut deviation:Vec<f64> = vec![f64::NAN; period - 1];
     let windows = price_array.windows(period).to_owned();
     for window in windows {
@@ -171,7 +173,7 @@ pub fn bollinger_bands(price_array: &Array1<f64>, period: usize, n_std: i32) -> 
     bb_info.insert(String::from("sma"), sma);
     bb_info.insert(String::from("upper_band"), upper_band);
     bb_info.insert(String::from("lower_band"), lower_band);
-    bb_info
+    Ok(bb_info)
 }
 
 
@@ -198,7 +200,7 @@ pub fn bollinger_bands(price_array: &Array1<f64>, period: usize, n_std: i32) -> 
 /// # Links
 /// - Wikipedia: https://en.wikipedia.org/wiki/Relative_strength_index
 /// - Original Source: N/A
-pub fn rsi(price_array: &Array1<f64>, period: usize, oversold_band: f64, overbought_band: f64) -> HashMap<String, Array1<f64>> {
+pub fn rsi(price_array: &Array1<f64>, period: usize, oversold_band: f64, overbought_band: f64) -> Result<HashMap<String, Array1<f64>>, Error> {
     let price_array_length: usize = price_array.len();
     let mut rsi_u: Vec<f64> = vec![0.0; price_array_length];
     let mut rsi_d: Vec<f64> = vec![0.0; price_array_length];
@@ -215,8 +217,8 @@ pub fn rsi(price_array: &Array1<f64>, period: usize, oversold_band: f64, overbou
     let rsi_u: Array1<f64> = Array1::from_vec(rsi_u);
     let rsi_d: Array1<f64> = Array1::from_vec(rsi_d);
     // U SMMA and D SMMA
-    rsi_u_smma[period] = rsi_u.slice(s![1..period+1]).mean().expect("Mean of U slice is not computed.");
-    rsi_d_smma[period] = rsi_d.slice(s![1..period+1]).mean().expect("Mean of D slice is not computed.");
+    rsi_u_smma[period] = some_or_error(rsi_u.slice(s![1..period+1]).mean(), "Mean of U slice is not computed.")?;
+    rsi_d_smma[period] = some_or_error(rsi_d.slice(s![1..period+1]).mean(), "Mean of D slice is not computed.")?;
     for i in (period+1)..price_array_length {
         rsi_u_smma[i] = (rsi_u_smma[i-1]*(period as f64 - 1.0) + rsi_u[i]) / period as f64;
         rsi_d_smma[i] = (rsi_d_smma[i-1]*(period as f64 - 1.0) + rsi_d[i]) / period as f64;
@@ -236,7 +238,7 @@ pub fn rsi(price_array: &Array1<f64>, period: usize, oversold_band: f64, overbou
     rsi_info.insert(String::from("rsi"), rsi);
     rsi_info.insert(String::from("oversold"), Array1::from_vec(vec![oversold_band; price_array_length]));
     rsi_info.insert(String::from("overbought"), Array1::from_vec(vec![overbought_band; price_array_length]));
-    rsi_info
+    Ok(rsi_info)
 }
 
 
@@ -265,12 +267,12 @@ pub fn rsi(price_array: &Array1<f64>, period: usize, oversold_band: f64, overbou
 /// # Links
 /// - Wikipedia: https://en.wikipedia.org/wiki/Average_directional_movement_index
 /// - Original Source: N/A
-pub fn adx(high_price: &Array1<f64>, low_price: &Array1<f64>, close_price: &Array1<f64>, period: usize, benchmark: f64) -> HashMap<String, Array1<f64>> {
-    compare_array_len(close_price, high_price, "close_price", "high_price");
-    compare_array_len(close_price, low_price, "close_price", "low_price");
+pub fn adx(high_price: &Array1<f64>, low_price: &Array1<f64>, close_price: &Array1<f64>, period: usize, benchmark: f64) -> Result<HashMap<String, Array1<f64>>, Error> {
+    compare_array_len(close_price, high_price, "close_price", "high_price")?;
+    compare_array_len(close_price, low_price, "close_price", "low_price")?;
     let price_array_length = close_price.len();
     if price_array_length < (2*period + 1) {
-        panic!("The argument period must be defined such that the length of price array is smaller than (2*period + 1).");
+        return Err(data_error("The argument period must be defined such that the length of price array is smaller than (2*period + 1)."));
     }
     let mut pdm: Vec<f64> = vec![0.0; price_array_length];
     let mut mdm: Vec<f64> = vec![0.0; price_array_length];
@@ -297,14 +299,14 @@ pub fn adx(high_price: &Array1<f64>, low_price: &Array1<f64>, close_price: &Arra
     let mdm: Array1<f64> = Array1::from_vec(mdm);
     let tr: Array1<f64> = Array1::from_vec(tr);
     // ATR
-    atr[period-1] = tr.slice(s![0..period]).mean().expect("Mean of TR slice is not computed.");
+    atr[period-1] = some_or_error(tr.slice(s![0..period]).mean(), "Mean of TR slice is not computed.")?;
     for i in period..price_array_length {
         atr[i] = (atr[i-1] * (period as f64 - 1.0) + tr[i]) / period as f64;
     }
     let atr: Array1<f64> = Array1::from_vec(atr);
     // +DM SMMA and -DM SMMA
-    pdm_smma[period] = pdm.slice(s![1..period+1]).mean().expect("Mean of +DM slice is not computed.");
-    mdm_smma[period] = mdm.slice(s![1..period+1]).mean().expect("Mean of +DM slice is not computed.");
+    pdm_smma[period] = some_or_error(pdm.slice(s![1..period+1]).mean(), "Mean of +DM slice is not computed.")?;
+    mdm_smma[period] = some_or_error(mdm.slice(s![1..period+1]).mean(), "Mean of +DM slice is not computed.")?;
     for i in (period+1)..price_array_length {
         pdm_smma[i] = (pdm_smma[i-1] * (period as f64 - 1.0) + pdm[i]) / period as f64;
         mdm_smma[i] = (mdm_smma[i-1] * (period as f64 - 1.0) + mdm[i]) / period as f64;
@@ -317,7 +319,7 @@ pub fn adx(high_price: &Array1<f64>, low_price: &Array1<f64>, close_price: &Arra
     // |+DI - -DI|
     let abs_pdi_mdi: Array1<f64> = (&pdi - &mdi).map(| i | i.abs());
     // ADX
-    adx[2*period] = abs_pdi_mdi.slice(s![period..(2*period + 1)]).mean().expect("Mean of |+DI - -DI| slice is not computed.");
+    adx[2*period] = some_or_error(abs_pdi_mdi.slice(s![period..(2*period + 1)]).mean(), "Mean of |+DI - -DI| slice is not computed.")?;
     for i in (2*period + 1)..price_array_length {
         adx[i] = (adx[i-1] * (period as f64 - 1.0) + abs_pdi_mdi[i]) / period as f64;
     }
@@ -329,7 +331,7 @@ pub fn adx(high_price: &Array1<f64>, low_price: &Array1<f64>, close_price: &Arra
     adx_info.insert(String::from("-di"), mdi);
     adx_info.insert(String::from("adx"), adx);
     adx_info.insert(String::from("benchmark"), Array1::from_vec(vec![benchmark; price_array_length]));
-    adx_info
+    Ok(adx_info)
 }
 
 
@@ -349,8 +351,8 @@ pub fn adx(high_price: &Array1<f64>, low_price: &Array1<f64>, close_price: &Arra
 /// # Links
 /// - Wikipedia: https://en.wikipedia.org/wiki/On-balance_volume
 /// - Original Source: N/A
-pub fn obv(close_price: &Array1<f64>, volume: &Array1<f64>) -> Array1<f64> {
-    compare_array_len(close_price, volume, "close_price", "volume");
+pub fn obv(close_price: &Array1<f64>, volume: &Array1<f64>) -> Result<Array1<f64>, Error> {
+    compare_array_len(close_price, volume, "close_price", "volume")?;
     let price_array_len = close_price.len();
     let mut obv: Vec<f64> = vec![0.0; price_array_len];
     for i in 1..price_array_len {
@@ -363,12 +365,13 @@ pub fn obv(close_price: &Array1<f64>, volume: &Array1<f64>) -> Array1<f64> {
         }
     }
     let obv: Array1<f64> = Array1::from_vec(obv);
-    obv
+    Ok(obv)
 }
 
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use ndarray::{Array1, s};
     use crate::utilities::TEST_ACCURACY;
 
@@ -384,7 +387,7 @@ mod tests {
     fn unit_test_sma() -> () {
         use crate::technical_indicators::sma;
         let price_array: Array1<f64> = Array1::from_vec(vec![10.0, 11.0, 12.0, 13.0, 11.0, 15.0]);
-        let sma: Array1<f64> = sma(&price_array, 3);
+        let sma: Array1<f64> = sma(&price_array, 3).unwrap();
         assert!((sma - Array1::from_vec(vec![f64::NAN, f64::NAN, 11.0, 12.0, 12.0, 13.0])).slice(s![2..]).sum().abs() < TEST_ACCURACY);
     }
 
@@ -392,7 +395,7 @@ mod tests {
     fn unit_test_ema() -> () {
         use crate::technical_indicators::ema;
         let price_array: Array1<f64> = Array1::from_vec(vec![10.0, 11.0, 12.0, 13.0, 11.0, 15.0]);
-        let ema: Array1<f64> = ema(&price_array, 3, 2);
+        let ema: Array1<f64> = ema(&price_array, 3, 2).unwrap();
         assert!((ema - Array1::from_vec(vec![f64::NAN, f64::NAN, 11.0, 12.0, 11.5, 13.25])).slice(s![2..]).sum().abs() < TEST_ACCURACY);
     }
 
@@ -400,8 +403,8 @@ mod tests {
     fn unit_test_macd() -> () {
         use crate::technical_indicators::{ema, macd};
         let price_array: Array1<f64> = Array1::from_vec(vec![10.0, 11.0, 12.0, 13.0, 11.0, 15.0]);
-        let macd_info = macd(&price_array, 3, 4, 2, 2);
-        assert!((macd_info.get("macd").unwrap() - ema(&price_array, 3, 2) + ema(&price_array, 4, 2)).slice(s![3..]).sum().abs() < TEST_ACCURACY);
+        let macd_info: HashMap<String, Array1<f64>> = macd(&price_array, 3, 4, 2, 2).unwrap();
+        assert!((macd_info.get("macd").unwrap() - ema(&price_array, 3, 2).unwrap() + ema(&price_array, 4, 2).unwrap()).slice(s![3..]).sum().abs() < TEST_ACCURACY);
         assert!((macd_info.get("signal_line").unwrap().slice(s![4..]).to_owned() - Array1::from_vec(vec![0.35, 0.43])).sum().abs() < TEST_ACCURACY);
     }
 
@@ -410,15 +413,15 @@ mod tests {
         use crate::technical_indicators::{sma, bollinger_bands};
         let price_array: Array1<f64> = Array1::from_vec(vec![10.0, 11.0, 12.0, 13.0, 11.0, 15.0]);
         let deviations: Array1<f64> = 2.0 * Array1::from_vec(vec![f64::NAN, f64::NAN, (2.0/3.0_f64).sqrt(), (2.0/3.0_f64).sqrt(), (2.0/3.0_f64).sqrt(), (8.0/3.0_f64).sqrt()]);
-        let bb_info = bollinger_bands(&price_array, 3, 2);
-        assert!((bb_info.get("upper_band").unwrap() - sma(&price_array, 3) - &deviations).slice(s![2..]).sum().abs() < TEST_ACCURACY);
+        let bb_info: HashMap<String, Array1<f64>> = bollinger_bands(&price_array, 3, 2).unwrap();
+        assert!((bb_info.get("upper_band").unwrap() - sma(&price_array, 3).unwrap() - &deviations).slice(s![2..]).sum().abs() < TEST_ACCURACY);
     }
 
     #[test]
     fn unit_test_rsi() -> () {
         use crate::technical_indicators::rsi;
         let price_array: Array1<f64> = Array1::from_vec(vec![10.0, 11.0, 12.0, 13.0, 11.0, 15.0]);
-        let rsi_info = rsi(&price_array, 3, 30.0, 70.0);
+        let rsi_info: HashMap<String, Array1<f64>> = rsi(&price_array, 3, 30.0, 70.0).unwrap();
         assert!((rsi_info.get("u").unwrap() - Array1::from_vec(vec![0.0, 1.0, 1.0, 1.0, 0.0, 4.0])).sum().abs() < TEST_ACCURACY);
         assert!((rsi_info.get("d").unwrap() - Array1::from_vec(vec![0.0, 0.0, 0.0, 0.0, 2.0, 0.0])).sum().abs() < TEST_ACCURACY);
         assert!((rsi_info.get("u_smma").unwrap() - Array1::from_vec(vec![f64::NAN, f64::NAN, f64::NAN, 3.0/3.0, (1.0*2.0 + 0.0)/3.0, (2.0/3.0*2.0 + 4.0)/3.0])).slice(s![3..]).sum().abs() < TEST_ACCURACY);
@@ -433,7 +436,7 @@ mod tests {
         let close_price: Array1<f64> = Array1::from_vec(vec![10.0, 11.0, 12.0, 13.0, 11.0, 15.0]);
         let low_price: Array1<f64> = Array1::from_vec(vec![9.5, 10.7, 11.8, 12.6, 10.7, 14.9]);
         let high_price: Array1<f64> = Array1::from_vec(vec![10.2, 11.4, 12.3, 13.4, 11.3, 15.2]);
-        let adx_info = adx(&high_price, &low_price, &close_price, 2, 25.0);
+        let adx_info: HashMap<String, Array1<f64>> = adx(&high_price, &low_price, &close_price, 2, 25.0).unwrap();
         // TODO: Test ADX
         assert!((adx_info.get("adx").unwrap() - Array1::from_vec(vec![f64::NAN, f64::NAN, f64::NAN, f64::NAN, 85.55088702147526, 72.52191286414025])).slice(s![4..]).sum().abs() < TEST_ACCURACY);
     }
@@ -443,7 +446,7 @@ mod tests {
         use crate::technical_indicators::obv;
         let close_price: Array1<f64> = Array1::from_vec(vec![10.0, 11.0, 12.0, 13.0, 11.0, 15.0]);
         let volume: Array1<f64> = Array1::from_vec(vec![1000.0, 1200.0, 1100.0, 1250.0, 1260.0, 1110.0]);
-        let obv: Array1<f64> = obv(&close_price, &volume);
+        let obv: Array1<f64> = obv(&close_price, &volume).unwrap();
         assert!((obv - Array1::from_vec(vec![0.0, 1200.0, 2300.0, 3550.0, 2290.0, 3400.0])).sum().abs() < TEST_ACCURACY);
     }
 }

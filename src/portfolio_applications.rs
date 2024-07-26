@@ -4,8 +4,9 @@ pub mod risk_measures;
 pub mod utility_functions;
 
 
+use std::io::Error;
 use ndarray::{Array1, s, concatenate, Axis};
-use crate::utilities::compare_array_len;
+use crate::utilities::{compare_array_len, data_error, some_or_error};
 use crate::statistics::covariance;
 
 
@@ -52,10 +53,10 @@ impl AssetHistData {
     /// 
     /// # Panics
     /// - Panics if the length of price_array, predictable_income and/or time_array do not match
-    pub fn new(price_array: Array1<f64>, predictable_income: Array1<f64>, time_array: Array1<f64>) -> Self {
-        compare_array_len(&price_array, &predictable_income, "price_array", "predictable_income");
-        compare_array_len(&price_array, &time_array, "price_array", "time_array");
-        AssetHistData { price_array, predictable_income, time_array }
+    pub fn new(price_array: Array1<f64>, predictable_income: Array1<f64>, time_array: Array1<f64>) -> Result<Self, Error> {
+        compare_array_len(&price_array, &predictable_income, "price_array", "predictable_income")?;
+        compare_array_len(&price_array, &time_array, "price_array", "time_array")?;
+        Ok(AssetHistData { price_array, predictable_income, time_array })
     }
 
     /// # Description
@@ -67,10 +68,11 @@ impl AssetHistData {
     /// 
     /// # Panics
     /// - Panics if the index provided is out of bounds for the price array
-    fn validate_index(&self, index: usize, index_label: &str) -> () {
+    fn validate_index(&self, index: usize, index_label: &str) -> Result<(), Error> {
         if self.price_array.len() < index {
-            panic!("The argument {} is out of range for price array of length {}.", index_label, self.price_array.len());
+            return Err(data_error(format!("The argument {} is out of range for price array of length {}.", index_label, self.price_array.len())));
         }
+        Ok(())
     }
 
     /// # Description
@@ -87,18 +89,20 @@ impl AssetHistData {
     /// 
     /// # Panics
     /// - Panics if the index provided is out of bounds for the price array
-    pub fn get_price(&self, end_index: usize, start_index: Option<usize>) -> Array1<f64> {
-        self.validate_index(end_index, "end_index");
+    pub fn get_price(&self, end_index: usize, start_index: Option<usize>) -> Result<Array1<f64>, Error> {
+        self.validate_index(end_index, "end_index")?;
+        let mut start_index_: usize = 0;
         match start_index {
             Some(index) => {
-                self.validate_index(index, "start_index");
+                self.validate_index(index, "start_index")?;
                 if end_index <= index {
-                    panic!("The argument start_index must be smaller than the end_index");
+                    return Err(data_error("The argument start_index must be smaller than the end_index"));
                 }
+                start_index_ = index;
             },
             None => (),
         }
-        self.price_array.slice(s![start_index.expect("Could not unwrap start_index.")..end_index]).to_owned()
+        Ok(self.price_array.slice(s![start_index_..end_index]).to_owned())
     }
 
     /// # Description
@@ -112,18 +116,20 @@ impl AssetHistData {
     /// 
     /// # Output
     /// - Historical and/or current predictable income(s)
-    pub fn get_predictable_income(&self, end_index: usize, start_index: Option<usize>) -> Array1<f64> {
-        self.validate_index(end_index, "end_index");
+    pub fn get_predictable_income(&self, end_index: usize, start_index: Option<usize>) -> Result<Array1<f64>, Error> {
+        self.validate_index(end_index, "end_index")?;
+        let mut start_index_: usize = 0;
         match start_index {
             Some(index) => {
-                self.validate_index(index, "start_index");
+                self.validate_index(index, "start_index")?;
                 if end_index <= index {
-                    panic!("The argument start_index must be smaller than the end_index");
+                    return Err(data_error("The argument start_index must be smaller than the end_index"));
                 }
+                start_index_ = index;
             },
             None => (),
         }
-        self.predictable_income.slice(s![start_index.expect("Could not unwrap start_index.")..end_index]).to_owned()
+        Ok(self.predictable_income.slice(s![start_index_..end_index]).to_owned())
     }
 }
 
@@ -139,10 +145,10 @@ impl AssetHistData {
 /// 
 /// # Output
 /// - Volatility of price over a certain period
-pub fn price_volatility(price_array: &Array1<f64>, n_periods: usize) -> f64 {
+pub fn price_volatility(price_array: &Array1<f64>, n_periods: usize) -> Result<f64, Error> {
     let log_price_diff: Array1<f64> = price_array.slice(s![1..]).map(|x| x.ln()) - price_array.slice(s![0..(price_array.len()-1)]).map(|x| x.ln());
-    let std: f64 = covariance(&log_price_diff, &log_price_diff, 0).sqrt();
-    std * (n_periods as f64).sqrt()
+    let std: f64 = covariance(&log_price_diff, &log_price_diff, 0)?.sqrt();
+    Ok(std * (n_periods as f64).sqrt())
 }
 
 
@@ -171,15 +177,15 @@ pub fn prices_to_returns(price_array: &Array1<f64>) -> Array1<f64> {
 /// 
 /// # Output
 /// - Average return over a certain period
-pub fn returns_average(price_array: &Array1<f64>, method: ReturnsMethod, n_periods: usize) -> f64 {
+pub fn returns_average(price_array: &Array1<f64>, method: ReturnsMethod, n_periods: usize) -> Result<f64, Error> {
     let returns: Array1<f64> = prices_to_returns(price_array);
     match method {
         ReturnsMethod::ImpliedAverageReturn => {
-            (1.0 + returns.mean().expect("Could not compute the mean of the returns.")).powi(n_periods as i32) - 1.0
+            Ok((1.0 + some_or_error(returns.mean(), "Could not compute the mean of the returns.")?).powi(n_periods as i32) - 1.0)
         },
         ReturnsMethod::EstimatedFromTotalReturn => {
             let returns_len: f64 = returns.len() as f64;
-            (1.0 + returns).product().powf((n_periods as f64)/returns_len) - 1.0
+            Ok((1.0 + returns).product().powf((n_periods as f64)/returns_len) - 1.0)
         },
     }
 }
@@ -194,10 +200,10 @@ pub fn returns_average(price_array: &Array1<f64>, method: ReturnsMethod, n_perio
 /// 
 /// # Output
 /// - Standard deviation of returns over a certain period
-pub fn returns_std(price_array: &Array1<f64>, n_periods: usize) -> f64 {
+pub fn returns_std(price_array: &Array1<f64>, n_periods: usize) -> Result<f64, Error> {
     let returns: Array1<f64> = prices_to_returns(price_array);
-    let returns_std: f64 = covariance(&returns, &returns, 0).sqrt();
-    returns_std * (n_periods as f64).sqrt()
+    let returns_std: f64 = covariance(&returns, &returns, 0)?.sqrt();
+    Ok(returns_std * (n_periods as f64).sqrt())
 }
 
 
@@ -210,9 +216,9 @@ pub fn returns_std(price_array: &Array1<f64>, n_periods: usize) -> f64 {
 /// 
 /// # Output
 /// - Variance of returns over a certain period
-pub fn returns_variance(price_array: &Array1<f64>, n_periods: usize) -> f64 {
+pub fn returns_variance(price_array: &Array1<f64>, n_periods: usize) -> Result<f64, Error> {
     let returns: Array1<f64> = prices_to_returns(price_array);
-    covariance(&returns, &returns, 0) * (n_periods as f64)
+    Ok(covariance(&returns, &returns, 0)? * (n_periods as f64))
 }
 
 
@@ -225,7 +231,7 @@ mod tests {
     fn unit_test_price_volatility() -> () {
         use crate::portfolio_applications::price_volatility;
         let price_array: Array1<f64> = Array1::from_vec(vec![100.0, 101.0, 102.0, 101.0, 103.0, 102.0]);
-        let vol: f64 = price_volatility(&price_array, 252);
+        let vol: f64 = price_volatility(&price_array, 252).unwrap();
         // The result was found using alternative Python code
         assert!((vol - 0.18707565202263976).abs() < TEST_ACCURACY);
     }

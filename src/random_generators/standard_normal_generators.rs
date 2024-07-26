@@ -1,4 +1,6 @@
+use std::io::Error;
 use ndarray::Array1;
+use crate::utilities::{input_error, some_or_error};
 use crate::random_generators::{RandomGenerator, generate_seed, uniform_generators::FibonacciGenerator};
 use crate::random_generators::generator_algorithms::{accept_reject, inverse_transform, box_muller, marsaglia, ziggurat};
 use crate::statistics::continuous_distributions::{LaplaceDistribution, NormalDistribution};
@@ -36,11 +38,11 @@ impl StandardNormalAcceptReject {
     /// 
     /// # Panics
     /// - Panics if the argument lap_b is not positive
-    pub fn new(max_sample_size: usize, lap_b: f64, seed_1: u32, seed_2: u32) -> Self {
+    pub fn new(max_sample_size: usize, lap_b: f64, seed_1: u32, seed_2: u32) -> Result<Self, Error> {
         if lap_b <= 0.0 {
-            panic!("The argument lap_b must be positive.");
+            return Err(input_error("The argument lap_b must be positive."));
         }
-        StandardNormalAcceptReject { max_sample_size, lap_b, seed_1, seed_2 }
+        Ok(StandardNormalAcceptReject { max_sample_size, lap_b, seed_1, seed_2 })
     }
 }
 
@@ -59,17 +61,16 @@ impl RandomGenerator for StandardNormalAcceptReject {
     /// 
     /// # Output
     /// - An array of pseudo-random numbers following a standard normal distribution
-    fn generate(&self) -> Array1<f64> {
-        let u_1: Array1<f64> = FibonacciGenerator::new(self.seed_1, self.max_sample_size, 5, 17, 714_025, 1_366, 150_889).generate();
+    fn generate(&self) -> Result<Array1<f64>, Error> {
+        let u_1: Array1<f64> = FibonacciGenerator::new(self.seed_1, self.max_sample_size, 5, 17, 714_025, 1_366, 150_889).generate()?;
         let m: f64 = (2.0 * std::f64::consts::E / std::f64::consts::PI).sqrt();
-        let u_2: Array1<f64> = FibonacciGenerator::new(self.seed_2, self.max_sample_size, 5, 17, 714_025, 1_366, 150_889).generate();
+        let u_2: Array1<f64> = FibonacciGenerator::new(self.seed_2, self.max_sample_size, 5, 17, 714_025, 1_366, 150_889).generate()?;
         // Laplace distribution sampling.
-        let laplace_dist: LaplaceDistribution = LaplaceDistribution::new(0.0, self.lap_b);
-        let l: Array1<f64> = laplace_dist.inverse_cdf(&u_1);
+        let laplace_dist: LaplaceDistribution = LaplaceDistribution::new(0.0, self.lap_b)?;
+        let l: Array1<f64> = laplace_dist.inverse_cdf(&u_1)?;
         // Accept-Reject algorithm.
-        let standard_normal_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0);
-        accept_reject(|sample: &Array1<f64>| { standard_normal_dist.pdf(&sample) },
-                      |sample: &Array1<f64>| { laplace_dist.pdf(&sample) }, &l, m, &u_2)
+        let standard_normal_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0)?;
+        accept_reject(&standard_normal_dist, &laplace_dist, &l, m, &u_2)
     }
 }
 
@@ -113,9 +114,9 @@ impl RandomGenerator for StandardNormalInverseTransform {
     /// 
     /// # Output
     /// - An array of pseudo-random numbers following a standard normal distribution
-    fn generate(&self) -> Array1<f64> {
-        let standard_normal_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0);
-        inverse_transform(|sample: &Array1<f64>| { standard_normal_dist.inverse_cdf(&sample) }, self.sample_size)
+    fn generate(&self) -> Result<Array1<f64>, Error> {
+        let standard_normal_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0)?;
+        inverse_transform(&standard_normal_dist, self.sample_size)
     }
 }
 
@@ -170,11 +171,11 @@ impl RandomGenerator for StandardNormalBoxMuller {
     /// 
     /// # Output
     /// - Two arrays of pseudo-random numbers following a standard normal distribution
-    fn generate(&self) -> Array1<f64> {
-        let u_1: Array1<f64> = FibonacciGenerator::new(self.seed_1, self.sample_size, 5, 17, 714_025, 1_366, 150_889).generate();
-        let u_2: Array1<f64> = FibonacciGenerator::new(self.seed_2, self.sample_size, 5, 17, 714_025, 1_366, 150_889).generate();
+    fn generate(&self) -> Result<Array1<f64>, Error> {
+        let u_1: Array1<f64> = FibonacciGenerator::new(self.seed_1, self.sample_size, 5, 17, 714_025, 1_366, 150_889).generate()?;
+        let u_2: Array1<f64> = FibonacciGenerator::new(self.seed_2, self.sample_size, 5, 17, 714_025, 1_366, 150_889).generate()?;
         let normal_arrays: (Array1<f64>, Array1<f64>) = box_muller(&u_1, &u_2);
-        normal_arrays.0
+        Ok(normal_arrays.0)
     }
 }
 
@@ -227,14 +228,14 @@ impl RandomGenerator for StandardNormalMarsaglia {
     /// 
     /// # Output
     /// - Two arrays of pseudo-random numbers following a standard normal distribution
-    fn generate(&self) -> Array1<f64> {
+    fn generate(&self) -> Result<Array1<f64>, Error> {
         let mut z_1: Array1<f64> = Array1::from_vec(vec![1.0; self.sample_size]);
         let mut z_2: Array1<f64> = Array1::from_vec(vec![1.0; self.sample_size]);
         //  Marsaglia method.
         for i in 0..self.sample_size {
-            (z_1[i], z_2[i]) = marsaglia(self.max_iterations).expect("Marsaglia algorithm failed to generate pseudo-random numbers.");
+            (z_1[i], z_2[i]) = some_or_error(marsaglia(self.max_iterations)?, "Marsaglia algorithm failed to generate pseudo-random numbers.")?;
         }
-        z_1
+        Ok(z_1)
     }
 }
 
@@ -286,15 +287,15 @@ impl RandomGenerator for StandardNormalZiggurat {
     /// 
     /// # Output
     /// - An array of pseudo-random numbers following a standard normal distribution
-    fn generate(&self) -> Array1<f64> {
+    fn generate(&self) -> Result<Array1<f64>, Error> {
         let mut x_guess: Vec<f64> = Vec::<f64>::new();
         let mut current_x: f64 = 0.0;
         let mut rectangle_length: f64 = 0.0;
-        let standard_normal_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0);
+        let standard_normal_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0)?;
         // Initial guess.
         while current_x < self.limit {
             rectangle_length = rectangle_length + self.dx;
-            let current_area: f64 = (standard_normal_dist.pdf(&Array1::from_vec(vec![current_x])) - standard_normal_dist.pdf(&Array1::from_vec(vec![rectangle_length])))[0] * rectangle_length;
+            let current_area: f64 = (standard_normal_dist.pdf(&Array1::from_vec(vec![current_x]))? - standard_normal_dist.pdf(&Array1::from_vec(vec![rectangle_length]))?)[0] * rectangle_length;
             if self.rectangle_size < current_area {
                 x_guess.push(rectangle_length);
                 current_x = rectangle_length;
@@ -316,9 +317,9 @@ mod tests {
         use crate::random_generators::standard_normal_generators::StandardNormalAcceptReject;
         use crate::statistics::covariance;
         let snar: StandardNormalAcceptReject = StandardNormalAcceptReject::new_shuffle(100_000);
-        let sample: Array1<f64> = snar.generate();
+        let sample: Array1<f64> = snar.generate().unwrap();
         assert!((sample.mean().unwrap() - 0.0).abs() < 30_000_000.0 * TEST_ACCURACY);
-        assert!((covariance(&sample, &sample, 0) - 1.0).abs() < 30_000_000.0 * TEST_ACCURACY);
+        assert!((covariance(&sample, &sample, 0).unwrap() - 1.0).abs() < 30_000_000.0 * TEST_ACCURACY);
     }
 
     #[test]
@@ -326,9 +327,9 @@ mod tests {
         use crate::random_generators::standard_normal_generators::StandardNormalInverseTransform;
         use crate::statistics::covariance;
         let snit: StandardNormalInverseTransform = StandardNormalInverseTransform::new_shuffle(100_000);
-        let sample: Array1<f64> = snit.generate();
+        let sample: Array1<f64> = snit.generate().unwrap();
         assert!((sample.mean().unwrap() - 0.0).abs() < 30_000_000.0 * TEST_ACCURACY);
-        assert!((covariance(&sample, &sample, 0) - 1.0).abs() < 30_000_000.0 * TEST_ACCURACY);
+        assert!((covariance(&sample, &sample, 0).unwrap() - 1.0).abs() < 30_000_000.0 * TEST_ACCURACY);
     }
 
     #[test]
@@ -336,9 +337,9 @@ mod tests {
         use crate::random_generators::standard_normal_generators::StandardNormalBoxMuller;
         use crate::statistics::covariance;
         let snit: StandardNormalBoxMuller = StandardNormalBoxMuller::new_shuffle(100_000);
-        let sample: Array1<f64> = snit.generate();
+        let sample: Array1<f64> = snit.generate().unwrap();
         assert!((sample.mean().unwrap() - 0.0).abs() < 30_000_000.0 * TEST_ACCURACY);
-        assert!((covariance(&sample, &sample, 0) - 1.0).abs() < 30_000_000.0 * TEST_ACCURACY);
+        assert!((covariance(&sample, &sample, 0).unwrap() - 1.0).abs() < 30_000_000.0 * TEST_ACCURACY);
     }
 
     #[test]
@@ -346,9 +347,9 @@ mod tests {
         use crate::random_generators::standard_normal_generators::StandardNormalMarsaglia;
         use crate::statistics::covariance;
         let snit: StandardNormalMarsaglia = StandardNormalMarsaglia::new_shuffle(10_000);
-        let sample: Array1<f64> = snit.generate();
+        let sample: Array1<f64> = snit.generate().unwrap();
         assert!((sample.mean().unwrap() - 0.0).abs() < 100_000_000.0 * TEST_ACCURACY);
-        assert!((covariance(&sample, &sample, 0) - 1.0).abs() < 100_000_000.0 * TEST_ACCURACY);
+        assert!((covariance(&sample, &sample, 0).unwrap() - 1.0).abs() < 100_000_000.0 * TEST_ACCURACY);
     }
 
     #[test]
@@ -356,8 +357,8 @@ mod tests {
         use crate::random_generators::standard_normal_generators::StandardNormalZiggurat;
         use crate::statistics::covariance;
         let snit: StandardNormalZiggurat = StandardNormalZiggurat::new_shuffle(1_000);
-        let sample: Array1<f64> = snit.generate();
-        println!("{} \t {}", sample.mean().unwrap(), covariance(&sample, &sample, 0));
+        let sample: Array1<f64> = snit.generate().unwrap();
+        println!("{} \t {}", sample.mean().unwrap(), covariance(&sample, &sample, 0).unwrap());
         // TODO: Debug Ziggurat results
         // assert!((sample.mean().unwrap() - 0.0).abs() < 30_000_000.0 * TEST_ACCURACY);
         // assert!((covariance(&sample, &sample, 0) - 1.0).abs() < 30_000_000.0 * TEST_ACCURACY);

@@ -1,6 +1,7 @@
 pub mod standard_stochastic_models;
 
 
+use std::io::Error;
 use ndarray::Array1;
 
 
@@ -18,5 +19,5 @@ pub trait StochasticProcess {
 
     /// # Description
     /// Paths, S, of the stochastic process.
-    fn get_paths(&self) -> Vec<Array1<f64>>;
+    fn get_paths(&self) -> Result<Vec<Array1<f64>>, Error>;
 }

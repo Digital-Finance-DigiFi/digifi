@@ -1,5 +1,6 @@
+use std::io::Error;
 use ndarray::{Array1, Axis};
-
+use crate::utilities::input_error;
 use crate::random_generators::RandomGenerator;
 use crate::stochastic_processes::StochasticProcess;
 use crate::random_generators::standard_normal_generators::StandardNormalBoxMuller;
@@ -86,15 +87,15 @@ impl ArithmeticBrownianMotion {
     /// 
     /// # LaTeX Formula
     /// - \\textit{Cov}(S_{t_{1}}, S_{t_{2}}) = \\sigma^{2} \\min(S_{t_{1}}, S_{t_{2}})
-    pub fn get_auto_cov(&self, index_t1: usize, index_t2: usize) -> f64 {
+    pub fn get_auto_cov(&self, index_t1: usize, index_t2: usize) -> Result<f64, Error> {
         let t_len: usize = self.t.len();
         if t_len < index_t1 {
-            panic!("The argument index_t1 is out of range for price array of length {}.", t_len)
+            return Err(input_error(format!("The argument index_t1 is out of range for price array of length {}.", t_len)));
         }
         if t_len < index_t2 {
-            panic!("The argument index_t2 is out of range for price array of length {}.", t_len)
+            return Err(input_error(format!("The argument index_t2 is out of range for price array of length {}.", t_len)));
         }
-        self.sigma.powi(2) * self.t[index_t1].min(self.t[index_t2])
+        Ok(self.sigma.powi(2) * self.t[index_t1].min(self.t[index_t2]))
     }
 }
 
@@ -123,16 +124,16 @@ impl StochasticProcess for ArithmeticBrownianMotion {
     /// 
     /// # LaTeX Formula
     /// - dS_{t} = \\mu dt + \\sigma dW_{t}
-    fn get_paths(&self) -> Vec<Array1<f64>> {
+    fn get_paths(&self) -> Result<Vec<Array1<f64>>, Error> {
         let mut paths: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
         for _ in 0..self.n_paths {
-            let dw: Array1<f64> = self.dt.sqrt() * StandardNormalBoxMuller::new_shuffle(self.n_steps).generate();
+            let dw: Array1<f64> = self.dt.sqrt() * StandardNormalBoxMuller::new_shuffle(self.n_steps).generate()?;
             let mut ds: Array1<f64> = self.mu * self.dt + self.sigma * dw;
             ds[0] = self.s_0;
             ds.accumulate_axis_inplace(Axis(0), |&prev, curr| { *curr += prev });
             paths.push(ds);
         }
-        paths
+        Ok(paths)
     }
 }
 
@@ -149,7 +150,7 @@ mod tests {
         let n_paths: usize = 100;
         let n_steps: usize = 200;
         let abm: ArithmeticBrownianMotion = ArithmeticBrownianMotion::new(1.0, 0.4, n_paths, n_steps, 1.0, 100.0);
-        let paths: Vec<Array1<f64>> = abm.get_paths();
+        let paths: Vec<Array1<f64>> = abm.get_paths().unwrap();
         assert_eq!(paths.len(), n_paths);
         assert_eq!(paths[0].len(), n_steps);
         // let mut final_steps: Vec<f64> = Vec::<f64>::new();

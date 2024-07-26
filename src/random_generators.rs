@@ -3,6 +3,7 @@ pub mod standard_normal_generators;
 pub mod uniform_generators;
 
 
+use std::io::Error;
 use std::time::{SystemTime, UNIX_EPOCH};
 use ndarray::Array1;
 
@@ -10,7 +11,7 @@ use ndarray::Array1;
 pub trait RandomGenerator {
     fn new_shuffle(sample_size: usize) -> Self;
 
-    fn generate(&self) -> Array1<f64>;
+    fn generate(&self) -> Result<Array1<f64>, Error>;
 }
 
 
@@ -21,6 +22,7 @@ pub fn generate_seed () -> u32 {
     let delta: f64 = start.duration_since(UNIX_EPOCH).expect("Could not compute duration since last unix epoch.").subsec_nanos() as f64;
     (delta / (10_000.0)) as u32
 }
+
 
 #[cfg(test)]
 mod tests {

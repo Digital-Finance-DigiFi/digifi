@@ -1,3 +1,4 @@
+use std::io::Error;
 use ndarray::Array1;
 use crate::random_generators::{RandomGenerator, generate_seed};
 
@@ -58,7 +59,7 @@ impl RandomGenerator for LinearCongruentialGenerator {
     /// 
     /// # Output
     /// - An array pseudo-random numbers following Uniform distribution
-    fn generate(&self) -> Array1<f64> {
+    fn generate(&self) -> Result<Array1<f64>, Error> {
         let mut u: Array1<f64> = Array1::from_vec(vec![0.0; self.sample_size]);
         u[0] = self.seed as f64;
         let a: f64 = self.a as f64;
@@ -67,7 +68,7 @@ impl RandomGenerator for LinearCongruentialGenerator {
         for i in 1..self.sample_size {
             u[i] = (a * u[i-1] + b) % m;
         }
-        u / m
+        Ok(u / m)
     }
 }
 
@@ -134,7 +135,7 @@ impl RandomGenerator for FibonacciGenerator {
     /// 
     /// # Output
     /// - An array pseudo-random numberss following Uniform distribution
-    fn generate(&self) -> Array1<f64> {
+    fn generate(&self) -> Result<Array1<f64>, Error> {
         let mut u: Array1<f64> = Array1::from_vec(vec![0.0; self.sample_size]);
         u[0] = self.seed as f64;
         let a: f64 = self.a as f64;
@@ -146,7 +147,7 @@ impl RandomGenerator for FibonacciGenerator {
         for i in (self.nu + 1)..self.sample_size {
             u[i] = (u[i-self.nu] + u[i-self.mu]) % m
         }
-        u / m
+        Ok(u / m)
     }
 }
 
@@ -161,7 +162,7 @@ mod tests {
     fn unit_test_linear_congruential_generator() -> () {
         use crate::random_generators::uniform_generators::LinearCongruentialGenerator;
         let lcg: LinearCongruentialGenerator = LinearCongruentialGenerator::new(12_345, 10_000, 244_944, 1_597, 51_749);
-        let sample: Array1<f64> = lcg.generate();
+        let sample: Array1<f64> = lcg.generate().unwrap();
         assert_eq!(sample.len(), 10_000);
         assert!((sample.mean().unwrap() - 0.5).abs() < 1_000_000.0 * TEST_ACCURACY)
     }
@@ -170,7 +171,7 @@ mod tests {
     fn unit_test_fibonacci_generator_1() -> () {
         use crate::random_generators::uniform_generators::FibonacciGenerator;
         let fg: FibonacciGenerator = FibonacciGenerator::new(12_345, 10_000, 5, 17, 714_025, 1_366, 150_889);
-        let sample: Array1<f64> = fg.generate();
+        let sample: Array1<f64> = fg.generate().unwrap();
         assert_eq!(sample.len(), 10_000);
         assert!((sample.mean().unwrap() - 0.5).abs() < 1_000_000.0 * TEST_ACCURACY);
     }
@@ -179,7 +180,7 @@ mod tests {
     fn unit_test_fibonacci_generator_2() -> () {
         use crate::random_generators::uniform_generators::FibonacciGenerator;
         let fg: FibonacciGenerator = FibonacciGenerator::new_shuffle(10_000);
-        let sample: Array1<f64> = fg.generate();
+        let sample: Array1<f64> = fg.generate().unwrap();
         assert_eq!(sample.len(), 10_000);
         assert!((sample.mean().unwrap() - 0.5).abs() < 1_000_000.0 * TEST_ACCURACY);
     }

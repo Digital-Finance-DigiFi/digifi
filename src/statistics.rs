@@ -2,10 +2,12 @@ pub mod continuous_distributions;
 pub mod discrete_distributions;
 
 
+use std::io::Error;
 use ndarray::{Array1, Array2};
-use ndarray_linalg::Inverse;
+// use ndarray_linalg::Inverse;
+use nalgebra::DMatrix;
 use num::complex::Complex;
-use crate::utilities::compare_array_len;
+use crate::utilities::{compare_array_len, input_error, data_error, some_or_error, MatrixConversion};
 use crate::utilities::maths_utils::factorial;
 
 
@@ -46,11 +48,11 @@ pub trait ProbabilityDistribution {
 
     /// # Description
     /// Probability density function.
-    fn pdf(&self, x: &Array1<f64>) -> Array1<f64>;
+    fn pdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, Error>;
 
     /// # Description
     /// Cummulative distribution function (CDF).
-    fn cdf(&self, x: &Array1<f64>) -> Array1<f64>;
+    fn cdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, Error>;
 
     /// # Description
     /// Moment generating function (MGF).
@@ -64,7 +66,7 @@ pub trait ProbabilityDistribution {
 
     /// # Description
     /// Inverse cumulative distribution function (CDF), else knwon as quantile function.
-    fn inverse_cdf(&self, p: &Array1<f64>) -> Array1<f64>;
+    fn inverse_cdf(&self, p: &Array1<f64>) -> Result<Array1<f64>, Error>;
 }
 
 
@@ -90,11 +92,11 @@ pub trait ProbabilityDistribution {
 /// # Links
 /// - Wikipedia: https://en.wikipedia.org/wiki/Covariance
 /// - Original Source: N/A
-pub fn covariance(array_1: &Array1<f64>, array_2: &Array1<f64>, ddof: usize) -> f64 {
-    compare_array_len(array_1, array_2, "array_1", "array_2");
-    let x: Array1<f64> = array_1 - array_1.mean().expect("Mean of array_1 is not computed.");
-    let y: Array1<f64> = array_2 - array_2.mean().expect("Mean of array_2 is not computed.");
-    (&x * &y).sum() / (x.len() - ddof) as f64
+pub fn covariance(array_1: &Array1<f64>, array_2: &Array1<f64>, ddof: usize) -> Result<f64, Error> {
+    compare_array_len(array_1, array_2, "array_1", "array_2")?;
+    let x: Array1<f64> = array_1 - some_or_error(array_1.mean(), "Mean of array_1 is not computed.")?;
+    let y: Array1<f64> = array_2 - some_or_error(array_2.mean(), "Mean of array_2 is not computed.")?;
+    Ok((&x * &y).sum() / (x.len() - ddof) as f64)
 }
 
 
@@ -117,14 +119,14 @@ pub fn covariance(array_1: &Array1<f64>, array_2: &Array1<f64>, ddof: usize) -> 
 /// # Links
 /// - Wikipedia: https://en.wikipedia.org/wiki/Skewness
 /// - Original Source: N/A
-pub fn skewness(array: &Array1<f64>) -> f64 {
-    let difference: Array1<f64> = array - array.mean().expect("Mean of array is not computed.");
-    let numerator: f64 = difference.map(| i | i.powi(3)).mean().expect("Mean of difference array is not computed.");
-    let denominator: f64 = difference.map(| i | i.powi(2)).mean().expect("Mean of difference array is not computed.").powf(3.0/2.0);
+pub fn skewness(array: &Array1<f64>) -> Result<f64, Error> {
+    let difference: Array1<f64> = array - some_or_error(array.mean(), "Mean of array is not computed.")?;
+    let numerator: f64 = some_or_error(difference.map(| i | i.powi(3)).mean(), "Mean of difference array is not computed.")?;
+    let denominator: f64 = some_or_error(difference.map(| i | i.powi(2)).mean(), "Mean of difference array is not computed.")?.powf(3.0/2.0);
     if denominator == 0.0 {
-        f64::NAN
+        Ok(f64::NAN)
     } else {
-        numerator / denominator
+        Ok(numerator / denominator)
     }
 }
 
@@ -148,14 +150,14 @@ pub fn skewness(array: &Array1<f64>) -> f64 {
 /// # Links
 /// - Wikipedia: https://en.wikipedia.org/wiki/Kurtosis
 /// - Original Source: N/A
-pub fn kurtosis(array: &Array1<f64>) -> f64 {
-    let difference: Array1<f64> = array - array.mean().expect("Mean of array is not computed.");
-    let numerator: f64 = difference.map(| i | i.powi(2)).mean().expect("Mean of difference array is not computed.");
-    let denominator: f64 = difference.map(| i | i.powi(2)).mean().expect("Mean of difference array is not computed.").powi(2);
+pub fn kurtosis(array: &Array1<f64>) -> Result<f64, Error> {
+    let difference: Array1<f64> = array - some_or_error(array.mean(), "Mean of array is not computed.")?;
+    let numerator: f64 = some_or_error(difference.map(| i | i.powi(2)).mean(), "Mean of difference array is not computed.")?;
+    let denominator: f64 = some_or_error(difference.map(| i | i.powi(2)).mean(), "Mean of difference array is not computed.")?.powi(2);
     if denominator == 0.0 {
-        f64::NAN
+        Ok(f64::NAN)
     } else {
-        numerator / denominator
+        Ok(numerator / denominator)
     }
 }
 
@@ -173,11 +175,11 @@ pub fn kurtosis(array: &Array1<f64>) -> f64 {
 /// # Links
 /// - Wikipedia: https://en.wikipedia.org/wiki/Binomial_coefficient
 /// - Original Source: N/A
-pub fn n_choose_r(n: u128, r: u128) -> u128 {
+pub fn n_choose_r(n: u128, r: u128) -> Result<u128, Error> {
     if n < r {
-        panic!("The value of variable n must be larger or equal to the value of variable r.");
+        return Err(input_error("The value of variable n must be larger or equal to the value of variable r."));
     }
-    factorial(n) / (factorial(n - r) * factorial(r))
+    Ok(factorial(n) / (factorial(n - r) * factorial(r)))
 }
 
 
@@ -200,12 +202,16 @@ pub fn n_choose_r(n: u128, r: u128) -> u128 {
 /// # Links
 /// - Wikipedia: https://en.wikipedia.org/wiki/Linear_regression
 /// - Original Source: N/A
-pub fn linear_regression(x: &Array2<f64>, y: &Array1<f64>) -> Array1<f64> {
+pub fn linear_regression(x: &Array2<f64>, y: &Array1<f64>) -> Result<Array1<f64>, Error> {
     if x.dim().0 != y.len() {
-        panic!("The length of x and y do not coincide.");
+        return Err(data_error("The length of x and y do not coincide."));
     }
     let square_matrix: Array2<f64> = x.t().dot(x);
-    square_matrix.inv().expect("Failed to inverse the matrix x.").dot(&x.t().dot(&y.t()))
+    // Matrix inverse is done via nalgebra.
+    let n_square_matrix: DMatrix<f64> = MatrixConversion::ndarray_to_nalgebra(&square_matrix);
+    let n_inv_matrix: DMatrix<f64> = some_or_error(n_square_matrix.try_inverse(), "No matrix inverse exists to perform linear regression.")?;
+    let inv_matrix: Array2<f64> = MatrixConversion::nalgebra_to_ndarray(&n_inv_matrix)?;
+    Ok(inv_matrix.dot(&x.t().dot(&y.t())))
 }
 
 
@@ -226,11 +232,11 @@ pub fn linear_regression(x: &Array2<f64>, y: &Array1<f64>) -> Array1<f64> {
 /// # Links
 /// - Wikipedia: https://en.wikipedia.org/wiki/Coefficient_of_determination
 /// - Original Source: N/A
-pub fn r_square(real_values: &Array1<f64>, predicted_values: &Array1<f64>) -> f64 {
-    compare_array_len(&real_values, &predicted_values, "real_values", "predicted_values");
+pub fn r_square(real_values: &Array1<f64>, predicted_values: &Array1<f64>) -> Result<f64, Error> {
+    compare_array_len(&real_values, &predicted_values, "real_values", "predicted_values")?;
     let residual_sum: f64 = (real_values - predicted_values).map(|x| x.powi(2)).sum();
-    let total_sum: f64 = (real_values - real_values.mean().expect("Could not compute the mean of real_values.")).map(|x| x.powi(2)).sum();
-    1.0 - residual_sum/total_sum
+    let total_sum: f64 = (real_values - some_or_error(real_values.mean(), "Could not compute the mean of real_values.")?).map(|x| x.powi(2)).sum();
+    Ok(1.0 - residual_sum/total_sum)
 }
 
 
@@ -252,8 +258,8 @@ pub fn r_square(real_values: &Array1<f64>, predicted_values: &Array1<f64>) -> f6
 /// # Links
 /// - Wikipedia: https://en.wikipedia.org/wiki/Coefficient_of_determination#Adjusted_R2
 /// - Original Source: N/A
-pub fn adjusted_r_square(real_values: &Array1<f64>, predicted_values: &Array1<f64>, sample_size: usize, k_variables: usize) -> f64 {
-    1.0 - (1.0-r_square(real_values, predicted_values)) * (sample_size as f64 - 1.0) / ((sample_size-k_variables) as f64 - 1.0)
+pub fn adjusted_r_square(real_values: &Array1<f64>, predicted_values: &Array1<f64>, sample_size: usize, k_variables: usize) -> Result<f64, Error> {
+    Ok(1.0 - (1.0-r_square(real_values, predicted_values)?) * (sample_size as f64 - 1.0) / ((sample_size-k_variables) as f64 - 1.0))
 }
 
 
@@ -267,7 +273,7 @@ mod tests {
         use crate::statistics::covariance;
         let array_1: Array1<f64> = array![1.0, 2.0, 3.0, 4.0, 5.0];
         let array_2: Array1<f64> = array![1.0, 5.0, -9.0, 2.0, 4.0];
-        assert!((covariance(&array_1, &array_2, 0) - array![-0.8, -4.4, 0.0, 1.4, 6.8].sum()/5.0).abs() < TEST_ACCURACY);
+        assert!((covariance(&array_1, &array_2, 0).unwrap() - array![-0.8, -4.4, 0.0, 1.4, 6.8].sum()/5.0).abs() < TEST_ACCURACY);
     }
 
     #[test]
@@ -276,7 +282,7 @@ mod tests {
         let array_: Array1<f64> = array![1.0, 1.0, 3.0, 4.0, 5.0];
         let numerator: f64 = array!(-5.832, -5.832, 0.008, 1.728, 10.648).mean().unwrap();
         let denominator: f64 = array!(3.24, 3.24, 0.04, 1.44, 4.84_f64).mean().unwrap().powf(3.0/2.0);
-        assert!((skewness(&array_) - numerator/denominator).abs() < TEST_ACCURACY);
+        assert!((skewness(&array_).unwrap() - numerator/denominator).abs() < TEST_ACCURACY);
     }
 
     #[test]
@@ -285,13 +291,13 @@ mod tests {
         let array_: Array1<f64> = array![1.0, 1.0, 3.0, 4.0, 5.0];
         let numerator: f64 = array!(3.24, 3.24, 0.04, 1.44, 4.84_f64).mean().unwrap();
         let denuminator: f64 = array!(3.24, 3.24, 0.04, 1.44, 4.84_f64).mean().unwrap().powi(2);
-        assert!((kurtosis(&array_) - numerator/denuminator).abs() < TEST_ACCURACY);
+        assert!((kurtosis(&array_).unwrap() - numerator/denuminator).abs() < TEST_ACCURACY);
     }
 
     #[test]
     fn unit_test_n_choose_r() {
         use crate::statistics::n_choose_r;
-        assert_eq!(10, n_choose_r(5, 2));
+        assert_eq!(10, n_choose_r(5, 2).unwrap());
     }
 
     #[test]
@@ -300,7 +306,7 @@ mod tests {
         use crate::statistics::linear_regression;
         let y: Array1<f64> = array![1.0, 2.0, 3.0];
         let x: Array2<f64> = array![[1.0, 3.0, 1.0], [4.0, 4.0, 1.0], [6.0, 5.0, 1.0]];
-        let params = linear_regression(&x, &y);
+        let params: Array1<f64> = linear_regression(&x, &y).unwrap();
         // The results were found using LinearRegression from sklearn
         let comparison: Array1<f64> = Array1::from(vec![-2.49556592e-16, 1.0, -2.0]);
         assert!((&params - &comparison).sum().abs() < TEST_ACCURACY);

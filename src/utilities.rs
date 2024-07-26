@@ -2,8 +2,10 @@ pub mod maths_utils;
 pub mod time_value_utils;
 
 
+use std::io::{Error, ErrorKind};
 use std::collections::HashMap;
-use ndarray::Array1;
+use ndarray::{Array1, Array2, ShapeError};
+use nalgebra::DMatrix;
 use csv::Reader;
 
 
@@ -56,9 +58,104 @@ impl Time {
 /// 
 /// # Panics
 /// - Panics if the length of arrays do not match
-pub fn compare_array_len<T>(array_1: &Array1<T>, array_2: &Array1<T>, array_1_name: &str, array_2_name: &str) -> () {
+pub fn compare_array_len<T>(array_1: &Array1<T>, array_2: &Array1<T>, array_1_name: &str, array_2_name: &str) -> Result<(), Error> {
     if array_1.len() != array_2.len() {
-        panic!("The length of {} and {} do not coincide.", array_1_name, array_2_name);
+        return Err(data_error(format!("The length of {} and {} do not coincide.", array_1_name, array_2_name)));
+    }
+    Ok(())
+}
+
+
+/// # Description
+/// Creates an invalid input standard io error with the custom message.
+/// 
+/// # Input
+/// - msg: Custom message
+/// 
+/// # Output
+/// - Invalid input standard io error with the custom message
+pub fn input_error<T: Into<Box<dyn std::error::Error + Send + Sync>>>(msg: T) -> Error {
+    Error::new(ErrorKind::InvalidInput, msg)
+}
+
+
+/// # Description
+/// Creates an invalid data standard io error with the custom message.
+/// 
+/// # Input
+/// - msg: Custom message
+/// 
+/// # Output
+/// - Invalid data standard io error with the custom message
+pub fn data_error<T: Into<Box<dyn std::error::Error + Send + Sync>>>(msg: T) -> Error {
+    Error::new(ErrorKind::InvalidData, msg)
+}
+
+
+/// # Description
+/// Returns the value inside the Option or an Error with the message.
+/// 
+/// # Input
+/// - input: Value to unwrap
+/// - message: Error message to resturn in case the input value is None
+/// 
+/// # Output
+/// - Value wrapped inside Result
+pub fn some_or_error<T>(input: Option<T>, message: &str) -> Result<T, Error> {
+    match input {
+        Some(v) => Ok(v),
+        None => Err(data_error(message))
+    }
+}
+
+
+/// # Description
+/// Returns the value inside the Result or a ShapeError converted into standard io Error.
+/// 
+/// # Input
+/// - input: Value wrapped inside Result with a ShapeError
+/// 
+/// # Output:
+/// - Value wrapped inside Result with std::io::Error
+pub fn shape_error_to_error<T>(input: Result<T, ShapeError>) -> Result<T, Error> {
+    match input {
+        Ok(v) => Ok(v),
+        Err(e) => Err(Error::new(ErrorKind::Other, e.to_string())),
+    }
+}
+
+
+/// # Description
+/// Methods for converting matrices from ndarray to nalgebra and vice versa.
+pub struct MatrixConversion;
+
+impl MatrixConversion {
+
+    /// # Description
+    /// Converts ndarray matrix to nalgebra matrix
+    /// 
+    /// # Input
+    /// - matrix: ndarray matrix
+    /// 
+    /// # Output
+    /// - nalgebra matrix
+    pub fn ndarray_to_nalgebra(matrix: &Array2<f64>) -> DMatrix<f64> {
+        let (n_rows, n_columns) = matrix.dim();
+        let n_matrix: DMatrix<f64> = DMatrix::from_vec(n_columns, n_rows, matrix.clone().into_raw_vec());
+        n_matrix.transpose()
+    }
+
+    /// # Description
+    /// Converts nalgebra matrix to ndarray matrix
+    /// 
+    /// # Input
+    /// - matrix: nalgebra matrix
+    /// 
+    /// # Ouput
+    /// - ndarray matrix
+    pub fn nalgebra_to_ndarray(matrix: &DMatrix<f64>) -> Result<Array2<f64>, Error> {
+        let dim = (matrix.row(0).len(), matrix.column(0).len());
+        shape_error_to_error(Array2::from_shape_vec(dim, matrix.as_slice().to_vec()))
     }
 }
 
@@ -170,7 +267,8 @@ impl SampleData {
 
 #[cfg(test)]
 mod tests {
-    use ndarray::Array1;
+    use ndarray::{Array1, Array2};
+    use nalgebra::DMatrix;
     use crate::utilities::TEST_ACCURACY;
 
     #[test]
@@ -188,7 +286,41 @@ mod tests {
         use crate::utilities::compare_array_len;
         let a: Array1<i32> = Array1::from_vec(vec![1, 2, 3]);
         let b: Array1<i32> = Array1::from_vec(vec![4, 5, 6]);
-        compare_array_len(&a, &b, "a", "b");
+        compare_array_len(&a, &b, "a", "b").unwrap();
+    }
+
+    #[test]
+    fn unit_test_some_or_error() -> () {
+        use std::io::ErrorKind;
+        use crate::utilities::some_or_error;
+        let input: Option<f64> = None;
+        let result = some_or_error(input, "Test error message");
+        match result {
+            Ok(_) => (),
+            Err(e) => assert_eq!(e.kind(), ErrorKind::InvalidData),
+        }
+    }
+
+    #[test]
+    fn unit_test_ndarray_to_nalgebra() -> () {
+        use ndarray::arr2;
+        use crate::utilities::MatrixConversion;
+        let matrix: Array2<f64> = arr2(&[[0.0, 1.0], [2.0, 3.0], [4.0, 5.0]]);
+        let matrix_dim: (usize, usize) = matrix.dim();
+        let result: DMatrix<f64> = MatrixConversion::ndarray_to_nalgebra(&matrix);
+        assert_eq!(result.row(0).len(), matrix_dim.1);
+        assert_eq!(result.column(0).len(), matrix_dim.0);
+    }
+
+    #[test]
+    fn unit_test_nalgebra_to_ndarray() -> () {
+        use crate::utilities::MatrixConversion;
+        let matrix_dim: (usize, usize) = (3, 2);
+        let matrix: DMatrix<f64> = DMatrix::from_vec(matrix_dim.0, matrix_dim.1, vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0]);
+        let result: Array2<f64> = MatrixConversion::nalgebra_to_ndarray(&matrix).unwrap();
+        let result_dim: (usize, usize) = result.dim();
+        assert_eq!(result_dim.0, matrix_dim.0);
+        assert_eq!(result_dim.1, matrix_dim.1);
     }
 
     #[test]

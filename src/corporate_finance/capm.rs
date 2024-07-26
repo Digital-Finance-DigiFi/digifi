@@ -1,6 +1,7 @@
+use std::io::Error;
 use std::collections::HashMap;
 use ndarray::{Array1, Array2};
-use crate::utilities::compare_array_len;
+use crate::utilities::{compare_array_len, input_error, data_error, some_or_error, shape_error_to_error};
 use crate::statistics::{covariance, linear_regression};
 
 
@@ -58,48 +59,49 @@ impl CAPMData {
     /// - Panics if covariance solution type used with non-standard CAPM
     /// - Panics if the length of the market_returns array does not match any other array (i.e., rf, smb, hml, rmw, cma)
     pub fn new(capm_type: CAPMType, solution_type: CAPMSolutionType, market_returns: Array1<f64>, rf: Array1<f64>,
-               smb: Option<Array1<f64>>, hml: Option<Array1<f64>>, rmw: Option<Array1<f64>>, cma: Option<Array1<f64>>) -> Self {
+               smb: Option<Array1<f64>>, hml: Option<Array1<f64>>, rmw: Option<Array1<f64>>, cma: Option<Array1<f64>>) -> Result<Self, Error> {
         // Check solution type compatibility with the choice of the model.
         match capm_type {
             CAPMType::Standard => (),
             _ => {
                 match solution_type {
                     CAPMSolutionType::Covariance => {
-                        panic!("The covariance solution method is only available for the standard CAPM.")
+                        return Err(input_error("The covariance solution method is only available for the standard CAPM."));
                     },
                     CAPMSolutionType::LinearRegression => ()
                 }
             }
         }
         // Validate array lengths
-        compare_array_len(&market_returns, &rf, "market_returns", "rf");
+        compare_array_len(&market_returns, &rf, "market_returns", "rf")?;
         match capm_type {
             CAPMType::Standard => (),
             CAPMType::ThreeFactorFamaFrench => {
-                CAPMData::validate_option_array(&market_returns, &smb, "smb");
-                CAPMData::validate_option_array(&market_returns, &hml, "hml");
+                CAPMData::validate_option_array(&market_returns, &smb, "smb")?;
+                CAPMData::validate_option_array(&market_returns, &hml, "hml")?;
             },
             CAPMType::FiveFactorFamaFrench => {
-                CAPMData::validate_option_array(&market_returns, &smb, "smb");
-                CAPMData::validate_option_array(&market_returns, &hml, "hml");
-                CAPMData::validate_option_array(&market_returns, &rmw, "rmw");
-                CAPMData::validate_option_array(&market_returns, &cma, "cma");
+                CAPMData::validate_option_array(&market_returns, &smb, "smb")?;
+                CAPMData::validate_option_array(&market_returns, &hml, "hml")?;
+                CAPMData::validate_option_array(&market_returns, &rmw, "rmw")?;
+                CAPMData::validate_option_array(&market_returns, &cma, "cma")?;
             },
         }
-        CAPMData { capm_type, solution_type, market_returns, rf, smb, hml, rmw, cma }
+        Ok(CAPMData { capm_type, solution_type, market_returns, rf, smb, hml, rmw, cma })
     }
 
     /// # Description
     /// Validation of length of arrays inside the Option enum.
-    fn validate_option_array(market_returns: &Array1<f64>, option_array: &Option<Array1<f64>>, option_array_name: &str) -> () {
+    fn validate_option_array(market_returns: &Array1<f64>, option_array: &Option<Array1<f64>>, option_array_name: &str) -> Result<(), Error> {
         match option_array {
             Some(array) => {
-                compare_array_len(&market_returns, array, "market_returns", option_array_name);
+                compare_array_len(&market_returns, array, "market_returns", option_array_name)?;
             },
             None => {
-                panic!("The argument {} must contain an array for the selected CAPM type.", option_array_name);
+                return Err(data_error(format!("The argument {} must contain an array for the selected CAPM type.", option_array_name)));
             },
         }
+        Ok(())
     }
 
     pub fn capm_type(&self) -> CAPMType {
@@ -175,55 +177,55 @@ impl CAPM {
     /// 
     /// # LaTeX Formula
     /// - E[R_{A}] = R_{rf} + \\alpha + \\beta_{M}(E[R_{M}] - R_{rf}) + \\beta_{S}SMB + \\beta_{H}HML + \\beta_{R}RMW + \\beta_{C}CMA
-    pub fn predict_asset_return(&self, alpha: f64, beta: f64, beta_s: f64, beta_h: f64, beta_r: f64, beta_c: f64) -> Array1<f64> {
+    pub fn predict_asset_return(&self, alpha: f64, beta: f64, beta_s: f64, beta_h: f64, beta_r: f64, beta_c: f64) -> Result<Array1<f64>, Error> {
         let mut lin_reg: Array1<f64> = alpha + beta*(&self.capm_data.market_returns - self.capm_data.rf());
         match self.capm_data.capm_type {
             CAPMType::Standard => (),
             CAPMType::ThreeFactorFamaFrench => {
-                lin_reg = lin_reg + beta_s*self.capm_data.smb().unwrap() + beta_h*self.capm_data.hml().unwrap();
+                lin_reg = lin_reg + beta_s*some_or_error(self.capm_data.smb(), "The argument smb is required for Three Factor Fama-French CAPM.")?
+                                  + beta_h*some_or_error(self.capm_data.hml(), "The argument hml is required for Three Factor Fama-French CAPM.")?;
             },
             CAPMType::FiveFactorFamaFrench => {
-                lin_reg = lin_reg + beta_s*self.capm_data.smb().unwrap() + beta_h*self.capm_data.hml().unwrap();
-                lin_reg = lin_reg + beta_r*self.capm_data.rmw().unwrap() + beta_c*self.capm_data.cma().unwrap();
+                lin_reg = lin_reg + beta_s*some_or_error(self.capm_data.smb(), "The argument smb is required for Five Factor Fama-French CAPM.")?
+                                  + beta_h*some_or_error(self.capm_data.hml(), "The argument hml is required for Five Factor Fama-French CAPM.")?;
+                lin_reg = lin_reg + beta_r*some_or_error(self.capm_data.rmw(), "The argument rmw is required for Five Factor Fama-French CAPM.")?
+                                  + beta_c*some_or_error(self.capm_data.cma(), "The argument cma is required for Five Factor Fama-French CAPM.")?;
             },
         }
-        lin_reg
+        Ok(lin_reg)
     }
 
-    fn train(&self, asset_returns: &Array1<f64>) -> HashMap<String, f64> {
+    fn train(&self, asset_returns: &Array1<f64>) -> Result<HashMap<String, f64>, Error> {
         let reg_params: HashMap<String, f64>;
         let mut data_vec: Vec<Vec<f64>> = vec![(self.capm_data.market_returns() - self.capm_data.rf()).to_vec()];
         data_vec.push(vec![1.0; data_vec[0].len()]);
         match self.capm_data.capm_type {
             CAPMType::Standard => {
-                let data_matrix: Array2<f64> = Array2::from_shape_vec((2, asset_returns.len()), data_vec.into_iter().flatten()
-                                                        .collect()).expect("Could not convert data to Array2.");
-                let params: Array1<f64> = linear_regression(&data_matrix.t().to_owned(), &asset_returns);
+                let data_matrix: Array2<f64> = shape_error_to_error(Array2::from_shape_vec((2, asset_returns.len()), data_vec.into_iter().flatten().collect()))?;
+                let params: Array1<f64> = linear_regression(&data_matrix.t().to_owned(), &asset_returns)?;
                 reg_params = HashMap::from([(String::from("beta"), params[0]), (String::from("alpha"), params[1])]);
             },
             CAPMType::ThreeFactorFamaFrench => {
-                data_vec.push(self.capm_data.smb().expect("The argument smb is required for Three Factor Fama-French CAPM.").to_vec());
-                data_vec.push(self.capm_data.hml().expect("The argument hml is required for Three Factor Fama-French CAPM.").to_vec());
-                let data_matrix: Array2<f64> = Array2::from_shape_vec((4, asset_returns.len()), data_vec.into_iter().flatten()
-                                                        .collect()).expect("Could not convert data to Array2.");
-                let params: Array1<f64> = linear_regression(&data_matrix.t().to_owned(), &asset_returns);
+                data_vec.push(some_or_error(self.capm_data.smb(), "The argument smb is required for Three Factor Fama-French CAPM.")?.to_vec());
+                data_vec.push(some_or_error(self.capm_data.hml(), "The argument hml is required for Three Factor Fama-French CAPM.")?.to_vec());
+                let data_matrix: Array2<f64> = shape_error_to_error(Array2::from_shape_vec((4, asset_returns.len()), data_vec.into_iter().flatten().collect()))?;
+                let params: Array1<f64> = linear_regression(&data_matrix.t().to_owned(), &asset_returns)?;
                 reg_params = HashMap::from([(String::from("beta"), params[0]), (String::from("alpha"), params[1]),
                                             (String::from("beta_s"), params[2]), (String::from("beta_h"), params[3])]);
             },
             CAPMType::FiveFactorFamaFrench => {
-                data_vec.push(self.capm_data.smb().expect("The argument smb is required for Five Factor Fama-French CAPM.").to_vec());
-                data_vec.push(self.capm_data.hml().expect("The argument hml is required for Five Factor Fama-French CAPM.").to_vec());
-                data_vec.push(self.capm_data.rmw().expect("The argument rmw is required for Five Factor Fama-French CAPM.").to_vec());
-                data_vec.push(self.capm_data.cma().expect("The argument cma is required for Five Factor Fama-French CAPM.").to_vec());
-                let data_matrix: Array2<f64> = Array2::from_shape_vec((6, asset_returns.len()), data_vec.into_iter().flatten()
-                                                        .collect()).expect("Could not convert data to Array2.");
-                let params: Array1<f64> = linear_regression(&data_matrix.t().to_owned(), &asset_returns);
+                data_vec.push(some_or_error(self.capm_data.smb(), "The argument smb is required for Five Factor Fama-French CAPM.")?.to_vec());
+                data_vec.push(some_or_error(self.capm_data.hml(), "The argument hml is required for Five Factor Fama-French CAPM.")?.to_vec());
+                data_vec.push(some_or_error(self.capm_data.rmw(), "The argument rmw is required for Five Factor Fama-French CAPM.")?.to_vec());
+                data_vec.push(some_or_error(self.capm_data.cma(), "The argument cma is required for Five Factor Fama-French CAPM.")?.to_vec());
+                let data_matrix: Array2<f64> = shape_error_to_error(Array2::from_shape_vec((6, asset_returns.len()), data_vec.into_iter().flatten().collect()))?;
+                let params: Array1<f64> = linear_regression(&data_matrix.t().to_owned(), &asset_returns)?;
                 reg_params = HashMap::from([(String::from("beta"), params[0]), (String::from("alpha"), params[1]),
                                             (String::from("beta_s"), params[2]), (String::from("beta_h"), params[3]),
                                             (String::from("beta_r"), params[4]), (String::from("beta_c"), params[5])]);
             },
         }
-        reg_params
+        Ok(reg_params)
     }
 
     /// # Description
@@ -239,12 +241,12 @@ impl CAPM {
     /// - beta_h: Sensitivity of the asset with respect to HML returns
     /// - beta_r: Sensitivity of the asset with respect to RMW returns
     /// - beta_c: Sensitivity of the asset with respect to CMA returns
-    pub fn get_parameters(&self, asset_returns: Array1<f64>) -> HashMap<String, f64> {
-        compare_array_len(&asset_returns, &self.capm_data.market_returns, "asset_returns", "market_returns");
+    pub fn get_parameters(&self, asset_returns: Array1<f64>) -> Result<HashMap<String, f64>, Error> {
+        compare_array_len(&asset_returns, &self.capm_data.market_returns, "asset_returns", "market_returns")?;
         if let CAPMSolutionType::Covariance = self.capm_data.solution_type {
-            let numerator: f64 = covariance(&asset_returns, &self.capm_data.market_returns, 0);
-            let denominator: f64 = covariance(&self.capm_data.market_returns, &self.capm_data.market_returns, 0);
-            HashMap::from([(String::from("beta"), numerator/denominator)])
+            let numerator: f64 = covariance(&asset_returns, &self.capm_data.market_returns, 0)?;
+            let denominator: f64 = covariance(&self.capm_data.market_returns, &self.capm_data.market_returns, 0)?;
+            Ok(HashMap::from([(String::from("beta"), numerator/denominator)]))
         } else {
             self.train(&asset_returns)
         }
@@ -266,9 +268,9 @@ mod tests {
         let capm_data: CAPMData = CAPMData::new(CAPMType::FiveFactorFamaFrench, CAPMSolutionType::LinearRegression,
                                                 sample_data.get("market").unwrap().clone(), sample_data.get("rf").unwrap().clone(),
                                                 Some(sample_data.get("smb").unwrap().clone()), Some(sample_data.get("hml").unwrap().clone()),
-                                                Some(sample_data.get("rmw").unwrap().clone()), Some(sample_data.get("cma").unwrap().clone()));
+                                                Some(sample_data.get("rmw").unwrap().clone()), Some(sample_data.get("cma").unwrap().clone())).unwrap();
         let capm: CAPM = CAPM::new(capm_data);
-        let params: HashMap<String, f64> = capm.get_parameters(sample_data.get("aapl").unwrap().clone());
+        let params: HashMap<String, f64> = capm.get_parameters(sample_data.get("aapl").unwrap().clone()).unwrap();
         // The results were found using LinearRegression from sklearn
         assert!((params.get("alpha").unwrap() - 0.013530149403422963).abs() < TEST_ACCURACY);
         assert!((params.get("beta").unwrap() - 1.37731033).abs() < TEST_ACCURACY);

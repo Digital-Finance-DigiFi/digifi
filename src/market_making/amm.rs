@@ -1,5 +1,7 @@
+use std::io::Error;
 use std::collections::HashMap;
 use ndarray::Array1;
+use crate::utilities::{input_error, data_error};
 
 
 #[derive(Clone)]
@@ -44,14 +46,14 @@ impl AMMLiquidityPool {
     /// # Panics
     /// - Panics if the characteristic number is not positive
     /// - Panics if the product of supplies of the two tokens do not equal to the characteristic number
-    pub fn new(token_1: AMMToken, token_2: AMMToken, char_number: f64, tolerance: f64) -> Self {
+    pub fn new(token_1: AMMToken, token_2: AMMToken, char_number: f64, tolerance: f64) -> Result<Self, Error> {
         if char_number <= 0.0 {
-            panic!("The argument char_number must be positive.")
+            return Err(input_error("The argument char_number must be positive."));
         }
         if tolerance < ((token_1.supply * token_2.supply) - char_number).abs() {
-            panic!("The argument char_number must be the product of supplies of the tokens.");
+            return Err(data_error("The argument char_number must be the product of supplies of the tokens."));
         }
-        AMMLiquidityPool { token_1, token_2, char_number, tolerance }
+        Ok(AMMLiquidityPool { token_1, token_2, char_number, tolerance })
     }
 
     pub fn token_1(&self) -> AMMToken {
@@ -76,18 +78,19 @@ impl AMMLiquidityPool {
     /// # Panics
     /// - Panics if the product of updated supplies of the two tokens do not equal to the characteristic number
     /// - Panics if the wrong id for either token_1 or token_2 are provided
-    pub fn update_token_supply(&mut self, token_1: AMMToken, token_2: AMMToken) -> () {
+    pub fn update_token_supply(&mut self, token_1: AMMToken, token_2: AMMToken) -> Result<(), Error> {
         if self.tolerance < ((token_1.supply * token_2.supply) - self.char_number).abs() {
-            panic!("The argument char_number must be the product of supplies of the tokens.");
+            return Err(data_error("The argument char_number must be the product of supplies of the tokens."));
         }
         if self.token_1.id != token_1.id {
-            panic!("Wrong token_1 id is provided.");
+            return Err(input_error("Wrong token_1 id is provided."));
         }
         if self.token_2.id != token_2.id {
-            panic!("Wrong token_2 id is provided.");
+            return Err(input_error("Wrong token_2 id is provided."));
         }
         self.token_1 = token_1;
         self.token_2 = token_2;
+        Ok(())
     }
 }
 
@@ -104,14 +107,14 @@ pub struct AMMTransactionData {
 }
 
 impl AMMTransactionData {
-    pub fn new(token_id: String, quantity: f64, percent_fee: f64) -> Self {
+    pub fn new(token_id: String, quantity: f64, percent_fee: f64) -> Result<Self, Error> {
         if quantity <= 0.0 {
-            panic!("The argument quantity must be positive.");
+            return Err(input_error("The argument quantity must be positive."));
         }
         if percent_fee < 0.0 {
-            panic!("The argument percent_fee must be non-negative.");
+            return Err(input_error("The argument percent_fee must be non-negative."));
         }
-        AMMTransactionData { token_id, quantity, percent_fee }
+        Ok(AMMTransactionData { token_id, quantity, percent_fee })
     }
 
     pub fn token_id(&self) -> String {
@@ -162,7 +165,7 @@ impl SimpleAMM {
     /// - Panics if the id of token in transaction does not match the id of any token in the liquidity pool
     /// - Panics if cannot fill the buy order due to lack of supply in the liquidity pool
     /// - Panics if the transaction fee is outside the fee range specified by the liquidity pool
-    pub fn make_transaction(&mut self, tx_data: AMMTransactionData) -> HashMap<String, f64> {
+    pub fn make_transaction(&mut self, tx_data: AMMTransactionData) -> Result<HashMap<String, f64>, Error> {
         let mut token_1 = self.liquidity_pool.token_1();
         let mut token_2 = self.liquidity_pool.token_2();
         let token: AMMToken;
@@ -174,14 +177,14 @@ impl SimpleAMM {
             token = token_2.clone();
             counterparty_token_supply = token_1.supply;
         } else {
-            panic!("The token with identifier {} does not exist in the liquidity pool.", tx_data.token_id());
+            return Err(input_error(format!("The token with identifier {} does not exist in the liquidity pool.", tx_data.token_id())));
         }
         let tx_buy_size = tx_data.quantity() * (1.0 + tx_data.percent_fee());
         if token.supply < tx_buy_size {
-            panic!("Not enough supply of token {} ({}) to fill in the buy order of {}.", token.id, token.supply, tx_buy_size);
+            return Err(data_error(format!("Not enough supply of token {} ({}) to fill in the buy order of {}.", token.id, token.supply, tx_buy_size)));
         }
         if (tx_data.percent_fee() < token.fee_lower_bound) || (token.fee_upper_bound < tx_data.percent_fee()) {
-            panic!("The argument percent_fee must be in the range [{}, {}].", token.fee_lower_bound, token.fee_upper_bound);
+            return Err(input_error(format!("The argument percent_fee must be in the range [{}, {}].", token.fee_lower_bound, token.fee_upper_bound)));
         }
         // Change in supply of token (y - delta_y)
         let updated_token_supply = token.supply - tx_buy_size;
@@ -201,12 +204,12 @@ impl SimpleAMM {
             token_1.supply = updated_counterparty_token_supply;
             token_2.supply = updated_token_supply;
         }
-        self.liquidity_pool.update_token_supply(token_1, token_2);
+        self.liquidity_pool.update_token_supply(token_1, token_2)?;
         let mut receipt: HashMap<String, f64> = HashMap::<String, f64>::new();
         receipt.insert(String::from("quantity_to_sell"), dx);
         receipt.insert(String::from("exchange_price"), price);
         receipt.insert(String::from("fee_in_purchased_token"), fee);
-        receipt
+        Ok(receipt)
     }
 
     /// # Description
@@ -239,10 +242,10 @@ mod tests {
         use crate::market_making::amm::{AMMToken, AMMLiquidityPool, AMMTransactionData, SimpleAMM};
         let token_1: AMMToken = AMMToken { id: String::from("BTC"), supply: 10.0, fee_lower_bound: 0.0, fee_upper_bound: 0.03  };
         let token_2: AMMToken = AMMToken { id: String::from("ETH"), supply: 1_000.0, fee_lower_bound: 0.0, fee_upper_bound: 0.03  };
-        let liquidity_pool: AMMLiquidityPool = AMMLiquidityPool::new(token_1, token_2, 10_000.0, 0.00001);
-        let tx_data: AMMTransactionData = AMMTransactionData::new(String::from("BTC"), 1.0, 0.01);
+        let liquidity_pool: AMMLiquidityPool = AMMLiquidityPool::new(token_1, token_2, 10_000.0, 0.00001).unwrap();
+        let tx_data: AMMTransactionData = AMMTransactionData::new(String::from("BTC"), 1.0, 0.01).unwrap();
         let mut amm: SimpleAMM = SimpleAMM { liquidity_pool };
-        let receipt = amm.make_transaction(tx_data);
+        let receipt = amm.make_transaction(tx_data).unwrap();
         assert_eq!(*receipt.get("quantity_to_sell").unwrap(), 10_000.0/8.99 - 1_000.0);
         assert_eq!(*receipt.get("exchange_price").unwrap(), (10_000.0/8.99) / 8.99);
     }
