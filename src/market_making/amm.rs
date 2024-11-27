@@ -6,7 +6,7 @@ use crate::utilities::{input_error, data_error};
 
 #[derive(Clone)]
 /// # Description
-/// Token data format used to define AMMLiquidityPool.
+/// Token data format used to define `AMMLiquidityPool`.
 pub struct AMMToken {
     /// Token identifier/name
     pub id: String,
@@ -43,15 +43,15 @@ impl AMMLiquidityPool {
     /// - char_number: Characteristic number
     /// - tolerance: Error margin for computing validating token supplies
     /// 
-    /// # Panics
-    /// - Panics if the characteristic number is not positive
-    /// - Panics if the product of supplies of the two tokens do not equal to the characteristic number
+    /// # Errors
+    /// - Returns an error if the characteristic number is not positive
+    /// - Returns an error if the product of supplies of the two tokens do not equal to the characteristic number
     pub fn new(token_1: AMMToken, token_2: AMMToken, char_number: f64, tolerance: f64) -> Result<Self, Error> {
         if char_number <= 0.0 {
-            return Err(input_error("The argument char_number must be positive."));
+            return Err(input_error("AMM Liquidity Pool: The argument char_number must be positive."));
         }
         if tolerance < ((token_1.supply * token_2.supply) - char_number).abs() {
-            return Err(data_error("The argument char_number must be the product of supplies of the tokens."));
+            return Err(data_error("AMM Liquidity Pool: The argument char_number must be the product of supplies of the tokens."));
         }
         Ok(AMMLiquidityPool { token_1, token_2, char_number, tolerance })
     }
@@ -75,18 +75,18 @@ impl AMMLiquidityPool {
     /// - token_1: Token 1 updated data
     /// - token_2: Token 2 updated data
     /// 
-    /// # Panics
-    /// - Panics if the product of updated supplies of the two tokens do not equal to the characteristic number
-    /// - Panics if the wrong id for either token_1 or token_2 are provided
+    /// # Errors
+    /// - Returns an error if the product of updated supplies of the two tokens do not equal to the characteristic number
+    /// - Returns an error if the wrong id for either `token_1` or `token_2` are provided
     pub fn update_token_supply(&mut self, token_1: AMMToken, token_2: AMMToken) -> Result<(), Error> {
         if self.tolerance < ((token_1.supply * token_2.supply) - self.char_number).abs() {
-            return Err(data_error("The argument char_number must be the product of supplies of the tokens."));
+            return Err(data_error("AMM Liquidity Pool: The argument char_number must be the product of supplies of the tokens."));
         }
         if self.token_1.id != token_1.id {
-            return Err(input_error("Wrong token_1 id is provided."));
+            return Err(input_error("AMM Liquidity Pool: Wrong token_1 id is provided."));
         }
         if self.token_2.id != token_2.id {
-            return Err(input_error("Wrong token_2 id is provided."));
+            return Err(input_error("AMM Liquidity Pool: Wrong token_2 id is provided."));
         }
         self.token_1 = token_1;
         self.token_2 = token_2;
@@ -117,8 +117,8 @@ impl AMMTransactionData {
         Ok(AMMTransactionData { token_id, quantity, percent_fee })
     }
 
-    pub fn token_id(&self) -> String {
-        self.token_id.clone()
+    pub fn token_id(&self) -> &String {
+        &self.token_id
     }
 
     pub fn quantity(&self) -> f64 {
@@ -161,43 +161,52 @@ impl SimpleAMM {
     /// - exchange_price: Exchange rate produced by the AMM
     /// - fee_in_purchased_token: Transaction fee that has to be paid quoted in quantity of purchased token (e.g., fee is 2.1 Purchased Tokens)
     /// 
-    /// # Panics
-    /// - Panics if the id of token in transaction does not match the id of any token in the liquidity pool
-    /// - Panics if cannot fill the buy order due to lack of supply in the liquidity pool
-    /// - Panics if the transaction fee is outside the fee range specified by the liquidity pool
+    /// # Errors
+    /// - Returns an error if the id of token in transaction does not match the id of any token in the liquidity pool
+    /// - Returns an error if cannot fill the buy order due to lack of supply in the liquidity pool
+    /// - Returns an error if the transaction fee is outside the fee range specified by the liquidity pool
     pub fn make_transaction(&mut self, tx_data: AMMTransactionData) -> Result<HashMap<String, f64>, Error> {
-        let mut token_1 = self.liquidity_pool.token_1();
-        let mut token_2 = self.liquidity_pool.token_2();
-        let token: AMMToken;
+        let mut token_1: AMMToken = self.liquidity_pool.token_1();
+        let mut token_2: AMMToken = self.liquidity_pool.token_2();
+        let token_id: &String;
+        let token_supply: f64;
+        let token_fee_lower_bound: f64;
+        let token_fee_upper_bound: f64;
         let counterparty_token_supply: f64;
-        if tx_data.token_id() == token_1.id {
-            token = token_1.clone();
+        if tx_data.token_id() == &token_1.id {
+            token_id = &token_1.id;
+            token_supply = token_1.supply;
+            token_fee_lower_bound = token_1.fee_lower_bound;
+            token_fee_upper_bound = token_1.fee_upper_bound;
             counterparty_token_supply = token_2.supply;
-        } else if tx_data.token_id() == token_2.id {
-            token = token_2.clone();
+        } else if tx_data.token_id() == &token_2.id {
+            token_id = &token_2.id;
+            token_supply = token_2.supply;
+            token_fee_lower_bound = token_2.fee_lower_bound;
+            token_fee_upper_bound = token_2.fee_upper_bound;
             counterparty_token_supply = token_1.supply;
         } else {
-            return Err(input_error(format!("The token with identifier {} does not exist in the liquidity pool.", tx_data.token_id())));
+            return Err(input_error(format!("Simple AMM: The token with identifier {} does not exist in the liquidity pool.", tx_data.token_id())));
         }
-        let tx_buy_size = tx_data.quantity() * (1.0 + tx_data.percent_fee());
-        if token.supply < tx_buy_size {
-            return Err(data_error(format!("Not enough supply of token {} ({}) to fill in the buy order of {}.", token.id, token.supply, tx_buy_size)));
+        let tx_buy_size: f64 = tx_data.quantity() * (1.0 + tx_data.percent_fee());
+        if token_supply < tx_buy_size {
+            return Err(data_error(format!("Simple AMM: Not enough supply of token {} ({}) to fill in the buy order of {}.", token_id, token_supply, tx_buy_size)));
         }
-        if (tx_data.percent_fee() < token.fee_lower_bound) || (token.fee_upper_bound < tx_data.percent_fee()) {
-            return Err(input_error(format!("The argument percent_fee must be in the range [{}, {}].", token.fee_lower_bound, token.fee_upper_bound)));
+        if (tx_data.percent_fee() < token_fee_lower_bound) || (token_fee_upper_bound < tx_data.percent_fee()) {
+            return Err(input_error(format!("Simple AMM: The argument percent_fee must be in the range [{}, {}].", token_fee_lower_bound, token_fee_upper_bound)));
         }
         // Change in supply of token (y - delta_y)
-        let updated_token_supply = token.supply - tx_buy_size;
+        let updated_token_supply: f64 = token_supply - tx_buy_size;
         // Update supply of counterparty_token based on the characteristic number (x + delta_x = K/(y - delta_y))
-        let updated_counterparty_token_supply = self.liquidity_pool.char_number() / updated_token_supply;
+        let updated_counterparty_token_supply: f64 = self.liquidity_pool.char_number() / updated_token_supply;
         // Determine amount of other_token that needs to be sold to AMM to fill the token buy order (delta_x)
-        let dx = updated_counterparty_token_supply - counterparty_token_supply;
+        let dx: f64 = updated_counterparty_token_supply - counterparty_token_supply;
         // Exchange price (P = (x + delta_x)/(y - delta_y))
-        let price = updated_counterparty_token_supply / updated_token_supply;
+        let price: f64 = updated_counterparty_token_supply / updated_token_supply;
         // Fee quoted in terms of token
-        let fee = tx_data.quantity() * tx_data.percent_fee() * price;
+        let fee: f64 = tx_data.quantity() * tx_data.percent_fee() * price;
         // Update the liquidity pool
-        if tx_data.token_id() == token_1.id {
+        if tx_data.token_id() == &token_1.id {
             token_1.supply = updated_token_supply;
             token_2.supply = updated_counterparty_token_supply;
         } else {

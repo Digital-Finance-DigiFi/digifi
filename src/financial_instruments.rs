@@ -4,6 +4,7 @@ pub mod rates_and_swaps;
 use std::io::Error;
 use ndarray::Array1;
 use crate::utilities::{input_error, data_error};
+use crate::portfolio_applications::AssetHistData;
 
 
 pub enum FinancialInstrumentType {
@@ -55,7 +56,7 @@ pub trait FinancialInstrument {
 
     /// # Description
     /// Genrates and updates the historica data about the asset.
-    fn generate_historic_data(&self) -> ();
+    fn generate_historic_data(&mut self, in_place: bool) -> Result<AssetHistData, Error>;
 }
 
 
@@ -82,7 +83,7 @@ pub trait Payoff: PayoffClone {
     /// Validation of payoff object to satisfy the computational requirements.
     /// 
     /// # Input
-    /// - length_value: Number of test data points to validate payoff method on
+    /// - `length_value`: Number of test data points to validate payoff method on
     fn validate_payoff(&self, val_length: usize) -> Result<(), Error> {
         let s: Array1<f64> = Array1::from_vec(vec![1.0; val_length]);
         let result: Array1<f64> = self.payoff(&s);
@@ -115,7 +116,7 @@ impl Payoff for LongCall {
     /// Long call option payoff.
     /// 
     /// # Input
-    /// - s: Underlying asset price
+    /// - `s`: Underlying asset price
     /// 
     /// # Output
     /// - Payoff of the long call option
@@ -130,7 +131,7 @@ impl Payoff for LongCall {
     /// Long call option profit.
     /// 
     /// # Input
-    /// - s: Underlying asset price
+    /// - `s`: Underlying asset price
     /// 
     /// # Output
     /// - Profit of the long call option
@@ -158,7 +159,7 @@ impl Payoff for ShortCall {
     /// Short call option payoff.
     /// 
     /// # Input
-    /// - s: Underlying asset price
+    /// - `s`: Underlying asset price
     /// 
     /// # Output
     /// - Payoff of the short call option
@@ -173,7 +174,7 @@ impl Payoff for ShortCall {
     /// Short call option profit.
     /// 
     /// # Input
-    /// - s: Underlying asset price
+    /// - `s`: Underlying asset price
     /// 
     /// # Output
     /// - Profit of the short call option
@@ -201,7 +202,7 @@ impl Payoff for LongPut {
     /// Long put option payoff.
     /// 
     /// # Input
-    /// - s: Underlying asset price
+    /// - `s`: Underlying asset price
     /// 
     /// # Output
     /// - Payoff of the long put option
@@ -216,7 +217,7 @@ impl Payoff for LongPut {
     /// Long put option profit.
     /// 
     /// # Input
-    /// - s: Underlying asset price
+    /// - `s`: Underlying asset price
     /// 
     /// # Output
     /// - Profit of the long put option
@@ -244,7 +245,7 @@ impl Payoff for ShortPut {
     /// Short put option payoff.
     /// 
     /// # Input
-    /// - s: Underlying asset price
+    /// - `s`: Underlying asset price
     /// 
     /// # Output
     /// - Payoff of the short put option
@@ -259,7 +260,7 @@ impl Payoff for ShortPut {
     /// Short put option profit.
     /// 
     /// # Input
-    /// - s: Underlying asset price
+    /// - `s`: Underlying asset price
     /// 
     /// # Output
     /// - Profit of the short put option
@@ -295,17 +296,17 @@ impl BullCollar {
     /// Creates a new BullCollar instance.
     /// 
     /// # Input
-    /// - k_p: Long put option strike price
-    /// - k_c: Short call option strike price
-    /// - cost_p: Initial long put option price (cost)
-    /// - cost_c: Initial short call option price (cost)
-    /// - cost_s: Initial asset price (cost)
+    /// - `k_p`: Long put option strike price
+    /// - `k_c`: Short call option strike price
+    /// - `cost_p`: Initial long put option price (cost)
+    /// - `cost_c`: Initial short call option price (cost)
+    /// - `cost_s`: Initial asset price (cost)
     /// 
-    /// # Panics
-    /// - Panics if the long put strike price is larger than the short call strike price
+    /// # Errors
+    /// - Returns an error if the long put strike price is larger than the short call strike price
     pub fn new(k_p: f64, k_c: f64, cost_p: f64, cost_c: f64, cost_s: f64) -> Result<Self, Error> {
         if k_c < k_p {
-            return Err(input_error("The argument k_p must be smaller or equal to k_c."));
+            return Err(input_error("Bull Collar: The argument k_p must be smaller or equal to k_c."));
         }
         Ok(BullCollar { k_p, k_c, cost_p, cost_c, cost_s })
     }
@@ -316,7 +317,7 @@ impl Payoff for BullCollar {
     /// Bull collar strategy payoff.
     /// 
     /// # Input
-    /// - s: Underlying asset price
+    /// - `s`: Underlying asset price
     /// 
     /// # Output
     /// - Payoff of the bull collar strategy
@@ -331,7 +332,7 @@ impl Payoff for BullCollar {
     /// Bull collar strategy profit.
     /// 
     /// # Input
-    /// - s: Underlying asset price
+    /// - `s`: Underlying asset price
     /// 
     /// # Output
     /// - Profit of the bull collar strategy
@@ -367,17 +368,17 @@ impl BearCollar {
     /// Creates a new BearCollar instance.
     /// 
     /// # Input
-    /// - k_p: Short put option strike price
-    /// - k_c: Long call option strike price
-    /// - cost_p: Initial short put option price (cost)
-    /// - cost_c: Initial long call option price (cost)
-    /// - cost_s: Initial asset price (cost)
+    /// - `k_p`: Short put option strike price
+    /// - `k_c`: Long call option strike price
+    /// - `cost_p`: Initial short put option price (cost)
+    /// - `cost_c`: Initial long call option price (cost)
+    /// - `cost_s`: Initial asset price (cost)
     /// 
-    /// # Panics
-    /// - Panics if the short put strike price is larger than the long call strike price
+    /// # Errors
+    /// - Returns an error if the short put strike price is larger than the long call strike price
     pub fn new(k_p: f64, k_c: f64, cost_p: f64, cost_c: f64, cost_s: f64) -> Result<Self, Error> {
         if k_c < k_p {
-            return Err(input_error("The argument k_p must be smaller or equal to k_c."));
+            return Err(input_error("Bear Collar: The argument k_p must be smaller or equal to k_c."));
         }
         Ok(BearCollar { k_p, k_c, cost_p, cost_c, cost_s })
     }
@@ -388,7 +389,7 @@ impl Payoff for BearCollar {
     /// Bear collar strategy payoff.
     /// 
     /// # Input
-    /// - s_t: Underlying asset price
+    /// - `s`: Underlying asset price
     /// 
     /// # Output
     /// - Payoff of the bear collar strategy
@@ -403,7 +404,7 @@ impl Payoff for BearCollar {
     /// Bear collar strategy profit.
     /// 
     /// # Input
-    /// - s: Underlying asset price
+    /// - `s`: Underlying asset price
     /// 
     /// # Output
     /// - Profit of the bear collar strategy
@@ -437,16 +438,16 @@ impl BullSpread {
     /// Creates a new BullSpread instance.
     /// 
     /// # Input
-    /// - k_l: Long call option strike price
-    /// - k_s: Short call option strike price
-    /// - cost_l: Initial long call option price (cost)
-    /// - cost_s: Initial short call option price (cost)
+    /// - `k_l`: Long call option strike price
+    /// - `k_s`: Short call option strike price
+    /// - `cost_l`: Initial long call option price (cost)
+    /// - `cost_s`: Initial short call option price (cost)
     /// 
-    /// # Panics
-    /// - Panics if the short call strike price is smaller than the long call strike price
+    /// # Errors
+    /// - Returns an error if the short call strike price is smaller than the long call strike price
     pub fn new(k_l: f64, k_s: f64, cost_l: f64, cost_s: f64) -> Result<Self, Error> {
         if k_s < k_l {
-            return Err(input_error("The argument k_l must be smaller or equal to k_s."));
+            return Err(input_error("Bull Spread: The argument k_l must be smaller or equal to k_s."));
         }
         Ok(BullSpread { k_l, k_s, cost_l, cost_s })
     }
@@ -457,7 +458,7 @@ impl Payoff for BullSpread {
     /// Bull spread option payoff.
     /// 
     /// # Input
-    /// - s: Underlying asset price
+    /// - `s`: Underlying asset price
     /// 
     /// # Output
     /// - Payoff of the bull spread option
@@ -472,7 +473,7 @@ impl Payoff for BullSpread {
     /// Bull spread option profit.
     /// 
     /// # Input
-    /// - s: Underlying asset price
+    /// - `s`: Underlying asset price
     /// 
     /// # Output
     /// - Profit of the bull spread option
@@ -506,16 +507,16 @@ impl BearSpread {
     /// Creates a new BearSpread instance.
     /// 
     /// # Input
-    /// - k_l: Long put option strike price
-    /// - k_s: Short put option strike price
-    /// - cost_l: Initial long put option price (cost)
-    /// - cost_s: Initial short put option price (cost)
+    /// - `k_l`: Long put option strike price
+    /// - `k_s`: Short put option strike price
+    /// - `cost_l`: Initial long put option price (cost)
+    /// - `cost_s`: Initial short put option price (cost)
     /// 
-    /// # Panics
-    /// - Panics if the long put strike price is smaller than the short put strike price
+    /// # Errors
+    /// - Returns an error if the long put strike price is smaller than the short put strike price
     pub fn new(k_l: f64, k_s: f64, cost_l: f64, cost_s: f64) -> Result<Self, Error> {
         if k_l < k_s {
-            return Err(input_error("The argument k_s must be smaller or equal to k_l."));
+            return Err(input_error("Bear Spread: The argument k_s must be smaller or equal to k_l."));
         }
         Ok(BearSpread { k_l, k_s, cost_l, cost_s })
     }
@@ -526,7 +527,7 @@ impl Payoff for BearSpread {
     /// Bear spread option payoff.
     /// 
     /// # Input
-    /// - s: Underlying asset price
+    /// - `s`: Underlying asset price
     /// 
     /// # Output
     /// - Payoff of the bear spread option
@@ -541,7 +542,7 @@ impl Payoff for BearSpread {
     /// Bear spread option profit.
     /// 
     /// # Input
-    /// - s: Underlying asset price
+    /// - `s`: Underlying asset price
     /// 
     /// # Output
     /// - Profit of the bear spread option
@@ -579,22 +580,22 @@ impl LongButterfly {
     /// Creates a new LongButterfly instance.
     /// 
     /// # Input
-    /// - k1_c: Smaller long call option strike price
-    /// - k2_c: Larger long call option strike price
-    /// - k_p: Short put option strike price
-    /// - cost1_c: Initial smaller long call option price (cost)
-    /// - cost2_c: Initial larger long call option price (cost)
-    /// - cost_p: Initial short put option price (cost)
+    /// - `k1_c`: Smaller long call option strike price
+    /// - `k2_c`: Larger long call option strike price
+    /// - `k_p`: Short put option strike price
+    /// - `cost1_c`: Initial smaller long call option price (cost)
+    /// - `cost2_c`: Initial larger long call option price (cost)
+    /// - `cost_p`: Initial short put option price (cost)
     /// 
-    /// # Panics
-    /// - Panics if the long put strike price is smaller than the short put strike price
+    /// # Errors
+    /// - Returns an error if the long put strike price is smaller than the short put strike price
     pub fn new(k1_c: f64, k2_c: f64, k_p: f64, cost1_c: f64, cost2_c: f64, cost_p: f64) -> Result<Self, Error> {
         // Check that k1_c <= k_p <= k2_c
         if k2_c < k_p {
-            return Err(input_error("The argument k_p must be smaller or equal to k1_c."));
+            return Err(input_error("Long Butterfly: The argument k_p must be smaller or equal to k1_c."));
         }
         if k_p < k1_c {
-            return Err(input_error("The argument k1_c must be smaller or equal to k_p."));
+            return Err(input_error("Long Butterfly: The argument k1_c must be smaller or equal to k_p."));
         }
         Ok(LongButterfly { k1_c, k2_c, k_p, cost1_c, cost2_c, cost_p })
     }
@@ -605,7 +606,7 @@ impl Payoff for LongButterfly {
     /// Long butterfly option payoff.
     /// 
     /// # Input
-    /// - s: Underlying asset price
+    /// - `s`: Underlying asset price
     /// 
     /// # Output
     /// - Payoff of the long butterfly option
@@ -613,14 +614,14 @@ impl Payoff for LongButterfly {
     /// # LaTeX Formula
     /// - \\textit{Butterfly Spread Payoff} = max(S_{t}-K1_{c}, 0) + 2min(K_{p}-S_{t}, 0) + max(S_{t}-K2_{c}, 0)
     fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
-        (s - self.k1_c).map(| p | p.max(0.0)) + 2.0*(s - self.k_p).map(| p | p.min(0.0)) + (s - self.k2_c).map(| p | p.max(0.0))
+        (s - self.k1_c).map(| p | p.max(0.0)) + 2.0*(self.k_p - s).map(| p | p.min(0.0)) + (s - self.k2_c).map(| p | p.max(0.0))
     }
 
     /// # Description
     /// Long butterfly option profit.
     /// 
     /// # Input
-    /// - s: Underlying asset price
+    /// - `s`: Underlying asset price
     /// 
     /// # Output
     /// - Profit of the long butterfly option
@@ -659,18 +660,18 @@ impl BoxSpread {
     /// Creates a new BoxSpread instance.
     /// 
     /// # Input
-    /// - k_1: Smaller option strike price
-    /// - k_2: Larger option strike price
-    /// - cost_lc: Initial long call option price (cost)
-    /// - cost_sp: Initial short put option price (cost)
-    /// - cost_sc: Initial short call option price (cost)
-    /// - cost_lp: Initial long put option price (cost)
+    /// - `k_1`: Smaller option strike price
+    /// - `k_2`: Larger option strike price
+    /// - `cost_lc`: Initial long call option price (cost)
+    /// - `cost_sp`: Initial short put option price (cost)
+    /// - `cost_sc`: Initial short call option price (cost)
+    /// - `cost_lp`: Initial long put option price (cost)
     /// 
-    /// # Panics
-    /// - Panics if the k_2 strike price is smaller than the k_1 strike price
+    /// # Errors
+    /// - Returns an error if the k_2 strike price is smaller than the k_1 strike price
     pub fn new(k_1: f64, k_2: f64, cost_lc: f64, cost_sp: f64, cost_sc: f64, cost_lp: f64) -> Result<Self, Error> {
         if k_2 < k_1 {
-            return Err(input_error("The argument k_1 must be smaller or equal to k_2."));
+            return Err(input_error("Box Spread: The argument k_1 must be smaller or equal to k_2."));
         }
         Ok(BoxSpread { k_1, k_2, cost_lc, cost_sp, cost_sc, cost_lp })
     }
@@ -681,7 +682,7 @@ impl Payoff for BoxSpread {
     /// Box spread option payoff.
     /// 
     /// # Input
-    /// - s: Underlying asset price
+    /// - `s`: Underlying asset price
     /// 
     /// # Output
     /// - Payoff of the box spread option
@@ -696,7 +697,7 @@ impl Payoff for BoxSpread {
     /// Box spread option profit.
     /// 
     /// # Input
-    /// - s: Underlying asset price
+    /// - `s`: Underlying asset price
     /// 
     /// # Output
     /// - Profit of the box spread option
@@ -729,7 +730,7 @@ impl Payoff for Straddle {
     /// Straddle option payoff.
     /// 
     /// # Input
-    /// - s: Underlying asset price
+    /// - `s`: Underlying asset price
     /// 
     /// # Output
     /// - Payoff of the straddle option
@@ -744,7 +745,7 @@ impl Payoff for Straddle {
     /// Straddle option profit.
     /// 
     /// # Input
-    /// - s: Underlying asset price
+    /// - `s`: Underlying asset price
     /// 
     /// # Output
     /// - Profit of the straddle option
@@ -778,16 +779,16 @@ impl Strangle {
     /// Creates a new Strangle instance.
     /// 
     /// # Input
-    /// - k_c: Call option strike price
-    /// - k_p: Put option strike price
-    /// - cost_c: Initial long call option price (cost)
-    /// - cost_p: initial long put option price (cost)
+    /// - `k_c`: Call option strike price
+    /// - `k_p`: Put option strike price
+    /// - `cost_c`: Initial long call option price (cost)
+    /// - `cost_p`: initial long put option price (cost)
     /// 
-    /// # Panics
-    /// - Panics if the k_c strike price is smaller or equal to the k_p strike price
+    /// # Errors
+    /// - Returns an error if the k_c strike price is smaller or equal to the k_p strike price
     pub fn new(k_c: f64, k_p: f64, cost_c: f64, cost_p: f64) -> Result<Self, Error> {
         if k_c <= k_p {
-            return Err(input_error("The argument k_p must be smaller than k_c."));
+            return Err(input_error("Strangle: The argument k_p must be smaller than k_c."));
         }
         Ok(Strangle { k_c, k_p, cost_c, cost_p })
     }
@@ -798,7 +799,7 @@ impl Payoff for Strangle {
     /// Strangle option payoff.
     /// 
     /// # Input
-    /// - s: Underlying asset price
+    /// - `s`: Underlying asset price
     /// 
     /// # Output
     /// - Payoff of the strangle option
@@ -813,7 +814,7 @@ impl Payoff for Strangle {
     /// Strangle option profit.
     /// 
     /// # Input
-    /// - s: Underlying asset price
+    /// - `s`: Underlying asset price
     /// 
     /// # Output
     /// - Profit of the strangle option
@@ -845,7 +846,7 @@ impl Payoff for Strip {
     /// Strip option payoff.
     /// 
     /// # Input
-    /// - s: Underlying asset price
+    /// - `s`: Underlying asset price
     /// 
     /// # Output
     /// - Payoff of the strip option
@@ -860,7 +861,7 @@ impl Payoff for Strip {
     /// Strip option profit.
     /// 
     /// # Input
-    /// - s: Underlying asset price
+    /// - `s`: Underlying asset price
     /// 
     /// # Output
     /// - Profit of the strip option
@@ -892,7 +893,7 @@ impl Payoff for Strap {
     /// Strap option payoff.
     /// 
     /// # Input
-    /// - s: Underlying asset price
+    /// - `s`: Underlying asset price
     /// 
     /// # Output
     /// - Payoff of the strap option
@@ -907,7 +908,7 @@ impl Payoff for Strap {
     /// Strap option profit.
     /// 
     /// # Input
-    /// - s: Underlying asset price
+    /// - `s`: Underlying asset price
     /// 
     /// # Output
     /// - Profit of the strap option

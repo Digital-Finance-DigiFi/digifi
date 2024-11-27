@@ -3,7 +3,8 @@ use ndarray::Array1;
 use crate::utilities::{input_error, time_value_utils::{CompoundingType, Compounding}};
 use crate::financial_instruments::{FinancialInstrument, FinancialInstrumentId};
 use crate::portfolio_applications::AssetHistData;
-use crate::stochastic_processes::StochasticProcess;
+use crate::statistics::covariance;
+use crate::stochastic_processes::{StochasticProcess, standard_stochastic_models::{FellerSquareRootProcess, FSRSimulationMethod}};
 
 
 /// # Description
@@ -33,10 +34,10 @@ pub fn forward_interest_rate(zero_rate_1: f64, time_1: f64, zero_rate_2: f64, ti
 /// Zero rate defined through the previous zero rate and current forward rate.
 /// 
 /// # Input
-/// - zero_rate_1 (float): Zero rate at time step 1
-/// - time_1 (float): Time step 1
-/// - time_2 (float): Time step 2
-/// - forward_rate (float): Current forward rate
+/// - zero_rate_1: Zero rate at time step 1
+/// - time_1: Time step 1
+/// - time_2: Time step 2
+/// - forward_rate: Current forward rate
 /// 
 /// # Output
 /// - Zero rate at time step 2
@@ -74,7 +75,7 @@ pub struct ForwardRate {
     /// Parameters for defining regulatory categorization of an instrument
     _financial_instrument_id: FinancialInstrumentId,
     /// Time series asset data
-    _asset_historical_data: AssetHistData,
+    asset_historical_data: AssetHistData,
     /// Stochastic model to use for price paths generation
     stochastic_model: Box<dyn StochasticProcess>,
 }
@@ -94,11 +95,22 @@ impl ForwardRate {
     /// - asset_historical_data: Time series asset data
     /// - stochastic_model: Stochastic model to use for price paths generation
     pub fn new(agreed_fixed_rate: f64, current_forward_rate: f64, time_to_maturity: f64, principal: f64, initial_price: f64,
-               compounding_type: CompoundingType, _financial_instrument_id: FinancialInstrumentId, _asset_historical_data: AssetHistData,
-               stochastic_model: Box<dyn StochasticProcess>) -> Self {
-        // TODO: Add default stochastic model for the case when the user doesn't provide one
-        ForwardRate { agreed_fixed_rate, current_forward_rate, time_to_maturity, principal, initial_price, compounding_type,
-                      _financial_instrument_id, _asset_historical_data, stochastic_model }
+               compounding_type: CompoundingType, _financial_instrument_id: FinancialInstrumentId, asset_historical_data: AssetHistData,
+               stochastic_model: Option<Box<dyn StochasticProcess>>) -> Result<Self, Error> {
+        let stochastic_model_: Box<dyn StochasticProcess>;
+        match stochastic_model {
+            Some(model) => stochastic_model_ = model,
+            None => stochastic_model_ = {
+                // Default stochastic model for the case when the user doesn't provide one
+                let end_index: usize = asset_historical_data.time_array.len() - 1;
+                let prices: Array1<f64> = asset_historical_data.get_price(end_index, None)?;
+                let sigma: f64 = covariance(&prices, &prices, 0)?;
+                Box::new(FellerSquareRootProcess::new(agreed_fixed_rate, sigma, 5.0, 1, asset_historical_data.time_array.len(),
+                                                      time_to_maturity, current_forward_rate, FSRSimulationMethod::EulerMaruyama))
+            },
+        }
+        Ok(ForwardRate { agreed_fixed_rate, current_forward_rate, time_to_maturity, principal, initial_price, compounding_type,
+                      _financial_instrument_id, asset_historical_data, stochastic_model: stochastic_model_ })
     }
 
     /// # Description
@@ -127,11 +139,11 @@ impl ForwardRate {
     /// Forward interest rate for the period between time_1 and time_2.
     /// 
     /// # Input
-    /// - zero_rate_1 (float): Zero rate at time step 1
-    /// - time_1 (float): Time step 1
-    /// - zero_rate_2 (float): Zero rate at time step 2
-    /// - time_2 (float): Time step 2
-    /// - in_place (bool): Overwrite current_forward_rate with the obtained forward rate
+    /// - zero_rate_1: Zero rate at time step 1
+    /// - time_1: Time step 1
+    /// - zero_rate_2: Zero rate at time step 2
+    /// - time_2: Time step 2
+    /// - in_place: Overwrite current_forward_rate with the obtained forward rate
     /// 
     /// # Output
     /// - Forward rate from zero rate at time step 1 to zero rate at time step 2
@@ -177,9 +189,9 @@ impl ForwardRate {
     /// Forward Rate = Futures Rate - Convexity Adjustment.
     /// 
     /// # Input
-    /// - futures_rate (float): Current futures contract rate
-    /// - convexity_sdjustment (float): Convexity adjustment constant
-    /// - in_place (bool): Overwrite current_forward_rate with the obtained forward rate
+    /// - futures_rate: Current futures contract rate
+    /// - convexity_adjustment: Convexity adjustment constant
+    /// - in_place: Overwrite current_forward_rate with the obtained forward rate
     /// 
     /// # Output
     /// - Forward rate of the contract
@@ -188,7 +200,7 @@ impl ForwardRate {
     /// - \\textit{Forward Rate} = \\textit{Futures Rate} - \\textit{C}
     pub fn rate_adjustment(&mut self, futures_rate: f64, convexity_adjustment: f64, in_place: bool) -> Result<f64, Error> {
         if convexity_adjustment <= 0.0 {
-            return Err(input_error("The argument convexity adjustment must be positive."));
+            return Err(input_error("Forward Rate: The argument convexity adjustment must be positive."));
         }
         let forward_rate: f64 = futures_rate - convexity_adjustment;
         if in_place {
@@ -212,7 +224,7 @@ impl FinancialInstrument for ForwardRate {
     /// - Wikipedia: https://en.wikipedia.org/wiki/Forward_rate_agreement#Valuation_and_pricing
     /// - Original Source: N/A
     fn present_value(&self) -> f64 {
-        let discount_term: Compounding = Compounding::new(self.current_forward_rate, self.compounding_type.clone());
+        let discount_term: Compounding = Compounding::new(self.current_forward_rate, &self.compounding_type);
         (self.time_to_maturity * (self.current_forward_rate - self.agreed_fixed_rate) * self.principal) * discount_term.compounding_term(self.time_to_maturity)
     }
 
@@ -231,7 +243,7 @@ impl FinancialInstrument for ForwardRate {
     /// # Output
     /// - Future value of the forward rate agreement at it maturity (Computed from the present value of the forward rate agreement)
     fn future_value(&self) -> f64 {
-        let discount_term: Compounding = Compounding::new(self.current_forward_rate, self.compounding_type.clone());
+        let discount_term: Compounding = Compounding::new(self.current_forward_rate, &self.compounding_type);
         self.present_value() / discount_term.compounding_term(self.time_to_maturity)
     }
 
@@ -245,9 +257,20 @@ impl FinancialInstrument for ForwardRate {
     }
 
     /// # Description
-    /// Generates an array of prices and predictable income, and updates the asset_historical_data.
-    fn generate_historic_data(&self) -> () {
-        // TODO: Implement data generation
+    /// Generates an array of prices and predictable income, and updates the `asset_historical_data`.
+    /// 
+    /// # Input
+    /// - in_place: If true, uses generated data to update the asset history data 
+    fn generate_historic_data(&mut self, in_place: bool) -> Result<AssetHistData, Error> {
+        let prices: Array1<f64> = self.stochastic_model.get_paths()?.remove(0);
+        let end_index: usize = self.asset_historical_data.time_array.len() - 1;
+        let new_data: AssetHistData = AssetHistData::new(prices,
+                                                         self.asset_historical_data.get_predictable_income(end_index, None)?,
+                                                         self.asset_historical_data.time_array.clone())?;
+        if in_place {
+            self.asset_historical_data = new_data.clone();
+        }
+        Ok(new_data)
     }
 }
 
@@ -257,21 +280,22 @@ mod tests {
     use ndarray::Array1;
     use crate::{financial_instruments::FinancialInstrument, utilities::TEST_ACCURACY};
 
-//     #[test]
-//     fn unit_test_forward_rate() -> () {
-//         use crate::utilities::time_value_utils::CompoundingType;
-//         use crate::financial_instruments::{FinancialInstrumentId, FinancialInstrumentType, AssetClass};
-//         use crate::financial_instruments::rates_and_swaps::ForwardRate;
-//         use crate::portfolio_applications::AssetHistData;
-//         let compounding_type: CompoundingType = CompoundingType::Continuous;
-//         let financial_instrument_id: FinancialInstrumentId = FinancialInstrumentId {instrument_type: FinancialInstrumentType::DerivativeInstrument,
-//                                                                                     asset_class: AssetClass::ForeignExchangeInstrument,
-//                                                                                     identifier: String::from("32198407128904") };
-//         let asset_historical_data: AssetHistData = AssetHistData::new(Array1::from_vec(vec![10.0]),
-//                                                                       Array1::from_vec(vec![0.0]),
-//                                                                       Array1::from_vec(vec![0.0]));
-//         let forward_rate: ForwardRate = ForwardRate::new(0.04, 0.05, 1.0, 1000.0, 10.0,
-//                                                          compounding_type, financial_instrument_id, asset_historical_data);
-//         assert!((forward_rate.present_value() - 1.0*0.01*1000.0*(-0.05*1.0_f64).exp()).abs() < TEST_ACCURACY);
-//     }
+    #[test]
+    fn unit_test_forward_rate() -> () {
+        use crate::utilities::time_value_utils::CompoundingType;
+        use crate::financial_instruments::{FinancialInstrumentId, FinancialInstrumentType, AssetClass};
+        use crate::financial_instruments::rates_and_swaps::ForwardRate;
+        use crate::portfolio_applications::AssetHistData;
+        let compounding_type: CompoundingType = CompoundingType::Continuous;
+        let financial_instrument_id: FinancialInstrumentId = FinancialInstrumentId {instrument_type: FinancialInstrumentType::DerivativeInstrument,
+                                                                                    asset_class: AssetClass::ForeignExchangeInstrument,
+                                                                                    identifier: String::from("32198407128904") };
+        let asset_historical_data: AssetHistData = AssetHistData::new(Array1::from_vec(vec![0.4, 0.5]),
+                                                                      Array1::from_vec(vec![0.0, 0.0]),
+                                                                      Array1::from_vec(vec![0.0, 1.0])).unwrap();
+        let forward_rate: ForwardRate = ForwardRate::new(0.04, 0.05, 1.0, 1000.0, 10.0,
+                                                         compounding_type, financial_instrument_id, asset_historical_data,
+                                                         None).unwrap();
+        assert!((forward_rate.present_value() - 1.0*0.01*1000.0*(-0.05*1.0_f64).exp()).abs() < TEST_ACCURACY);
+    }
 }

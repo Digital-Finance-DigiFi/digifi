@@ -1,6 +1,7 @@
 use std::io::Error;
 use ndarray::Array1;
-use crate::utilities::{input_error, some_or_error};
+use num::Signed;
+use crate::utilities::{input_error, other_error};
 use crate::random_generators::{RandomGenerator, generate_seed, uniform_generators::FibonacciGenerator};
 use crate::random_generators::generator_algorithms::{accept_reject, inverse_transform, box_muller, marsaglia, ziggurat};
 use crate::statistics::continuous_distributions::{LaplaceDistribution, NormalDistribution};
@@ -31,29 +32,29 @@ impl StandardNormalAcceptReject {
     /// Creates a new StandardNormalAcceptReject instance.
     /// 
     /// # Input
-    /// - sample_size: The maximum size of the sample to generate
-    /// - lap_b: Scale parameter for the Laplace distribution
-    /// - seed_1: Seed for the first random number generator
-    /// - seed_2: Seed for the second random number generator
+    /// - `sample_size`: The maximum size of the sample to generate
+    /// - `lap_b`: Scale parameter for the Laplace distribution
+    /// - `seed_1`: Seed for the first random number generator
+    /// - `seed_2`: Seed for the second random number generator
     /// 
-    /// # Panics
-    /// - Panics if the argument lap_b is not positive
+    /// # Errors
+    /// - Returns an error if the argument `lap_b` is not positive
     pub fn new(max_sample_size: usize, lap_b: f64, seed_1: u32, seed_2: u32) -> Result<Self, Error> {
         if lap_b <= 0.0 {
-            return Err(input_error("The argument lap_b must be positive."));
+            return Err(input_error("Accept-Reject Algorithm: The argument lap_b must be positive."));
         }
         Ok(StandardNormalAcceptReject { max_sample_size, lap_b, seed_1, seed_2 })
     }
 }
 
-impl RandomGenerator for StandardNormalAcceptReject {
+impl RandomGenerator<StandardNormalAcceptReject> for StandardNormalAcceptReject {
     /// # Description
     /// Creates a new StandardNormalAcceptReject instance with random parameters.
     /// 
     /// # Input
-    /// - sample_size: The maximum size of the sample to generate
-    fn new_shuffle(sample_size: usize) -> Self {
-        StandardNormalAcceptReject { max_sample_size: sample_size, lap_b: 1.0, seed_1: generate_seed(), seed_2: generate_seed() }
+    /// - `sample_size`: The maximum size of the sample to generate
+    fn new_shuffle(sample_size: usize) -> Result<Self, Error> {
+        Ok(StandardNormalAcceptReject { max_sample_size: sample_size, lap_b: 1.0, seed_1: generate_seed()?, seed_2: generate_seed()? })
     }
 
     /// # Description
@@ -67,7 +68,8 @@ impl RandomGenerator for StandardNormalAcceptReject {
         let u_2: Array1<f64> = FibonacciGenerator::new(self.seed_2, self.max_sample_size, 5, 17, 714_025, 1_366, 150_889).generate()?;
         // Laplace distribution sampling.
         let laplace_dist: LaplaceDistribution = LaplaceDistribution::new(0.0, self.lap_b)?;
-        let l: Array1<f64> = laplace_dist.inverse_cdf(&u_1)?;
+        let l: Array1<f64> = laplace_dist.inverse_cdf(&u_1)?
+            .map(|i| { if i.is_infinite() && i.is_positive() { 1.0 } else if i.is_infinite() && i.is_negative() { 0.0 } else { *i } });
         // Accept-Reject algorithm.
         let standard_normal_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0)?;
         accept_reject(&standard_normal_dist, &laplace_dist, &l, m, &u_2)
@@ -93,20 +95,20 @@ impl StandardNormalInverseTransform {
     /// Creates a new StandardNormalAcceptReject instance.
     /// 
     /// # Input
-    /// - sample_size: Number of random samples to generate
+    /// - `sample_size`: Number of random samples to generate
     pub fn new(sample_size: usize) -> Self {
         StandardNormalInverseTransform { sample_size }
     }
 }
 
-impl RandomGenerator for StandardNormalInverseTransform {
+impl RandomGenerator<StandardNormalInverseTransform> for StandardNormalInverseTransform {
     /// # Description
     /// Creates a new StandardNormalInverseTransform instance.
     /// 
     /// # Input
-    /// - sample_size: Number of pseudo-random numbers to generate
-    fn new_shuffle(sample_size: usize) -> Self {
-        StandardNormalInverseTransform { sample_size }
+    /// - `sample_size`: Number of pseudo-random numbers to generate
+    fn new_shuffle(sample_size: usize) -> Result<Self, Error> {
+        Ok(StandardNormalInverseTransform { sample_size })
     }
 
     /// # Description
@@ -148,22 +150,22 @@ impl StandardNormalBoxMuller {
     /// Creates a new StandardNormalBoxMuller instance.
     /// 
     /// # Input
-    /// - sample_size: Number of random samples to generate
-    /// - seed_1: Seed for the first uniform random number generator
-    /// - seed_2: Seed for the second uniform random number generator
+    /// - `sample_size`: Number of random samples to generate
+    /// - `seed_1`: Seed for the first uniform random number generator
+    /// - `seed_2`: Seed for the second uniform random number generator
     pub fn new(sample_size: usize, seed_1: u32, seed_2: u32) -> Self {
         StandardNormalBoxMuller { sample_size, seed_1, seed_2 }
     }
 }
 
-impl RandomGenerator for StandardNormalBoxMuller {
+impl RandomGenerator<StandardNormalBoxMuller> for StandardNormalBoxMuller {
     /// # Description
     /// Creates a new StandardNormalBoxMuller instance with random parameters.
     /// 
     /// # Input
-    /// - sample_size: Number of pseudo-random numbers to generate
-    fn new_shuffle(sample_size: usize) -> Self {
-        StandardNormalBoxMuller { sample_size, seed_1: generate_seed(), seed_2: generate_seed() }
+    /// - `sample_size`: Number of pseudo-random numbers to generate
+    fn new_shuffle(sample_size: usize) -> Result<Self, Error> {
+        Ok(StandardNormalBoxMuller { sample_size, seed_1: generate_seed()?, seed_2: generate_seed()? })
     }
 
     /// # Description
@@ -206,21 +208,21 @@ impl StandardNormalMarsaglia {
     /// Creates a new StandardNormalMarsaglia instance.
     /// 
     /// # Input
-    /// - sample_size: Number of random samples to generate
-    /// - max_iterations: Maximum number of iterations for the algorithm
+    /// - `sample_size`: Number of random samples to generate
+    /// - `max_iterations`: Maximum number of iterations for the algorithm
     pub fn new(sample_size: usize, max_iterations: usize) -> Self {
         StandardNormalMarsaglia { sample_size, max_iterations }
     }
 }
 
-impl RandomGenerator for StandardNormalMarsaglia {
+impl RandomGenerator<StandardNormalMarsaglia> for StandardNormalMarsaglia {
     /// # Description
     /// Creates a new StandardNormalMarsaglia instance with random parameters.
     /// 
     /// # Input
-    /// - sample_size: Number of pseudo-random numbers to generate
-    fn new_shuffle(sample_size: usize) -> Self {
-        StandardNormalMarsaglia { sample_size, max_iterations: 1_000 }
+    /// - `sample_size`: Number of pseudo-random numbers to generate
+    fn new_shuffle(sample_size: usize) -> Result<Self, Error> {
+        Ok(StandardNormalMarsaglia { sample_size, max_iterations: 1_000 })
     }
 
     /// # Description
@@ -233,7 +235,7 @@ impl RandomGenerator for StandardNormalMarsaglia {
         let mut z_2: Array1<f64> = Array1::from_vec(vec![1.0; self.sample_size]);
         //  Marsaglia method.
         for i in 0..self.sample_size {
-            (z_1[i], z_2[i]) = some_or_error(marsaglia(self.max_iterations)?, "Marsaglia algorithm failed to generate pseudo-random numbers.")?;
+            (z_1[i], z_2[i]) = marsaglia(self.max_iterations)?.ok_or(other_error("Marsaglia Algorithm: Marsaglia algorithm failed to generate pseudo-random numbers."))?;
         }
         Ok(z_1)
     }
@@ -264,22 +266,22 @@ impl StandardNormalZiggurat {
     /// Creates a new StandardNormalZiggurat instance.
     /// 
     /// # Input
-    /// - sample_size: Number of random samples to generate
-    /// - regions: Number of regions for the Ziggurat method
-    /// - max_iterations: Maximum number of iterations for the algorithm
+    /// - `sample_size`: Number of random samples to generate
+    /// - `regions`: Number of regions for the Ziggurat method
+    /// - `max_iterations`: Maximum number of iterations for the algorithm
     pub fn new(sample_size: usize, rectangle_size: f64, max_iterations: usize, dx: f64, limit: f64) -> Self {
         StandardNormalZiggurat { sample_size, rectangle_size, max_iterations, dx, limit }
     }
 }
 
-impl RandomGenerator for StandardNormalZiggurat {
+impl RandomGenerator<StandardNormalZiggurat> for StandardNormalZiggurat {
     /// # Description
     /// Creates a new StandardNormalZiggurat instance with random parameters.
     /// 
     /// # Input
-    /// - sample_size: Number of pseudo-random numbers to generate
-    fn new_shuffle(sample_size: usize) -> Self {
-        StandardNormalZiggurat { sample_size, rectangle_size: 1.0/256.0, max_iterations: 10_000, dx: 0.001, limit: 6.0 }
+    /// - `sample_size`: Number of pseudo-random numbers to generate
+    fn new_shuffle(sample_size: usize) -> Result<Self, Error> {
+        Ok(StandardNormalZiggurat { sample_size, rectangle_size: 1.0/256.0, max_iterations: 10_000, dx: 0.001, limit: 6.0 })
     }
 
     /// # Description
@@ -316,9 +318,9 @@ mod tests {
     fn unit_test_accept_reject() -> () {
         use crate::random_generators::standard_normal_generators::StandardNormalAcceptReject;
         use crate::statistics::covariance;
-        let snar: StandardNormalAcceptReject = StandardNormalAcceptReject::new_shuffle(100_000);
+        let snar: StandardNormalAcceptReject = StandardNormalAcceptReject::new_shuffle(100_000).unwrap();
         let sample: Array1<f64> = snar.generate().unwrap();
-        assert!((sample.mean().unwrap() - 0.0).abs() < 30_000_000.0 * TEST_ACCURACY);
+        assert!((sample.mean().unwrap() - 0.0).abs() < 1_000_000.0 * TEST_ACCURACY);
         assert!((covariance(&sample, &sample, 0).unwrap() - 1.0).abs() < 30_000_000.0 * TEST_ACCURACY);
     }
 
@@ -326,9 +328,9 @@ mod tests {
     fn unit_test_inverse_transform() -> () {
         use crate::random_generators::standard_normal_generators::StandardNormalInverseTransform;
         use crate::statistics::covariance;
-        let snit: StandardNormalInverseTransform = StandardNormalInverseTransform::new_shuffle(100_000);
+        let snit: StandardNormalInverseTransform = StandardNormalInverseTransform::new_shuffle(100_000).unwrap();
         let sample: Array1<f64> = snit.generate().unwrap();
-        assert!((sample.mean().unwrap() - 0.0).abs() < 30_000_000.0 * TEST_ACCURACY);
+        assert!((sample.mean().unwrap() - 0.0).abs() < 1_000_000.0 * TEST_ACCURACY);
         assert!((covariance(&sample, &sample, 0).unwrap() - 1.0).abs() < 30_000_000.0 * TEST_ACCURACY);
     }
 
@@ -336,7 +338,7 @@ mod tests {
     fn unit_test_box_muller() -> () {
         use crate::random_generators::standard_normal_generators::StandardNormalBoxMuller;
         use crate::statistics::covariance;
-        let snit: StandardNormalBoxMuller = StandardNormalBoxMuller::new_shuffle(100_000);
+        let snit: StandardNormalBoxMuller = StandardNormalBoxMuller::new_shuffle(100_000).unwrap();
         let sample: Array1<f64> = snit.generate().unwrap();
         assert!((sample.mean().unwrap() - 0.0).abs() < 30_000_000.0 * TEST_ACCURACY);
         assert!((covariance(&sample, &sample, 0).unwrap() - 1.0).abs() < 30_000_000.0 * TEST_ACCURACY);
@@ -346,7 +348,7 @@ mod tests {
     fn unit_test_marsaglia() -> () {
         use crate::random_generators::standard_normal_generators::StandardNormalMarsaglia;
         use crate::statistics::covariance;
-        let snit: StandardNormalMarsaglia = StandardNormalMarsaglia::new_shuffle(10_000);
+        let snit: StandardNormalMarsaglia = StandardNormalMarsaglia::new_shuffle(10_000).unwrap();
         let sample: Array1<f64> = snit.generate().unwrap();
         assert!((sample.mean().unwrap() - 0.0).abs() < 100_000_000.0 * TEST_ACCURACY);
         assert!((covariance(&sample, &sample, 0).unwrap() - 1.0).abs() < 100_000_000.0 * TEST_ACCURACY);
@@ -356,7 +358,7 @@ mod tests {
     fn unit_test_ziggurat() -> () {
         use crate::random_generators::standard_normal_generators::StandardNormalZiggurat;
         use crate::statistics::covariance;
-        let snit: StandardNormalZiggurat = StandardNormalZiggurat::new_shuffle(1_000);
+        let snit: StandardNormalZiggurat = StandardNormalZiggurat::new_shuffle(1_000).unwrap();
         let sample: Array1<f64> = snit.generate().unwrap();
         println!("{} \t {}", sample.mean().unwrap(), covariance(&sample, &sample, 0).unwrap());
         // TODO: Debug Ziggurat results

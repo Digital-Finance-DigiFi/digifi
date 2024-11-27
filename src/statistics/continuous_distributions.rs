@@ -1,8 +1,9 @@
 use std::io::Error;
 use ndarray::Array1;
 use num::complex::Complex;
-use crate::utilities::{input_error, maths_utils::{erf, erfinv}};
-use crate::statistics::{ProbabilityDistribution, ProbabilityDistributionType};
+use crate::utilities::{input_error, maths_utils::{FunctionEvalMethod, erf, erfinv, derivative}};
+use crate::statistics::{ProbabilityDistribution, ProbabilityDistributionType,
+                        gamma_function, upper_incomplete_gamma_function, lower_incomplete_gamma_function};
 
 
 /// # Description
@@ -28,11 +29,11 @@ impl ContinuousUniformDistribution {
     /// - a: Lower bound of the distribution
     /// - b: Upper bound of the distribution
     /// 
-    /// # Panics
-    /// - Panics if the value of a is larger or equal to b
+    /// # Errors
+    /// - Returns an error if the value of `a` is larger or equal to `b`
     pub fn new(a: f64, b: f64) -> Result<Self, Error> {
         if b <= a {
-            return Err(input_error("The argument a must be smaller or equal to the argument b."));
+            return Err(input_error("Continuous Uniform Distribution: The argument a must be smaller or equal to the argument b."));
         }
         Ok(ContinuousUniformDistribution { a, b, _distribution_type: ProbabilityDistributionType::Continuous })
     }
@@ -167,11 +168,11 @@ impl NormalDistribution {
     /// - mu: Mean of the distribution
     /// - sigma: Standard deviation of the distribution
     /// 
-    /// # Panics
-    /// - Panics if sigma is negative
+    /// # Errors
+    /// - Returns an error if sigma is negative
     pub fn new(mu: f64, sigma: f64) -> Result<Self, Error> {
         if sigma < 0.0 {
-            return Err(input_error("The argument sigma must be non-negative."));
+            return Err(input_error("Normal Distribution: The argument sigma must be non-negative."));
         }
         Ok(NormalDistribution { mu, sigma, _distribution_type: ProbabilityDistributionType::Continuous })
     }
@@ -237,7 +238,7 @@ impl ProbabilityDistribution for NormalDistribution {
     /// - Wikipedia: https://en.wikipedia.org/wiki/Normal_distribution#Cumulative_distribution_function
     /// - Original Source: N/A
     fn cdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, Error> {
-        Ok((1.0 + ((x - self.mu) / (self.sigma * 2.0_f64.sqrt())).map(|x_| erf(*x_, 15) )) / 2.0)
+        Ok((1.0 + ((x - self.mu) / (self.sigma * 2.0_f64.sqrt())).map(|x_| erf(*x_, FunctionEvalMethod::PowerSeries { n_terms: 20 }) )) / 2.0)
     }
 
     /// # Description
@@ -250,7 +251,7 @@ impl ProbabilityDistribution for NormalDistribution {
     /// - Inverse CDF values for the given probabilities
     fn inverse_cdf(&self, p: &Array1<f64>) -> Result<Array1<f64>, Error> {
         let p: Array1<f64> = p.map(|p_| if (*p_ < 0.0) || (1.0 < *p_) { f64::NAN } else {*p_} );
-        Ok(self.mu + self.sigma * 2.0_f64.sqrt() * p.map(|p_| erfinv(2.0 * *p_ - 1.0, 15) ))
+        Ok(self.mu + self.sigma * 2.0_f64.sqrt() * p.map(|p_| erfinv(2.0 * *p_ - 1.0, 30) ))
     }
 
     /// # Description
@@ -305,11 +306,11 @@ impl ExponentialDistribution {
     /// # Input
     /// - lambda: Rate parameter
     /// 
-    /// # Panics
-    /// - Panics if lambda is not positive
+    /// # Errors
+    /// - Returns an error if `lambda` is not positive
     pub fn new(lambda: f64) -> Result<Self, Error> {
         if lambda <= 0.0 {
-            return Err(input_error("The argument lambda must be positive."));
+            return Err(input_error("Exponential Distribution: The argument lambda must be positive."));
         }
         Ok(ExponentialDistribution { lambda, _distribution_type: ProbabilityDistributionType::Continuous })
     }
@@ -542,6 +543,144 @@ impl ProbabilityDistribution for LaplaceDistribution {
         } else { Complex::new(f64::NAN, 0.0) } )
     }
 }
+
+
+/// # Description
+/// Methods and properties of Gamma distribution.
+/// 
+/// # Links
+/// - Wikipedia: https://en.wikipedia.org/wiki/Gamma_distribution
+/// - Original Source: N/A
+pub struct GammaDistribution {
+    /// Shape parameter, which controls the shape of the distribution
+    k: f64,
+    /// Scale parameter, which controls the spread of the distribution
+    theta: f64,
+    /// Type of distribution
+    _distribution_type: ProbabilityDistributionType,
+}
+
+impl GammaDistribution {
+    /// # Description
+    /// Creates a new GammaDistribution instance.
+    pub fn new(k: f64, theta: f64) -> Result<Self, Error> {
+        if k <= 0.0 {
+            return Err(input_error("Gamma Distribution: The argument k must be positive."))
+        }
+        if theta <= 0.0 {
+            return Err(input_error("Gamma Distribution: The argument theta must be positive."))
+        }
+        Ok(GammaDistribution { k, theta, _distribution_type: ProbabilityDistributionType::Continuous })
+    }
+}
+
+impl ProbabilityDistribution for GammaDistribution {
+    fn mean(&self) -> f64 {
+        self.k * self.theta
+    }
+
+    fn median(&self) -> Vec<f64> {
+        vec![f64::NAN]
+    }
+
+    fn mode(&self) -> Vec<f64> {
+        if 1.0 <= self.k {
+            vec![(self.k - 1.0) * self.theta]
+        } else {
+            vec![0.0]
+        }
+    }
+
+    fn variance(&self) -> f64 {
+        self.k * self.theta.powi(2)
+    }
+
+    fn skewness(&self) -> f64 {
+        2.0 / self.k.sqrt()
+    }
+
+    fn excess_kurtosis(&self) -> f64 {
+        6.0 / self.k
+    }
+
+    fn entropy(&self) -> f64 {
+        let f = |z: f64| { gamma_function(z.ln(), FunctionEvalMethod::Integral { n_intervals: 1_000_000 }) };
+        self.k + self.theta.ln() + gamma_function(self.k, FunctionEvalMethod::Integral { n_intervals: 1_000_000 }).ln() + (1.0 - self.k) * derivative(f, self.k, 0.00000001)
+    }
+
+    /// # Description
+    /// Calculates the Probability Density Function (PDF) for a Gamma distribution.
+    /// 
+    /// # Input
+    /// - x: Values at which to calculate the PDF
+    /// 
+    /// # Output
+    /// - PDF values at the given x
+    fn pdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, Error> {
+        Ok(x.map(|x_| x_.powf(self.k - 1.0) * (-x_ / self.theta).exp() / (gamma_function(self.k, FunctionEvalMethod::Integral { n_intervals: 1_000_000 }) * self.theta.powf(self.k)) ))
+    }
+
+    /// # Description
+    /// Computes the Cumulative Distribution Function (CDF) for a Gamma distribution.
+    /// 
+    /// # Input
+    /// - x: Values at which to calculate the CDF
+    /// 
+    /// # Output
+    /// - CDF values at the given x
+    fn cdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, Error> {
+        let mut y: Vec<f64> = Vec::<f64>::new();
+        for x_ in x {
+            y.push(lower_incomplete_gamma_function(self.k, x_/self.theta, FunctionEvalMethod::PowerSeries { n_terms: 20 })? / gamma_function(self.k, FunctionEvalMethod::Integral { n_intervals: 1_000_000 }));
+        }
+        Ok(Array1::from_vec(y))
+    }
+
+    /// # Description
+    /// Computes the Inverse Cumulative Distribution Function (Inverse CDF) for a Gamma distribution.
+    /// 
+    /// # Input
+    /// - p: Probability values for which to calculate the inverse CDF
+    /// 
+    /// # Output
+    /// - Inverse CDF values for the given probabilities
+    fn inverse_cdf(&self, p: &Array1<f64>) -> Result<Array1<f64>, Error> {
+        let p: Array1<f64> = p.map(|p_| if (*p_ < 0.0) || (1.0 < *p_) { f64::NAN } else {*p_} );
+        let mut y: Vec<f64> = Vec::<f64>::new();
+        for p_ in p {
+            y.push(upper_incomplete_gamma_function(self.k, self.theta / p_, 1_000_000)? /
+                   gamma_function(self.k, FunctionEvalMethod::Integral { n_intervals: 1_000_000 }));
+        }
+        Ok(Array1::from_vec(y))
+    }
+
+    /// # Description
+    /// Calculates the Moment Generating Function (MGF) for a Gamma distribution.
+    /// 
+    /// # Input
+    /// - t: Input values for the MGF
+    /// 
+    /// # Output
+    /// - MGF values at the given t
+    fn mgf(&self, t: &Array1<usize>) -> Array1<f64> {
+        t.map(|t_| if (*t_ as f64).abs() < 1.0 / self.theta {
+            (1.0 - self.theta * (*t_ as f64)).powf(-self.k)
+        } else { f64::NAN } )
+    }
+
+    /// # Description
+    /// Computes the Characteristic Function (CF) for a Gamma distribution.
+    /// 
+    /// # Input
+    /// - t: Input values for the CF
+    /// 
+    /// # Output
+    /// - CF values at the given t
+    fn cf(&self, t: &Array1<usize>) -> Array1<Complex<f64>> {
+        t.map(|t_| Complex::new(1.0, -self.theta * (*t_ as f64)).powf(-self.k) )
+    }
+}
+
 
 
 #[cfg(test)]

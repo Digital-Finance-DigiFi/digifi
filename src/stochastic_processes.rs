@@ -1,4 +1,5 @@
 pub mod standard_stochastic_models;
+pub mod stochastic_volatility_models;
 
 
 use std::io::Error;
@@ -10,7 +11,7 @@ pub trait StochasticProcess {
     /// Updates the number of paths that the stochastic process will generate.
     /// 
     /// # Input
-    /// - n_paths: Number of paths to generate
+    /// - `n_paths`: Number of paths to generate
     fn update_n_paths(&mut self, n_paths: usize) -> ();
 
     /// # Description

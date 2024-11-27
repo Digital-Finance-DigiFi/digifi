@@ -18,11 +18,11 @@ use crate::financial_instruments::Payoff;
 /// # Output
 /// - List of layers with node values at each step
 /// 
-/// # Panics:
-/// - Panics if the value of u or d is non-positive
+/// # Errors
+/// - Returns an error if the value of u or d is non-positive
 pub fn binomial_tree_nodes(s_0: f64, u: f64, d: f64, n_steps: usize) -> Result<Vec<Array1<f64>>, Error> {
     if (u <= 0.0) || (d <= 0.0) {
-        return Err(input_error("The arguments u and d must be positive multiplicative factors of the binomial model."));
+        return Err(input_error("Binomial Tree Nodes: The arguments u and d must be positive multiplicative factors of the binomial model."));
     }
     let mut binomial_tree: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
     for layer in 0..(n_steps as i32 + 1) {
@@ -57,24 +57,24 @@ pub fn binomial_tree_nodes(s_0: f64, u: f64, d: f64, n_steps: usize) -> Result<V
 /// # Output
 /// - The fair value calculated by the binomial model
 /// 
-/// # Panics
-/// - Panics if the value of either u or d is negative
-/// - Panics if the value of p_u is not in the range [0,1]
-/// - Panics if the length of exercise_time_steps is not of length n_steps
-pub fn binomial_model(payoff_object: Box<dyn Payoff>, s_0: f64, u: f64, d: f64, p_u: f64, n_steps: usize, exercise_time_steps: Option<Vec<bool>>) -> Result<f64, Error> {
+/// # Errors
+/// - Returns an error if the value of either `u` or `d` is negative
+/// - Returns an error if the value of `p_u` is not in the range \[0,1\]
+/// - Returns an error if the length of `exercise_time_steps` is not of length `n_steps`
+pub fn binomial_model(payoff_object: &dyn Payoff, s_0: f64, u: f64, d: f64, p_u: f64, n_steps: usize, exercise_time_steps: Option<Vec<bool>>) -> Result<f64, Error> {
     // Data validation.
     payoff_object.validate_payoff(5)?;
     if (u < 0.0) || (d < 0.0) {
-        return Err(input_error("The arguments u and d must be non-negative."));
+        return Err(input_error("Binomial Model: The arguments u and d must be non-negative."));
     }
     if (p_u <= 0.0) || (1.0 <= p_u) {
-        return Err(input_error("The argument p_u must be a defined over a range [0,1]."));
+        return Err(input_error("Binomial Model: The argument p_u must be a defined over a range [0,1]."));
     }
     let exercise_time_steps_: Vec<bool>;
     match exercise_time_steps {
         Some(exercise_time_steps_vec) => {
             if exercise_time_steps_vec.len() != n_steps {
-                return Err(data_error("The argument exercise_time_steps should be of length n_steps."));
+                return Err(data_error("Binomial Model: The argument exercise_time_steps should be of length n_steps."));
             }
             exercise_time_steps_ = exercise_time_steps_vec
         },
@@ -203,11 +203,11 @@ impl LatticeModel for BrownianMotionBinomialModel {
     /// # Output
     /// - The present value of an instrument with the Bermudan exercise style
     /// 
-    /// # Panics
-    /// - Panics if the length of exercise_time_steps is not of length n_steps
+    /// # Errors
+    /// - Returns an error if the length of `exercise_time_steps` is not of length `n_steps`
     fn bermudan(&self, exercise_time_steps: Vec<bool>) -> Result<f64, Error> {
         if exercise_time_steps.len() != self.n_steps {
-            return Err(data_error("The argument exercise_time_steps should be of length n_steps."));
+            return Err(data_error("Brownian Motion Binomial Model: The argument exercise_time_steps should be of length n_steps."));
         }
         let p_u: f64 = ((-self.q*self.dt).exp() - (-self.r*self.dt).exp()*self.d) / (self.u - self.d);
         let p_d: f64 = (-self.r*self.dt).exp() - p_u;
@@ -254,7 +254,7 @@ mod tests {
         use crate::lattice_models::binomial_models::binomial_model;
         use crate::financial_instruments::LongCall;
         let long_call: LongCall = LongCall { k: 11.0, cost: 0.0 };
-        let fair_value: f64 = binomial_model(Box::new(long_call), 10.0, 1.2, 0.9, 0.5, 2, Some(vec![false, false])).unwrap();
+        let fair_value: f64 = binomial_model(&long_call, 10.0, 1.2, 0.9, 0.5, 2, Some(vec![false, false])).unwrap();
         let analytic_solution: f64 = 0.5 * (0.5*0.0 + 0.5*3.4) + 0.5 * (0.5*0.0 + 0.5*0.0);
         assert!((fair_value - analytic_solution).abs() < TEST_ACCURACY);
     }
@@ -264,7 +264,7 @@ mod tests {
         use crate::lattice_models::binomial_models::binomial_model;
         use crate::financial_instruments::Straddle;
         let straddle: Straddle = Straddle { k: 11.0, cost_c: 0.0, cost_p: 0.0 };
-        let fair_value: f64 = binomial_model(Box::new(straddle), 10.0, 1.2, 0.9, 0.5, 2, Some(vec![false, false])).unwrap();
+        let fair_value: f64 = binomial_model(&straddle, 10.0, 1.2, 0.9, 0.5, 2, Some(vec![false, false])).unwrap();
         let analytic_solution: f64 = 0.5 * (0.5*3.4 + 0.5*0.2) + 0.5 * (0.5*0.2 + 0.5*2.9);
         assert!((fair_value - analytic_solution).abs() < TEST_ACCURACY);
     }

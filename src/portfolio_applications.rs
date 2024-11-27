@@ -6,7 +6,7 @@ pub mod utility_functions;
 
 use std::io::Error;
 use ndarray::{Array1, s, concatenate, Axis};
-use crate::utilities::{compare_array_len, data_error, some_or_error};
+use crate::utilities::{compare_array_len, data_error, other_error};
 use crate::statistics::covariance;
 
 
@@ -51,8 +51,8 @@ impl AssetHistData {
     /// - predictable_income: An array of preditable income readings (e.g., dividends for stocks, copouns for bonds, overnight fees, etc.)
     /// - time_array: An array of time accompanying the price series
     /// 
-    /// # Panics
-    /// - Panics if the length of price_array, predictable_income and/or time_array do not match
+    /// # Errors
+    /// - Returns an error if the length of price_array, predictable_income and/or time_array do not match
     pub fn new(price_array: Array1<f64>, predictable_income: Array1<f64>, time_array: Array1<f64>) -> Result<Self, Error> {
         compare_array_len(&price_array, &predictable_income, "price_array", "predictable_income")?;
         compare_array_len(&price_array, &time_array, "price_array", "time_array")?;
@@ -66,11 +66,11 @@ impl AssetHistData {
     /// - index: Time index beyond which no data will be returned
     /// - index_lable: Label of the index that will be included in the error message
     /// 
-    /// # Panics
-    /// - Panics if the index provided is out of bounds for the price array
+    /// # Errors
+    /// - Returns an error if the index provided is out of bounds for the price array
     fn validate_index(&self, index: usize, index_label: &str) -> Result<(), Error> {
         if self.price_array.len() < index {
-            return Err(data_error(format!("The argument {} is out of range for price array of length {}.", index_label, self.price_array.len())));
+            return Err(data_error(format!("AssetHistData: The argument {} is out of range for price array of length {}.", index_label, self.price_array.len())));
         }
         Ok(())
     }
@@ -87,8 +87,8 @@ impl AssetHistData {
     /// # Output
     /// - Historical and/or current prices(s)
     /// 
-    /// # Panics
-    /// - Panics if the index provided is out of bounds for the price array
+    /// # Errors
+    /// - Returns an error if the index provided is out of bounds for the price array
     pub fn get_price(&self, end_index: usize, start_index: Option<usize>) -> Result<Array1<f64>, Error> {
         self.validate_index(end_index, "end_index")?;
         let mut start_index_: usize = 0;
@@ -96,7 +96,7 @@ impl AssetHistData {
             Some(index) => {
                 self.validate_index(index, "start_index")?;
                 if end_index <= index {
-                    return Err(data_error("The argument start_index must be smaller than the end_index"));
+                    return Err(data_error("AssetHistData: The argument start_index must be smaller than the end_index"));
                 }
                 start_index_ = index;
             },
@@ -181,7 +181,7 @@ pub fn returns_average(price_array: &Array1<f64>, method: ReturnsMethod, n_perio
     let returns: Array1<f64> = prices_to_returns(price_array);
     match method {
         ReturnsMethod::ImpliedAverageReturn => {
-            Ok((1.0 + some_or_error(returns.mean(), "Could not compute the mean of the returns.")?).powi(n_periods as i32) - 1.0)
+            Ok((1.0 + returns.mean().ok_or(other_error("Could not compute the mean of the returns."))?).powi(n_periods as i32) - 1.0)
         },
         ReturnsMethod::EstimatedFromTotalReturn => {
             let returns_len: f64 = returns.len() as f64;

@@ -1,6 +1,6 @@
 use std::io::Error;
-use ndarray::Array1;
-use crate::utilities::{ParameterType, Time, compare_array_len, input_error, data_error};
+use ndarray::{Array1, arr1};
+use crate::utilities::{ParameterType, Time, compare_array_len, input_error, data_error, loss_functions::mse, numerical_engines::nelder_mead};
 
 
 #[derive(Clone)]
@@ -16,43 +16,42 @@ pub enum CompoundingType {
 /// Present value of the cashflow discounted at a certain rate for every time period.
 /// 
 /// # Input
-/// - cashflow: Array of cashflows
-/// - time: Time settings
-/// - rate: Value (array) of discount rate(s)
-/// - compounding_type: Compounding type used to discount cashflows
-/// - compounding_frequency: Compounding frequency of cashflows
+/// - `cashflow`: Array of cashflows
+/// - `time`: Time settings
+/// - `rate`: Value (array) of discount rate(s)
+/// - `compounding_type`: Compounding type used to discount cashflows
+/// - `compounding_frequency`: Compounding frequency of cashflows
 /// 
 /// # Output
 /// - Present value of series of cashflows
 /// 
-/// # Panics
-/// - Panics if any rate is defined outside the (-1,1) interval
+/// # Errors
+/// - Returns an error if any rate is defined outside the `(-1,1)` interval
 /// 
 /// # Links
 /// - Wikipedia: https://en.wikipedia.org/wiki/Present_value
 /// - Original Source: N/A
-pub fn present_value(cashflow: Array1<f64>, time: Time, rate: ParameterType, compounding_type: CompoundingType) -> Result<f64, Error> {
+pub fn present_value(cashflow: &Array1<f64>, time: &Time, rate: ParameterType, compounding_type: CompoundingType) -> Result<f64, Error> {
     let time_array = time.get_time_array();
     compare_array_len(&cashflow, &time_array, "cashflow", "time_array")?;
-    let rates_: Array1<f64>;
-    match rate {
+    let rates: Array1<f64> = match rate {
         ParameterType::Value { value } => {
             if (value <= -1.0) || (1.0 <= value) {
-                return Err(data_error("The argument rate must be defined in the interval (-1,1)."));
+                return Err(data_error("Present Value: The argument rate must be defined in the interval (-1,1)."));
             }
-            rates_ = Array1::from_vec(vec![value; cashflow.len()]);
+            Array1::from_vec(vec![value; cashflow.len()])
         },
         ParameterType::TimeSeries { values } => {
             if values.mapv(|r| { if (r <= -1.0) || (1.0 <= r) {1.0} else {0.0} }).sum() != 0.0 {
-                return Err(data_error("All rates must be in the range (-1,1)."));
+                return Err(data_error("Present Value: All rates must be in the range (-1,1)."));
             }
-            rates_ = values;
+            values
         },
-    }
+    };
     let mut present_value: f64 = 0.0;
     for i in 0..time_array.len() {
-        let discount_term = Compounding::new(rates_[i], compounding_type.clone());
-        present_value = present_value + cashflow[i]*discount_term.compounding_term(time_array[i]);
+        let discount_term: Compounding = Compounding::new(rates[i], &compounding_type);
+        present_value += cashflow[i]*discount_term.compounding_term(time_array[i]);
     }
     Ok(present_value)
 }
@@ -62,23 +61,23 @@ pub fn present_value(cashflow: Array1<f64>, time: Time, rate: ParameterType, com
 /// Net present value of the series of cashflows.
 /// 
 /// # Input
-/// - initial_cashflow: Initial cashflow
-/// - cashflow: Array of cashflows
-/// - time: Time settings
-/// - rate: Value (array) of discount rate(s)
-/// - compounding_type: Compounding type used to discount cashflows
-/// - compounding_frequency: Compounding frequency of cashflows
+/// - `initial_cashflow`: Initial cashflow
+/// - `cashflow`: Array of cashflows
+/// - `time`: Time settings
+/// - `rate`: Value (array) of discount rate(s)
+/// - `compounding_type`: Compounding type used to discount cashflows
+/// - `compounding_frequency`: Compounding frequency of cashflows
 /// 
 /// # Output
 /// - Present value of series of cashflows minus the initial cashflow
 /// 
-/// # Panics
-/// - Panics if any rate is defined outside the (-1,1) interval
+/// # Errors
+/// - Returns an error if any rate is defined outside the `(-1,1)` interval
 /// 
 /// # Links
 /// - Wikipedia: https://en.wikipedia.org/wiki/Present_value#Net_present_value_of_a_stream_of_cash_flows
 /// - Original Source: N/A
-pub fn net_present_value(initial_cashflow: f64, cashflow: Array1<f64>, time: Time, rate: ParameterType, compounding_type: CompoundingType) -> Result<f64, Error> {
+pub fn net_present_value(initial_cashflow: f64, cashflow: &Array1<f64>, time: &Time, rate: ParameterType, compounding_type: CompoundingType) -> Result<f64, Error> {
     Ok(-initial_cashflow + present_value(cashflow, time, rate, compounding_type)?)
 }
 
@@ -87,26 +86,26 @@ pub fn net_present_value(initial_cashflow: f64, cashflow: Array1<f64>, time: Tim
 /// Future value of the cashflow with a certain interest rate at a specific time.
 /// 
 /// # Input
-/// - current_value: Present value
-/// - rate: Discount rate
-/// - time: Time for which the future value is evaluated
-/// - compounding_type: Compounding type used to discount cashflows
-/// - compounding_frequency: Compounding frequency of cashflows
+/// - `current_value`: Present value
+/// - `rate`: Discount rate
+/// - `time`: Time for which the future value is evaluated
+/// - `compounding_type`: Compounding type used to discount cashflows
+/// - `compounding_frequency`: Compounding frequency of cashflows
 /// 
 /// # Output
 /// - Future value of the current cashflow
 /// 
-/// # Panics
-/// - Panics if the rate is defined outside the (-1,1) interval
+/// # Errors
+/// - Returns an error if the rate is defined outside the `(-1,1)` interval
 /// 
 /// # Links
 /// - Wikipedia: https://en.wikipedia.org/wiki/Future_value
 /// - Original Source: N/A
 pub fn future_value(current_value: f64, rate: f64, time: f64, compounding_type: CompoundingType) -> Result<f64, Error> {
     if (rate <= -1.0) || (1.0 <= rate) {
-        return Err(input_error("The argument rate must be defined in the interval (-1,1)."));
+        return Err(input_error("Future Value: The argument rate must be defined in the interval (-1,1)."));
     }
-    let discount_term = Compounding::new(rate, compounding_type);
+    let discount_term: Compounding = Compounding::new(rate, &compounding_type);
     Ok(current_value / discount_term.compounding_term(time))
 }
 
@@ -115,11 +114,11 @@ pub fn future_value(current_value: f64, rate: f64, time: f64, compounding_type: 
 /// Computes the internal rate of return under a certain compounding for the given series of cashflows.
 /// 
 /// # Input
-/// - initial_cashflow: Initial cashflow
-/// - cashflow: Array of cashflows
-/// - time: Time settings
-/// - compounding_type: Compounding type used to discount cashflows
-/// - compounding_frequency: Compounding frequency of cashflows
+/// - `initial_cashflow`: Initial cashflow
+/// - `cashflow`: Array of cashflows
+/// - `time`: Time settings
+/// - `compounding_type`: Compounding type used to discount cashflows
+/// - `compounding_frequency`: Compounding frequency of cashflows
 /// 
 /// # Output
 /// - Internal rate of return that yields the initial cashflow by discounting future cashflows
@@ -130,16 +129,16 @@ pub fn future_value(current_value: f64, rate: f64, time: f64, compounding_type: 
 pub fn internal_rate_of_return(initial_cashflow: f64, cashflow: Array1<f64>, time: Time, compounding_type: CompoundingType) -> Result<f64, Error> {
     let time_array = time.get_time_array();
     compare_array_len(&cashflow, &time_array, "cashflow", "time_array")?;
-    let pv_closure  = | rate: f64 | {
+    let pv_closure  = | rate: &[f64] | {
         let mut present_value: f64 = 0.0;
         for i in 0..time_array.len() {
-            let discount_term = Compounding::new(rate, compounding_type.clone());
-            present_value = present_value + cashflow[i]*discount_term.compounding_term(time_array[i]);
+            let discount_term: Compounding = Compounding::new(rate[0], &compounding_type);
+            present_value += cashflow[i] * discount_term.compounding_term(time_array[i]);
         }
-        present_value - initial_cashflow
+        mse(&arr1(&[present_value]), &arr1(&[initial_cashflow])).unwrap()
     };
-    // TODO: Find replacement for fsolve and use closure above, write unit test, do data validation before closure 
-    Ok(0.0)
+    let rate: Array1<f64> = nelder_mead(pv_closure, vec![0.0], Some(1_000), Some(1_000), None, None, None)?;
+    Ok(rate[0])
 }
 
 
@@ -147,17 +146,17 @@ pub fn internal_rate_of_return(initial_cashflow: f64, cashflow: Array1<f64>, tim
 /// A conversion from nominal interest rate to real interest rate based on inflation.
 /// 
 /// # Input
-/// - nominal_interest_rate: Nominal interest rate
-/// - inflation_rate: Rate of inflation
+/// - `nominal_interest_rate`: Nominal interest rate
+/// - `inflation_rate`: Rate of inflation
 /// 
 /// # Output
 /// - Real interest rate
 /// 
-/// # Panics
-/// - Panics if inflation rate is defined as -1.0
+/// # Errors
+/// - Returns an error if inflation rate is defined as `-1.0`
 pub fn real_interest_rate(nominal_interest_rate: f64, inflation_rate: f64) -> Result<f64, Error> {
     if inflation_rate == -1.0 {
-        return Err(input_error("The argument inflation_rate has a residual at -1.0. Change the value of the argument."));
+        return Err(input_error("Real Interest Rate: The argument inflation_rate has a residual at -1.0. Change the value of the argument."));
     }
     Ok((1.0 + nominal_interest_rate)/(1.0 + inflation_rate) - 1.0)
 }
@@ -167,9 +166,9 @@ pub fn real_interest_rate(nominal_interest_rate: f64, inflation_rate: f64) -> Re
 /// Periodic-to-periodic compounding transformation between different compounding frequencies.
 /// 
 /// # Input
-/// - current_rate: Current periodic discount rate
-/// - current_frequency: Current compounding frequency
-/// - new_frequency: New compounding frequency
+/// - `current_rate`: Current periodic discount rate
+/// - `current_frequency`: Current compounding frequency
+/// - `new_frequency`: New compounding frequency
 /// 
 /// # Output
 /// - New periodic discount rate
@@ -182,8 +181,8 @@ pub fn ptp_compounding_transformation(current_rate: f64, current_frequency: u32,
 /// Periodic-to-continuous compounding transformation.
 /// 
 /// # Input
-/// - periodic_rate: Current periodic discount rate
-/// - periodic_frequency: Current compounding frequency
+/// - `periodic_rate`: Current periodic discount rate
+/// - `periodic_frequency`: Current compounding frequency
 /// 
 /// # Output
 /// - Continuous discount rate
@@ -196,8 +195,8 @@ pub fn ptc_compounding_transformation(periodic_rate: f64, periodic_frequency: u3
 /// Continuous-to-periodic compounding transformation.
 /// 
 /// # Input
-/// - continuous_rate: Current continuous discount rate
-/// - periodic_frequency: Periodic compounding frequency
+/// - `continuous_rate`: Current continuous discount rate
+/// - `periodic_frequency`: Periodic compounding frequency
 /// 
 /// # Output
 /// - Periodic discount rate
@@ -224,10 +223,10 @@ impl Compounding {
     /// Creates a new Compounding instance.
     /// 
     /// # Input
-    /// - rate: Discount rate
-    /// - compounding_type: Type of compounding to use when computing the discount term
-    pub fn new(rate: f64, compounding_type: CompoundingType) -> Self {
-        Compounding { rate, compounding_type }
+    /// - `rate`: Discount rate
+    /// - `compounding_type`: Type of compounding to use when computing the discount term
+    pub fn new(rate: f64, compounding_type: &CompoundingType) -> Self {
+        Compounding { rate, compounding_type: compounding_type.clone() }
     }
 
     /// # Description
@@ -236,7 +235,7 @@ impl Compounding {
     /// Note: Compounding term is defined as the discounting terms for future cashflows.
     /// 
     /// # Input
-    /// - time: Time at which to discount
+    /// - `time`: Time at which to discount
     /// 
     /// # Output
     /// - Discounting term for future cashflows
@@ -293,8 +292,8 @@ impl Compounding {
     /// Converts one compounding type an frequency to another type or frequency.
     /// 
     /// # Input
-    /// - new_compounding_type: Compounding type to convert to
-    /// - new_compounding_frequency: New compounding frequency
+    /// - `new_compounding_type`: Compounding type to convert to
+    /// - `new_compounding_frequency`: New compounding frequency
     pub fn compounding_transformation(&mut self, new_compounding_type: CompoundingType) -> () {
         match new_compounding_type {
             CompoundingType::Continuous => {
@@ -334,13 +333,13 @@ impl Cashflow {
     /// Creates a new Cashflow instance.
     /// 
     /// # Input
-    /// - cashflow: Cashflow settings
-    /// - time: Time settings
-    /// - cashflow_growth_rate: Growth rate of the cashflow
-    /// - inflation_rate: Inflation rate to discount cashflows by
+    /// - `cashflow`: Cashflow settings
+    /// - `time`: Time settings
+    /// - `cashflow_growth_rate`: Growth rate of the cashflow
+    /// - `inflation_rate`: Inflation rate to discount cashflows by
     /// 
-    /// # Panics
-    /// - Panics if cashflow and time settings do not generate arrays of the same length
+    /// # Errors
+    /// - Returns an error if cashflow and time settings do not generate arrays of the same length
     pub fn new(cashflow: ParameterType, time: Time, cashflow_growth_rate: f64, inflation_rate: f64) -> Result<Self, Error> {
         let time_array = time.get_time_array();
         match cashflow {
@@ -363,12 +362,12 @@ impl Cashflow {
         }
     }
 
-    pub fn cashflow(&self) -> Array1<f64> {
-        self.cashflow.clone()
+    pub fn cashflow(&self) -> &Array1<f64> {
+        &self.cashflow
     }
 
-    pub fn time_array(&self) -> Array1<f64> {
-        self.time_array.clone()
+    pub fn time_array(&self) -> &Array1<f64> {
+        &self.time_array
     }
 }
 
@@ -395,16 +394,16 @@ impl Perpetuity {
     /// Creates a new Perpetuity instance.
     /// 
     /// # Input
-    /// - perpetuity_cashflow: Constant cashflow of the perpetuity (Initial cashflow for a perpetuity with non-zero growth rate)
-    /// - rate: Constant cashflow of the perpetuity (Initial cashflow for a perpetuity with non-zero growth rate)
-    /// - perpetuity_growth_rate: Growth rate of the cashflow at eadch time step
-    /// - compounding_type: Compounding type used to discount cashflows
+    /// - `perpetuity_cashflow`: Constant cashflow of the perpetuity (Initial cashflow for a perpetuity with non-zero growth rate)
+    /// - `rate`: Constant cashflow of the perpetuity (Initial cashflow for a perpetuity with non-zero growth rate)
+    /// - `perpetuity_growth_rate`: Growth rate of the cashflow at eadch time step
+    /// - `compounding_type`: Compounding type used to discount cashflows
     /// 
-    /// # Panics
-    /// - Panics if the discount rate is smaller or equal to the perpetuity growth rate
+    /// # Errors
+    /// - Returns an error if the discount rate is smaller or equal to the perpetuity growth rate
     pub fn new(perpetuity_cashflow: f64, rate: f64, perpetuity_growth_rate: f64, compounding_type: CompoundingType) -> Result<Self, Error> {
         if rate <= perpetuity_growth_rate {
-            return Err(data_error("The rate cannot be smaller or equal to the perpetuity growth rate."));
+            return Err(data_error("Perpetuity: The rate cannot be smaller or equal to the perpetuity growth rate."));
         }
         Ok(Perpetuity { perpetuity_cashflow, rate, perpetuity_growth_rate, compounding_type })
     }
@@ -431,7 +430,7 @@ impl Perpetuity {
     /// Note: Compounding frequency for periodic compounding does not affect the calculation.
     /// 
     /// # Input
-    /// - initial_cashflow: Initial cashflow
+    /// - `initial_cashflow`: Initial cashflow
     /// 
     /// # Output
     /// - Net present value of the perpetuity
@@ -482,16 +481,16 @@ impl Annuity {
     /// Creates a new Annuity instance.
     /// 
     /// # Input
-    /// - annuity_cashflow: Constant cashflow of the annuity (Initial cashflow for an annuity with non-zero growth rate)
-    /// - rate: Discount rate
-    /// - annuity_growth_rate: Growth rate of the cashflow at eadch time step
-    /// - compounding_type: Compounding type used to discount cashflows
+    /// - `annuity_cashflow`: Constant cashflow of the annuity (Initial cashflow for an annuity with non-zero growth rate)
+    /// - `rate`: Discount rate
+    /// - `annuity_growth_rate`: Growth rate of the cashflow at eadch time step
+    /// - `compounding_type`: Compounding type used to discount cashflows
     /// 
-    /// # Panics
-    /// - Panics if the discount rate is smaller or equal to the perpetuity growth rate
+    /// # Errors
+    /// - Returns an error if the discount rate is smaller or equal to the perpetuity growth rate
     pub fn new(annuity_cashflow: f64, rate: f64, final_time_step: f64, annuity_growth_rate: f64, compounding_type: CompoundingType) -> Result<Self, Error> {
         if rate <= annuity_growth_rate {
-            return Err(data_error("The rate cannot be smaller or equal to the annuity growth rate."));
+            return Err(data_error("Annuity: The rate cannot be smaller or equal to the annuity growth rate."));
         }
         Ok(Annuity { annuity_cashflow, rate, final_time_step, annuity_growth_rate, compounding_type })
     }
@@ -516,7 +515,7 @@ impl Annuity {
     /// Net present value of the annuity.
     /// 
     /// # Input
-    /// - initial_cashflow: Initial cashflow
+    /// - `initial_cashflow`: Initial cashflow
     /// 
     /// # Output
     /// - Net present value of the annuity
@@ -551,13 +550,13 @@ mod tests {
     #[test]
     fn unit_test_present_value() -> () {
         use crate::utilities::time_value_utils::present_value;
-        let cashflow = Array1::from_vec(vec![10.0, 10.0, 10.0]);
-        let time = Time::Sequence { times: Array1::from_vec(vec![1.0, 2.0, 3.0]) };
-        let rate = ParameterType::Value { value: 0.02 };
-        let periodic_compounding = CompoundingType::Periodic { frequency: 1 };
-        let continuous_compounding = CompoundingType::Continuous;
-        let pv_periodic = present_value(cashflow.clone(), time.clone(), rate.clone(), periodic_compounding).unwrap();
-        let pv_continuous = present_value(cashflow, time, rate, continuous_compounding).unwrap();
+        let cashflow: Array1<f64> = Array1::from_vec(vec![10.0, 10.0, 10.0]);
+        let time: Time = Time::Sequence { times: Array1::from_vec(vec![1.0, 2.0, 3.0]) };
+        let rate: ParameterType = ParameterType::Value { value: 0.02 };
+        let periodic_compounding: CompoundingType = CompoundingType::Periodic { frequency: 1 };
+        let continuous_compounding: CompoundingType = CompoundingType::Continuous;
+        let pv_periodic: f64 = present_value(&cashflow, &time, rate.clone(), periodic_compounding).unwrap();
+        let pv_continuous: f64 = present_value(&cashflow, &time, rate, continuous_compounding).unwrap();
         assert!((pv_periodic - 10.0*(1.0/1.02 + 1.0/1.02_f64.powf(2.0) + 1.0/1.02_f64.powf(3.0))).abs() < TEST_ACCURACY);
         assert!((pv_continuous - 10.0*((-0.02_f64).exp() + (-0.02*2.0_f64).exp() + (-0.02*3.0_f64).exp())).abs() < TEST_ACCURACY);
     }
@@ -565,19 +564,29 @@ mod tests {
     #[test]
     fn unit_test_future_value() -> () {
         use crate::utilities::time_value_utils::future_value;
-        let periodic_compounding = CompoundingType::Periodic { frequency: 1 };
-        let continuous_compounding = CompoundingType::Continuous;
-        let fv_periodic = future_value(100.0, 0.03, 3.0, periodic_compounding).unwrap();
-        let fv_continuous = future_value(100.0, 0.03, 3.0, continuous_compounding).unwrap();
+        let periodic_compounding: CompoundingType = CompoundingType::Periodic { frequency: 1 };
+        let continuous_compounding: CompoundingType = CompoundingType::Continuous;
+        let fv_periodic: f64 = future_value(100.0, 0.03, 3.0, periodic_compounding).unwrap();
+        let fv_continuous: f64 = future_value(100.0, 0.03, 3.0, continuous_compounding).unwrap();
         assert!((fv_periodic - 100.0*(1.03_f64).powf(3.0)).abs() < TEST_ACCURACY);
         assert!((fv_continuous - 100.0*(0.03*3.0_f64).exp()).abs() < TEST_ACCURACY);
     }
 
     #[test]
+    fn unit_test_internal_rate_of_return() -> () {
+        use crate::utilities::time_value_utils::internal_rate_of_return;
+        let cashflow: Array1<f64> = Array1::from_vec(vec![200.0, 200.0, 900.0]);
+        let time: Time = Time::Sequence { times: Array1::from_vec(vec![1.0, 2.0, 3.0]) };
+        let compounding_type: CompoundingType = CompoundingType::Continuous;
+        let rate: f64 = internal_rate_of_return(1000.0, cashflow, time, compounding_type).unwrap();
+        assert!((rate - 0.10459277343750006).abs() < 1_000.0 * TEST_ACCURACY);
+    }
+
+    #[test]
     fn unit_test_compounding_struct() -> () {
         use crate::utilities::time_value_utils::{Compounding, CompoundingType, ptc_compounding_transformation};
-        let mut compounding = Compounding::new(0.03, CompoundingType::Periodic{ frequency: 2 });
-        let periodic_compounding_term = compounding.compounding_term(3.0);
+        let mut compounding: Compounding = Compounding::new(0.03, &CompoundingType::Periodic{ frequency: 2 });
+        let periodic_compounding_term: f64 = compounding.compounding_term(3.0);
         assert!((periodic_compounding_term - (1.0_f64 + 0.03/2.0).powf(-2.0*3.0)).abs() < TEST_ACCURACY);
         compounding.ptc_compounding_transformation();
         assert!((compounding.compounding_term(3.0) - (-ptc_compounding_transformation(0.03, 2)*3.0_f64).exp()).abs() < TEST_ACCURACY);
@@ -588,9 +597,9 @@ mod tests {
     #[test]
     fn unit_test_cashflow_struct() -> () {
         use crate::utilities::time_value_utils::Cashflow;
-        let cashflow_ = ParameterType::Value { value: 10.0 }; 
-        let time = Time::Range { initial_time: 0.0, final_time: 3.0, time_step: 1.0 };
-        let cashflow = Cashflow::new(cashflow_, time, 0.02, 0.015).unwrap();
+        let cashflow_: ParameterType = ParameterType::Value { value: 10.0 }; 
+        let time: Time = Time::Range { initial_time: 0.0, final_time: 3.0, time_step: 1.0 };
+        let cashflow: Cashflow = Cashflow::new(cashflow_, time, 0.02, 0.015).unwrap();
         assert!((cashflow.time_array() - Array1::from_vec(vec![0.0, 1.0, 2.0])).sum().abs() < TEST_ACCURACY);
         assert!((cashflow.cashflow() - Array1::from_vec(vec![10.0, 10.0*1.02/1.015, 10.0*(1.02/1.015_f64).powf(2.0)])).sum().abs() < TEST_ACCURACY);
     }
@@ -598,16 +607,16 @@ mod tests {
     #[test]
     fn unit_test_perpetuity_struct() -> () {
         use crate::utilities::time_value_utils::Perpetuity;
-        let compounding_type = CompoundingType::Continuous;
-        let perpetuity = Perpetuity::new(10.0, 0.03, 0.02, compounding_type).unwrap();
+        let compounding_type: CompoundingType = CompoundingType::Continuous;
+        let perpetuity: Perpetuity = Perpetuity::new(10.0, 0.03, 0.02, compounding_type).unwrap();
         assert!((perpetuity.present_value() - 10.0*0.02_f64.exp()/(0.01_f64.exp() - 1.0)).abs() < TEST_ACCURACY);
     }
 
     #[test]
     fn unit_test_annuity_struct() -> () {
         use crate::utilities::time_value_utils::Annuity;
-        let compounding_type = CompoundingType::Continuous;
-        let annuity = Annuity::new(10.0, 0.03, 3.0, 0.02, compounding_type).unwrap();
+        let compounding_type: CompoundingType = CompoundingType::Continuous;
+        let annuity: Annuity = Annuity::new(10.0, 0.03, 3.0, 0.02, compounding_type).unwrap();
         assert!((annuity.present_value() - 10.0 * ((-0.02_f64).exp()) / (0.01_f64.exp()-1.0) * (1.0-(-0.01*3.0_f64).exp())).abs() < TEST_ACCURACY);
     }
 }

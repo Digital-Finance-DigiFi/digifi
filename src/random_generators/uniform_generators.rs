@@ -40,18 +40,18 @@ impl LinearCongruentialGenerator {
     }
 }
 
-impl RandomGenerator for LinearCongruentialGenerator {
+impl RandomGenerator<LinearCongruentialGenerator> for LinearCongruentialGenerator {
     /// # Description
     /// Creates a new LinearCongruentialGenerator instance with random parameters.
     /// 
     /// # Input
     /// - sample_size: Number of pseudo-random numbers to generate
-    fn new_shuffle(sample_size: usize) -> Self {
-        let seed: u32 = generate_seed();
+    fn new_shuffle(sample_size: usize) -> Result<Self, Error> {
+        let seed: u32 = generate_seed()?;
         let m: u32 = (seed * 1_234) as u32;
         let a: u32 = (seed as f64 / 10.0) as u32;
         let b: u32 = (m as f64 / 10.0) as u32;
-        LinearCongruentialGenerator { seed, sample_size, m, a, b }
+        Ok(LinearCongruentialGenerator { seed, sample_size, m, a, b })
     }
 
     /// # Description
@@ -116,18 +116,18 @@ impl FibonacciGenerator {
     }
 }
 
-impl RandomGenerator for FibonacciGenerator {
+impl RandomGenerator<FibonacciGenerator> for FibonacciGenerator {
     /// # Description
     /// Creates a new FibonacciGenerator instance with random parameters.
     /// 
     /// # Input
     /// - sample_size: Number of pseudo-random numbers to generate
-    fn new_shuffle(sample_size: usize) -> Self {
-        let seed: u32 = generate_seed();
+    fn new_shuffle(sample_size: usize) -> Result<Self, Error> {
+        let seed: u32 = generate_seed()?;
         let m: u32 = (seed * 1_234) as u32;
         let a: u32 = (seed as f64 / 10.0) as u32;
         let b: u32 = (m as f64 / 10.0) as u32;
-        FibonacciGenerator { seed, sample_size, mu: 5, nu: 17, m, a, b }
+        Ok(FibonacciGenerator { seed, sample_size, mu: 5, nu: 17, m, a, b })
     }
 
     /// # Description
@@ -179,7 +179,7 @@ mod tests {
     #[test]
     fn unit_test_fibonacci_generator_2() -> () {
         use crate::random_generators::uniform_generators::FibonacciGenerator;
-        let fg: FibonacciGenerator = FibonacciGenerator::new_shuffle(10_000);
+        let fg: FibonacciGenerator = FibonacciGenerator::new_shuffle(10_000).unwrap();
         let sample: Array1<f64> = fg.generate().unwrap();
         assert_eq!(sample.len(), 10_000);
         assert!((sample.mean().unwrap() - 0.5).abs() < 1_000_000.0 * TEST_ACCURACY);

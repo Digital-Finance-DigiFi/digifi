@@ -2,3 +2,5 @@
 /Cargo.lock
 
 /test.py
+
+shell.nix

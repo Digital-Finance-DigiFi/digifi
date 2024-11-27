@@ -1,6 +1,6 @@
 use std::io::Error;
 use ndarray::Array1;
-use crate::utilities::input_error;
+use crate::utilities::{input_error, maths_utils::definite_integral};
 use crate::statistics::ProbabilityDistribution;
 
 
@@ -12,18 +12,21 @@ use crate::statistics::ProbabilityDistribution;
 /// Note: The V@R is quoted as a positive number, if V@R is negative it implies that the portfolio has very high chace of making a profit.
 /// 
 /// # Input
-/// - alpha: Probability level for V@R
-/// - returns_distribution: Probability distribution object with an inverse CDF method
+/// - `alpha`: Probability level for V@R
+/// - `returns_distribution`: Probability distribution object with an inverse CDF method
 /// 
 /// # Output
 /// - Value at risk (V@R)
 /// 
-/// # links
+/// # Errors
+/// - Returns an error if the argument `alpha` is not in the range \[0, 1\].
+///
+/// # Links
 /// - Wikipedia: https://en.wikipedia.org/wiki/Value_at_risk#
 /// - Original Source: N/A
 pub fn value_at_risk(alpha: f64, returns_distribution: &impl ProbabilityDistribution) -> Result<f64, Error> {
     if (alpha < 0.0) || (1.0 < alpha) {
-        return Err(input_error("The argument alpha must be in the range [0, 1]."));
+        return Err(input_error("Value at Risk: The argument alpha must be in the range [0, 1]."));
     }
     Ok(-returns_distribution.inverse_cdf(&Array1::from_vec(vec![alpha]))?[0])
 }
@@ -35,21 +38,47 @@ pub fn value_at_risk(alpha: f64, returns_distribution: &impl ProbabilityDistribu
 /// Note: This function uses the convention where ES at 5% is the expected shortfall of the 5% of worst cases.
 /// 
 /// # Input
-/// - alpha: Probability level for ES
-/// - returns_distribution: Probability distribution object with an inverse CDF method
+/// - `alpha`: Probability level for ES
+/// - `returns_distribution`: Probability distribution object with an inverse CDF method
 /// 
 /// # Output
 /// - Expected shortfall (ES)
 /// 
-/// # links
+/// # Errors
+/// - Returns an error if the argument `alpha` is not in the range \[0, 1\].
+///
+/// # Links
 /// - Wikipedia: https://en.wikipedia.org/wiki/Expected_shortfall
 /// - Original Source: N/A
 pub fn expected_shortfall(alpha: f64, returns_distribution: &impl ProbabilityDistribution) -> Result<f64, Error> {
     if (alpha < 0.0) || (1.0 < alpha) {
-        return Err(input_error("The argument alpha must be in the range [0, 1]."));
+        return Err(input_error("Expected Shortfall: The argument alpha must be in the range [0, 1]."));
     }
-    todo!();
-    // TODO: Implement expected_shortfall
-    // let function_integral: Fn(f64) -> f64 = |p| { value_at_risk(p, returns_distribution)? };
-    // Ok(numerical_integration(function_integral, 0.0, alpha) / alpha)
+    let f = |p| { value_at_risk(p, returns_distribution).unwrap() };
+    Ok(definite_integral(f, 0.0, alpha, 1_000_000) / alpha)
+}
+
+
+#[cfg(test)]
+mod tests {
+    use ndarray::arr1;
+    use crate::statistics::ProbabilityDistribution;
+    use crate::utilities::TEST_ACCURACY;
+    use crate::statistics::continuous_distributions::NormalDistribution;
+
+    #[test]
+    fn unit_test_value_at_risk() -> () {
+        use crate::portfolio_applications::risk_measures::value_at_risk;
+        let norm_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0).unwrap();
+        assert!((value_at_risk(0.1, &norm_dist).unwrap() - 1.28).abs() < 1_000_000.0 * TEST_ACCURACY);
+    }
+
+    #[test]
+    fn unit_test_expected_shortfall() -> () {
+        use crate::portfolio_applications::risk_measures::expected_shortfall;
+        let norm_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0).unwrap();
+        let es: f64 = expected_shortfall(0.1, &norm_dist).unwrap();
+        let theor: f64 = (-norm_dist.inverse_cdf(&arr1(&[0.1])).unwrap()[0].powi(2) / 2.0).exp() / (2.0 * std::f64::consts::PI).sqrt() / 0.1;
+        assert!((es - theor).abs() < 10_000_000.0 * TEST_ACCURACY);
+    }
 }

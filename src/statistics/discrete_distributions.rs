@@ -2,8 +2,9 @@ use std::io::Error;
 use ndarray::Array1;
 use num::complex::Complex;
 use crate::utilities::{input_error, data_error, maths_utils::factorial};
-use crate::statistics::{ProbabilityDistribution, ProbabilityDistributionType, n_choose_r};
+use crate::statistics::{ProbabilityDistribution, ProbabilityDistributionType, n_choose_r, regularized_incomplete_beta_function};
 use crate::statistics::continuous_distributions::NormalDistribution;
+use crate::utilities::numerical_engines::nelder_mead;
 
 
 /// # Description
@@ -24,13 +25,13 @@ impl BernoulliDistribution {
     /// Creates a new BernoulliDistribution instance.
     /// 
     /// # Input
-    /// - p: Probability of successful outcome
+    /// - `p`: Probability of successful outcome
     /// 
-    /// # Panics
-    /// - Panics if p is not in the [0,1] range
+    /// # Errors
+    /// - Returns an error if `p` is not in the \[0,1\] range
     pub fn new(p: f64) -> Result<Self, Error> {
         if (p < 0.0) || (1.0 < p) {
-            return Err(input_error("The argument p must be in the [0, 1] range."));
+            return Err(input_error("Bernoulli Distribution: The argument p must be in the [0, 1] range."));
         }
         Ok(BernoulliDistribution { p, _distribution_type: ProbabilityDistributionType::Discrete })
     }
@@ -69,10 +70,13 @@ impl ProbabilityDistribution for BernoulliDistribution {
     /// Calculates the Probability Mass Function (PMF) for a Bernoulli distribution.
     /// 
     /// # Input
-    /// - x: Array of values (0 or 1) at which to calculate the PMF
+    /// - `x`: Array of values (0 or 1) at which to calculate the PMF
     /// 
     /// # Output
     /// - PMF values at the given x
+    ///
+    /// # Errors
+    /// - Returns an error if any value inside array `x` is not in the set {0, 1}
     fn pdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, Error> {
         let mut result: Vec<f64> = Vec::<f64>::new();
         for i in x {
@@ -82,7 +86,7 @@ impl ProbabilityDistribution for BernoulliDistribution {
             } else if *i == 1.0 {
                 x_ = self.p
             } else {
-                return Err(data_error("The argument x must be in the {{0, 1}} set."));
+                return Err(data_error("Bernoulli Distribution: The argument x must be in the {{0, 1}} set."));
             }
             result.push(x_)
         }
@@ -93,10 +97,10 @@ impl ProbabilityDistribution for BernoulliDistribution {
     /// Computes the Cumulative Distribution Function (CDF) for a Bernoulli distribution.
     /// 
     /// # Input
-    /// - x: Array of values (0 or 1) at which to calculate the CDF
+    /// - `x`: Array of values (0 or 1) at which to calculate the CDF
     /// 
     /// # Output
-    /// - CDF values at the given x
+    /// - CDF values at the given `x`
     fn cdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, Error> {
         Ok(x.map(|x_| if *x_ < 0.0 { 0.0 } else if 1.0 <= *x_ { 1.0 } else { 1.0 - self.p } ))
     }
@@ -105,7 +109,7 @@ impl ProbabilityDistribution for BernoulliDistribution {
     /// Computes the Inverse Cumulative Distribution Function (Inverse CDF) for a Bernoulli distribution.
     /// 
     /// # Input
-    /// - p: Probability values for which to calculate the inverse CDF
+    /// - `p`: Probability values for which to calculate the inverse CDF
     /// 
     /// # Output
     /// - Inverse CDF values for the given probabilities
@@ -118,10 +122,10 @@ impl ProbabilityDistribution for BernoulliDistribution {
     /// Calculates the Moment Generating Function (MGF) for a Bernoulli distribution.
     /// 
     /// # Input
-    /// - t: Input values for the MGF
+    /// - `t`: Input values for the MGF
     /// 
     /// # Output
-    /// - MGF values at the given t
+    /// - MGF values at the given `t`
     fn mgf(&self, t: &Array1<usize>) -> Array1<f64> {
         t.map(|t_| (1.0 - self.p) + self.p * (*t_ as f64).exp() )
     }
@@ -130,10 +134,10 @@ impl ProbabilityDistribution for BernoulliDistribution {
     /// Computes the Characteristic Function (CF) for a Bernoulli distribution.
     /// 
     /// # Input
-    /// - t: Input values for the CF
+    /// - `t`: Input values for the CF
     /// 
     /// # Output
-    /// - CF values at the given t
+    /// - CF values at the given `t`
     fn cf(&self, t: &Array1<usize>) -> Array1<Complex<f64>> {
         t.map(|t_| (1.0 - self.p) + self.p * Complex::new(0.0, *t_ as f64).exp() )
     }
@@ -160,14 +164,14 @@ impl BinomialDistribution {
     /// Creates a new BinomialDistribution instance.
     /// 
     /// # Input
-    /// - n: Number of trials
-    /// - p: Probability of successful outcome
+    /// - `n`: Number of trials
+    /// - `p`: Probability of successful outcome
     /// 
-    /// # Panics
-    /// - Panics if p is not in the [0,1] range
+    /// # Errors
+    /// - Returns an error if `p` is not in the \[0,1\] range
     pub fn new(n: usize, p: f64) -> Result<Self, Error> {
         if (p < 0.0) || (1.0 < p) {
-            return Err(input_error("The argument p must be in the [0, 1] range."));
+            return Err(input_error("Binomial Distribution: The argument p must be in the [0, 1] range."));
         }
         Ok(BinomialDistribution { n, p, _distribution_type: ProbabilityDistributionType::Discrete })
     }
@@ -207,10 +211,10 @@ impl ProbabilityDistribution for BinomialDistribution {
     /// Calculates the Probability Mass Function (PMF) for a binomial distribution.
     /// 
     /// # Input
-    /// - x: Array of non-negative integer values at which to calculate the PMF
+    /// - `x`: Array of non-negative integer values at which to calculate the PMF
     /// 
     /// # Output
-    /// - PMF values at the given x
+    /// - PMF values at the given `x`
     fn pdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, Error> {
         let mut result: Vec<f64> = Vec::<f64>::new();
         for i in x {
@@ -225,25 +229,27 @@ impl ProbabilityDistribution for BinomialDistribution {
     /// Computes the Cumulative Distribution Function (CDF) for a binomial distribution.
     /// 
     /// # Input
-    /// - x: Array of non-negative integer values at which to calculate the CDF
+    /// - `x`: Array of non-negative integer values at which to calculate the CDF
     /// 
     /// # Output
-    /// - CDF values at the given x
+    /// - CDF values at the given `x`
     fn cdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, Error> {
         let x_floor: Array1<f64> = x.map(|x_| x_.floor() );
         let a : Array1<f64> = self.n as f64 - &x_floor;
         let b: Array1<f64> = 1.0 - &x_floor;
         let upper_integral_limit: Array1<f64> = (1.0 - self.p) * Array1::from_vec(vec![1.0; x_floor.len()]);
-        // TODO: Implement incomplete beta function
-        // betainc(a, b, upper_integral_limit)
-        Ok(a)
+        let mut cdf_: Vec<f64> = Vec::<f64>::new();
+        for i in 0..x.len() {
+            cdf_.push(regularized_incomplete_beta_function(upper_integral_limit[i], a[i], b[i], 1_000_000)?);
+        }
+        Ok(Array1::from_vec(cdf_))
     }
 
     /// # Description
     /// Computes the Inverse Cumulative Distribution Function (Inverse CDF) for a binomial distribution.
     /// 
     /// # Input
-    /// - p: Probability values for which to calculate the inverse CDF
+    /// - `p`: Probability values for which to calculate the inverse CDF
     /// 
     /// # Output
     /// - Inverse CDF values for the given probabilities
@@ -255,10 +261,9 @@ impl ProbabilityDistribution for BinomialDistribution {
                 result.push(p_);
                 continue
             }
-            let quantile = |rv: f64| { self.cdf(&Array1::from_vec(vec![rv])).unwrap().map(|cdf_| if cdf_.is_nan() { 0.0 } else { *cdf_ } )[0] - p_ };
-            let x_0: f64 = 0.5;
-            // TODO: Implement numerical solver and remove .unwrap()
-            // result.push(fsolve(quantile, x_0));
+            let quantile = |rv: &[f64]| { self.cdf(&Array1::from_vec(rv.to_vec())).unwrap().map(|cdf_| if cdf_.is_nan() { 0.0 } else { *cdf_ } )[0] - p_ };
+            let x: Array1<f64> = nelder_mead(quantile, vec![0.5], Some(10_000), Some(100_000), None, None, None)?;
+            result.push(x[0]);
         }
         Ok(Array1::from_vec(result))
     }
@@ -267,10 +272,10 @@ impl ProbabilityDistribution for BinomialDistribution {
     /// Calculates the Moment Generating Function (MGF) for a binomial distribution.
     /// 
     /// # Input
-    /// - t: Input values for the MGF
+    /// - `t`: Input values for the MGF
     /// 
     /// # Output
-    /// - MGF values at the given t
+    /// - MGF values at the given `t`
     fn mgf(&self, t: &Array1<usize>) -> Array1<f64> {
         t.map(|t_| ((1.0 - self.p) + self.p * (*t_ as f64).exp()).powi(self.n as i32) )
     }
@@ -304,14 +309,14 @@ impl DiscreteUniformDistribution {
     /// Creates a new DiscreteUniformDistribution instance.
     /// 
     /// # Input
-    /// - a: Lower bound of the distribution
-    /// - b: Upper bound of the distribution
+    /// - `a`: Lower bound of the distribution
+    /// - `b`: Upper bound of the distribution
     /// 
-    /// # Panics
-    /// - Panics if b is smaller than a
+    /// # Errors
+    /// - Returns an error if `b` is smaller than `a`
     pub fn new(a: i32, b: i32) -> Result<Self, Error> {
         if b < a {
-            return Err(input_error("The argument a must be smaller or equal to the argument b."));
+            return Err(input_error("Discrete Uniform Distribution: The argument a must be smaller or equal to the argument b."));
         }
         Ok(DiscreteUniformDistribution { a, b, n: ((b - a + 1) as f64), _distribution_type: ProbabilityDistributionType::Discrete })
     }
@@ -350,7 +355,7 @@ impl ProbabilityDistribution for DiscreteUniformDistribution {
     /// Calculates the Probability Mass Function (PMF) for a discrete uniform distribution.
     /// 
     /// # Input
-    /// - x: Array of values at which to calculate the PMF
+    /// - `x`: Array of values at which to calculate the PMF
     /// 
     /// # Output
     /// - PMF values for the discrete uniform distribution
@@ -362,10 +367,10 @@ impl ProbabilityDistribution for DiscreteUniformDistribution {
     /// Computes the Cumulative Distribution Function (CDF) for a discrete uniform distribution.
     /// 
     /// # Input
-    /// - x: Array of values at which to calculate the CDF
+    /// - `x`: Array of values at which to calculate the CDF
     /// 
     /// # Output
-    /// - CDF values at the given x
+    /// - CDF values at the given `x`
     fn cdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, Error> {
         Ok(x.map(|x_| if ((self.a as f64) <= *x_) || (*x_ <= (self.b as f64)) { (x_.floor() - (self.a as f64) + 1.0) / self.n } else { f64::NAN } ))
     }
@@ -374,7 +379,7 @@ impl ProbabilityDistribution for DiscreteUniformDistribution {
     /// Calculates the Inverse Cumulative Distribution Function (Inverse CDF) for a discrete uniform distribution.
     /// 
     /// # Input
-    /// - p: Probability values for which to calculate the inverse CDF
+    /// - `p`: Probability values for which to calculate the inverse CDF
     /// 
     /// # Output
     /// - Inverse CDF values for the given probabilities
@@ -387,10 +392,10 @@ impl ProbabilityDistribution for DiscreteUniformDistribution {
     /// Computes the Moment Generating Function (MGF) for a discrete uniform distribution.
     /// 
     /// # Input
-    /// - t: Input values for the MGF
+    /// - `t`: Input values for the MGF
     /// 
     /// # Output
-    /// - MGF values at the given t
+    /// - MGF values at the given `t`
     fn mgf(&self, t: &Array1<usize>) -> Array1<f64> {
         t.map(|t_| {
             let x: f64 = *t_ as f64;
@@ -402,10 +407,10 @@ impl ProbabilityDistribution for DiscreteUniformDistribution {
     /// Calculates the Characteristic Function (CF) for a discrete uniform distribution.
     /// 
     /// # Input
-    /// - t: Input values for the CF
+    /// - `t`: Input values for the CF
     /// 
     /// # Output
-    /// - CF values at the given t
+    /// - CF values at the given `t`
     fn cf(&self, t: &Array1<usize>) -> Array1<Complex<f64>> {
         t.map(|t_| {
             let x: f64 = *t_ as f64;
@@ -433,10 +438,13 @@ impl PoissonDistribution {
     /// Creates a new PoissonDistribution instance.
     /// 
     /// # Input
-    /// - lambda: Expected number of events in a given interval
+    /// - `lambda`: Expected number of events in a given interval
+    ///
+    /// # Errors
+    /// - Returns an error if `lambda` is not positive
     pub fn new(lambda: f64) -> Result<Self, Error> {
         if lambda <= 0.0 {
-            return Err(input_error("The argument lambda must be positive."));
+            return Err(input_error("Poisson Distribution: The argument lambda must be positive."));
         }
         Ok(PoissonDistribution { lambda, _distribution_type: ProbabilityDistributionType::Discrete })
     }
@@ -475,15 +483,18 @@ impl ProbabilityDistribution for PoissonDistribution {
     /// Calculates the Probability Mass Function (PMF) for a Poisson distribution.
     /// 
     /// # Input
-    /// - x: Array of non-negative integer values at which to calculate the PMF
+    /// - `x`: Array of non-negative integer values at which to calculate the PMF
     /// 
     /// # Output
-    /// - PMF values at the given x
+    /// - PMF values at the given `x`
+    ///
+    /// # Errors
+    /// - Returns an error if any value inside array `x` is not positive
     fn pdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, Error> {
         let mut result: Vec<f64> = Vec::<f64>::new();
         for i in x {
             if *i < 0.0 {
-                return Err(data_error("The argument x must be positive."));
+                return Err(data_error("Poisson Distribution: The argument x must be positive."));
             } else {
                 result.push((self.lambda.powi(*i as i32) * (-self.lambda).exp()) / factorial(*i as u128) as f64)
             }
@@ -495,15 +506,18 @@ impl ProbabilityDistribution for PoissonDistribution {
     /// Computes the Cumulative Distribution Function (CDF) for a Poisson distribution.
     /// 
     /// # Input
-    /// - x: Array of non-negative integer values at which to calculate the CDF
+    /// - `x`: Array of non-negative integer values at which to calculate the CDF
     /// 
     /// # Output
-    /// - CDF values at the given x
+    /// - CDF values at the given `x`
+    ///
+    /// # Errors
+    /// - Returns an error if any value inside array `x` is not positive
     fn cdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, Error> {
         let mut result: Vec<f64> = Vec::<f64>::new();
         for i in x {
             if *i < 0.0 {
-                return Err(data_error("The argument x must be positive."));
+                return Err(data_error("Poisson Distribution: The argument x must be positive."));
             }
             let mut proxy: f64 = 0.0;
             for j in 0..(i.floor() as i32) {
@@ -518,7 +532,7 @@ impl ProbabilityDistribution for PoissonDistribution {
     /// Computes the Inverse Cumulative Distribution Function (Inverse CDF) for a Poisson distribution.
     /// 
     /// # Input
-    /// - p: Probability values for which to calculate the inverse CDF
+    /// - `p`: Probability values for which to calculate the inverse CDF
     /// 
     /// # Output
     /// - Inverse CDF values for the givenprobabilities
@@ -535,10 +549,10 @@ impl ProbabilityDistribution for PoissonDistribution {
     /// Calculates the Moment Generating Function (MGF) for a Poisson distribution.
     /// 
     /// # Input
-    /// - t: Input values for the MGF
+    /// - `t`: Input values for the MGF
     /// 
     /// # Output
-    /// - MGF values at the given t
+    /// - MGF values at the given `t`
     fn mgf(&self, t: &Array1<usize>) -> Array1<f64> {
         t.map(|t_| (self.lambda * ((*t_ as f64).exp() - 1.0)).exp() )
     }
@@ -547,10 +561,10 @@ impl ProbabilityDistribution for PoissonDistribution {
     /// Computes the Characteristic Function (CF) for a Poisson distribution.
     /// 
     /// # Input
-    /// - t: Input values for the CF
+    /// - `t`: Input values for the CF
     /// 
     /// # Output
-    /// - CF values at the given t
+    /// - CF values at the given `t`
     fn cf(&self, t: &Array1<usize>) -> Array1<Complex<f64>> {
         t.map(|t_| (self.lambda * (Complex::new(0.0, *t_ as f64).exp() - 1.0)).exp() )
     }

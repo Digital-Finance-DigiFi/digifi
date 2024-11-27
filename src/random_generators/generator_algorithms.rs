@@ -19,9 +19,9 @@ use crate::random_generators::{RandomGenerator, uniform_generators::{LinearCongr
 /// # Output
 /// - Sample array generated from the target distribution
 /// 
-/// # Panics
-/// - Panics if the arrays produced by f_x and g_x are of different lengths
-/// - Panics if arrays produced by f_x and g_x are different in length to y_sample
+/// # Errors
+/// - Returns an error if the arrays produced by f_x and g_x are of different lengths
+/// - Returns an error if arrays produced by f_x and g_x are different in length to y_sample
 /// 
 /// # Links
 /// - Wikipedia: https://en.wikipedia.org/wiki/Rejection_sampling
@@ -34,7 +34,9 @@ pub fn accept_reject(f_x: &impl ProbabilityDistribution, g_x : &impl Probability
     compare_array_len(&g, y_sample, "g", "sample")?;
     let mut x_sample: Vec<f64> = Vec::<f64>::new();
     for i in 0..y_sample.len() {
-        if (uniform_sample[i] * m * g[i]) <= f[i] {
+        if g[i].is_infinite() || f[i].is_infinite() {
+            continue;
+        } else if (uniform_sample[i] * m * g[i]) <= f[i] {
             x_sample.push(y_sample[i]);
         }
     }
@@ -59,7 +61,7 @@ pub fn accept_reject(f_x: &impl ProbabilityDistribution, g_x : &impl Probability
 /// - Wikipedia: https://en.wikipedia.org/wiki/Inverse_transform_sampling
 /// - Original SOurce: N/A
 pub fn inverse_transform(f_x: &impl ProbabilityDistribution, sample_size: usize) -> Result<Array1<f64>, Error> {
-    let u: Array1<f64> = FibonacciGenerator::new_shuffle(sample_size).generate()?;
+    let u: Array1<f64> = FibonacciGenerator::new_shuffle(sample_size)?.generate()?;
     f_x.inverse_cdf(&u)
 }
 
@@ -81,8 +83,8 @@ pub fn inverse_transform(f_x: &impl ProbabilityDistribution, sample_size: usize)
 /// # Links
 /// - Wikipedia: https://en.wikipedia.org/wiki/Box-Muller_transform
 /// - Original Source: https://doi.org/10.1214%2Faoms%2F1177706645
-pub fn box_muller(uniform_ample_1: &Array1<f64>, unfiform_sample_2: &Array1<f64>) -> (Array1<f64>, Array1<f64>) {
-    let mult_1: Array1<f64> = uniform_ample_1.map(|x| (-2.0 * x.ln()).sqrt() );
+pub fn box_muller(uniform_sample_1: &Array1<f64>, unfiform_sample_2: &Array1<f64>) -> (Array1<f64>, Array1<f64>) {
+    let mult_1: Array1<f64> = uniform_sample_1.map(|x| if (x == &0.0) ||(x == &1.0) {0.0} else {(-2.0 * x.ln()).sqrt()} );
     let mult_21: Array1<f64> = unfiform_sample_2.map(|x| (2.0 * std::f64::consts::PI * x).cos() );
     let mult_22: Array1<f64> = unfiform_sample_2.map(|x| (2.0 * std::f64::consts::PI * x).sin() );
     (&mult_1 * &mult_21, &mult_1 * &mult_22)
@@ -108,8 +110,8 @@ pub fn box_muller(uniform_ample_1: &Array1<f64>, unfiform_sample_2: &Array1<f64>
 /// - Wikipedia: https://en.wikipedia.org/wiki/Marsaglia_polar_method
 /// - Original Source: https://doi.org/10.1137%2F1006063
 pub fn marsaglia(max_iterations: usize) -> Result<Option<(f64, f64)>, Error> {
-    let w_1: Array1<f64> = 2.0 * FibonacciGenerator::new_shuffle(max_iterations).generate()? - 1.0;
-    let w_2: Array1<f64> = 2.0 * FibonacciGenerator::new_shuffle(max_iterations).generate()? - 1.0;
+    let w_1: Array1<f64> = 2.0 * FibonacciGenerator::new_shuffle(max_iterations)?.generate()? - 1.0;
+    let w_2: Array1<f64> = 2.0 * FibonacciGenerator::new_shuffle(max_iterations)?.generate()? - 1.0;
     let mut i: usize = 0;
     while i < max_iterations {
         let s: f64 = w_1[i].powi(2) + w_2[i].powi(2);
@@ -142,12 +144,12 @@ pub fn ziggurat(x_guess: &Array1<f64>, sample_size: usize, max_iterations: usize
     let y: Array1<f64> = normal_dist.pdf(&x_guess)?;
     let mut z: Array1<f64> = Array1::from_vec(vec![1.0; sample_size]);
     for j in 0..sample_size {
-        let u_1: Array1<f64> = 2.0 * FibonacciGenerator::new_shuffle(max_iterations).generate()? - 1.0;
-        let u_2: Array1<f64> = FibonacciGenerator::new_shuffle(max_iterations).generate()?;
+        let u_1: Array1<f64> = 2.0 * FibonacciGenerator::new_shuffle(max_iterations)?.generate()? - 1.0;
+        let u_2: Array1<f64> = FibonacciGenerator::new_shuffle(max_iterations)?.generate()?;
         let mut i: usize = 0;
         while (z[j]==1.0) && (i < max_iterations) {
             // Generates a random index and ensures that it is in the range [1, x_guess.len()-1]
-            let rand_index: usize = (((x_guess.len() - 2) as f64) * LinearCongruentialGenerator::new_shuffle(1).generate()?[0]).ceil() as usize + 1;
+            let rand_index: usize = (((x_guess.len() - 2) as f64) * LinearCongruentialGenerator::new_shuffle(1)?.generate()?[0]).ceil() as usize + 1;
             let x: f64 = u_1[rand_index] * x_guess[rand_index];
             if x.abs() < x_guess[rand_index-1] {
                 z[j] = x;
