@@ -2,11 +2,13 @@
 name = "digifi"
 version = "2.0.0"
 edition = "2021"
-description = "General purpose financial library for financial modelling, portfolio optimization, and asset pricing."
+description = "General purpose financial library and framework for financial modelling, portfolio optimization, and asset pricing."
 license = "MIT OR Apache-2.0"
 homepage = "https://github.com/Digital-Finance-DigiFi/digifi"
 repository = "https://github.com/Digital-Finance-DigiFi/digifi"
 documentation = "https://docs.rs/digifi"
+keywords = ["stochastic", "portfolio", "pricing", "investment", "asset"]
+categories = ["finance", "mathematics", "science", "simulation"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
