@@ -1,8 +1,25 @@
 use std::io::Error;
-use std::collections::HashMap;
 use ndarray::{Array1, Array2};
 use crate::utilities::{compare_array_len, input_error};
 use crate::statistics::{covariance, linear_regression};
+
+
+/// # Description
+/// Parameters of CAPM model.
+pub struct CAPMParams {
+    /// y-axis intersection of the CAPM model
+    pub alpha: Option<f64>,
+    /// Sensitivity of the asset with respect to premium market returns
+    pub beta: f64,
+    /// Sensitivity of the asset with respect to SMB returns
+    pub beta_s: Option<f64>,
+    /// Sensitivity of the asset with respect to HML returns
+    pub beta_h: Option<f64>,
+    /// Sensitivity of the asset with respect to RMW returns
+    pub beta_r: Option<f64>,
+    /// 
+    pub beta_c: Option<f64>,
+}
 
 
 pub enum CAPMType {
@@ -64,8 +81,39 @@ pub enum CAPMSolutionType {
 /// Contains methods for finding asset beta and predicting expected asset returns with the given beta.
 /// 
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Capital_asset_pricing_model
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Capital_asset_pricing_model>
 /// - Original Source: N/A
+///
+/// # Examples
+///
+/// ```rust
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::corporate_finance::{CAPMParams, CAPMSolutionType, CAPMType, CAPM};
+///
+/// #[cfg(feature = "sample_data")]
+/// fn test_capm() -> () {
+///     use digifi::utilities::SampleData;
+///
+///     let sample: SampleData = SampleData::CAPM; 
+///     let (_, mut sample_data) = sample.load_sample_data();
+///     let capm_type: CAPMType = CAPMType::FiveFactorFamaFrench {
+///         smb: sample_data.remove("SMB").unwrap(), hml: sample_data.remove("HML").unwrap(),
+///         rmw: sample_data.remove("RMW").unwrap(), cma: sample_data.remove("CMA").unwrap(),
+///     };
+///     let solution_type: CAPMSolutionType = CAPMSolutionType::LinearRegression;
+///
+///     let capm: CAPM = CAPM::new(sample_data.remove("Market").unwrap(), sample_data.remove("RF").unwrap(), capm_type, solution_type).unwrap();
+///     let params: CAPMParams = capm.get_parameters(sample_data.remove("Stock Returns").unwrap()).unwrap();
+///
+///     // The results were found using LinearRegression from sklearn
+///     assert!((params.alpha.unwrap() - 0.01353015).abs() < TEST_ACCURACY);
+///     assert!((params.beta - 1.37731033).abs() < TEST_ACCURACY);
+///     assert!((params.beta_s.unwrap() - -0.38490771).abs() < TEST_ACCURACY);
+///     assert!((params.beta_h.unwrap() - -0.58771487).abs() < TEST_ACCURACY);
+///     assert!((params.beta_r.unwrap() - 0.11692186).abs() < TEST_ACCURACY);
+///     assert!((params.beta_c.unwrap() - 0.4192746).abs() < TEST_ACCURACY);
+/// }
+/// ```
 pub struct CAPM {
     /// Time series of market returns
     market_returns: Array1<f64>,
@@ -79,17 +127,17 @@ pub struct CAPM {
 
 impl CAPM {
     /// # Description
-    /// Creates a new CAPM instance.
+    /// Creates a new `CAPM` instance.
     /// 
     /// # Input
-    /// - market_returns: Time series of market returns
-    /// - rf: Time series of risk-free rate of return
-    /// - capm_type: Type of CAPM (i.e., `Standard`, `ThreeFactorFamaFrench`, ot `FiveFactorFamaFrench`)
-    /// - solution_type: Type of solution to use (i.e., `Covariance` - works only for the `Standard` CAPM, or `LinearRegression`)
+    /// - `market_returns`: Time series of market returns
+    /// - `rf`: Time series of risk-free rate of return
+    /// - `capm_type`: Type of CAPM (i.e., `Standard`, `ThreeFactorFamaFrench`, ot `FiveFactorFamaFrench`)
+    /// - `solution_type`: Type of solution to use (i.e., `Covariance` - works only for the `Standard` CAPM, or `LinearRegression`)
     ///
     /// # Errors
-    /// - Returns an error if the length of the market_returns array does not match any other array (i.e., `rf`, `smb`, `hml`, `rmw`, `cma`)
-    /// - Returns an error if covariance solution type used with non-standard CAPM
+    /// - Returns an error if the length of the market_returns array does not match any other array (i.e., `rf`, `smb`, `hml`, `rmw`, `cma`).
+    /// - Returns an error if covariance solution type used with non-standard CAPM.
     pub fn new(market_returns: Array1<f64>, rf: Array1<f64>, capm_type: CAPMType, solution_type: CAPMSolutionType) -> Result<Self, Error> {
         // Cross-validate the lengths of all arrays
         compare_array_len(&market_returns, &rf, "market_returns", "rf")?;
@@ -122,12 +170,12 @@ impl CAPM {
     /// Computes the expected return premium of an asset/project given the risk-free rate, expected market return, SMB, HML, RMW, CMA and their betas.
     /// 
     /// # Input
-    /// - alpha: y-axis intersection of the CAPM
-    /// - beta: Sensitivity of the asset with respect to premium market returns
-    /// - beta_s: Sensitivity of the asset with respect to SMB returns
-    /// - beta_h: Sensitivity of the asset with respect to HML returns
-    /// - beta_r: Sensitivity of the asset with respect to RMW returns
-    /// - beta_c: Sensitivity of the asset with respect to CMA returns
+    /// - `alpha`: y-axis intersection of the CAPM
+    /// - `beta`: Sensitivity of the asset with respect to premium market returns
+    /// - `beta_s`: Sensitivity of the asset with respect to SMB returns
+    /// - `beta_h`: Sensitivity of the asset with respect to HML returns
+    /// - `beta_r`: Sensitivity of the asset with respect to RMW returns
+    /// - `beta_c`: Sensitivity of the asset with respect to CMA returns
     /// 
     /// # Output
     /// - Array of risk premiums (i.e., asset return premiums)
@@ -148,23 +196,26 @@ impl CAPM {
         Ok(lin_reg)
     }
 
-    fn train(&self, risk_premium: &Array1<f64>) -> Result<HashMap<String, f64>, Box<dyn std::error::Error>> {
-        let reg_params: HashMap<String, f64>;
+    fn train(&self, risk_premium: &Array1<f64>) -> Result<CAPMParams, Box<dyn std::error::Error>> {
+        let mut reg_params: CAPMParams = CAPMParams { alpha: None, beta: 0.0, beta_s: None, beta_h: None, beta_r: None, beta_c: None };
         let mut data_vec: Vec<Vec<f64>> = vec![(&self.market_returns - &self.rf).to_vec()];
         data_vec.push(vec![1.0; data_vec[0].len()]);
         match &self.capm_type {
             CAPMType::Standard => {
                 let data_matrix: Array2<f64> = Array2::from_shape_vec((2, risk_premium.len()), data_vec.into_iter().flatten().collect())?;
                 let params: Array1<f64> = linear_regression(&data_matrix.t().to_owned(), &risk_premium)?;
-                reg_params = HashMap::from([(String::from("beta"), params[0]), (String::from("alpha"), params[1])]);
+                reg_params.beta = params[0];
+                reg_params.alpha = Some(params[1]);
             },
             CAPMType::ThreeFactorFamaFrench { smb, hml } => {
                 data_vec.push(smb.to_vec());
                 data_vec.push(hml.to_vec());
                 let data_matrix: Array2<f64> = Array2::from_shape_vec((4, risk_premium.len()), data_vec.into_iter().flatten().collect())?;
                 let params: Array1<f64> = linear_regression(&data_matrix.t().to_owned(), &risk_premium)?;
-                reg_params = HashMap::from([(String::from("beta"), params[0]), (String::from("alpha"), params[1]),
-                                            (String::from("beta_s"), params[2]), (String::from("beta_h"), params[3])]);
+                reg_params.beta = params[0];
+                reg_params.alpha = Some(params[1]);
+                reg_params.beta_s = Some(params[2]);
+                reg_params.beta_h = Some(params[3]);
             },
             CAPMType::FiveFactorFamaFrench { smb, hml, rmw, cma } => {
                 data_vec.push(smb.to_vec());
@@ -173,9 +224,12 @@ impl CAPM {
                 data_vec.push(cma.to_vec());
                 let data_matrix: Array2<f64> = Array2::from_shape_vec((6, risk_premium.len()), data_vec.into_iter().flatten().collect())?;
                 let params: Array1<f64> = linear_regression(&data_matrix.t().to_owned(), &risk_premium)?;
-                reg_params = HashMap::from([(String::from("beta"), params[0]), (String::from("alpha"), params[1]),
-                                            (String::from("beta_s"), params[2]), (String::from("beta_h"), params[3]),
-                                            (String::from("beta_r"), params[4]), (String::from("beta_c"), params[5])]);
+                reg_params.beta = params[0];
+                reg_params.alpha = Some(params[1]);
+                reg_params.beta_s = Some(params[2]);
+                reg_params.beta_h = Some(params[3]);
+                reg_params.beta_r = Some(params[4]);
+                reg_params.beta_c = Some(params[5]);
             },
         }
         Ok(reg_params)
@@ -185,22 +239,17 @@ impl CAPM {
     /// Finds the values of parameters alpha and betas (if `Covariance` solution type is used, only beta is returned).
     /// 
     /// # Input
-    /// - risk_premium: Array of risk premiums (i.e., asset return premiums)
+    /// - `risk_premium`: Array of risk premiums (i.e., asset return premiums)
     /// 
     /// # Output
-    /// - alpha: y-axis intersection of the CAPM model
-    /// - beta: Sensitivity of the asset with respect to premium market returns
-    /// - beta_s: Sensitivity of the asset with respect to SMB returns
-    /// - beta_h: Sensitivity of the asset with respect to HML returns
-    /// - beta_r: Sensitivity of the asset with respect to RMW returns
-    /// - beta_c: Sensitivity of the asset with respect to CMA returns
-    pub fn get_parameters(&self, risk_premium: Array1<f64>) -> Result<HashMap<String, f64>, Box<dyn std::error::Error>> {
+    /// - Parameters of the chosen CAPM model
+    pub fn get_parameters(&self, risk_premium: Array1<f64>) -> Result<CAPMParams, Box<dyn std::error::Error>> {
         compare_array_len(&risk_premium, &self.market_returns, "risk_premium", "market_returns")?;
         match self.solution_type {
             CAPMSolutionType::Covariance => {
                 let numerator: f64 = covariance(&risk_premium, &self.market_returns, 0)?;
                 let denominator: f64 = covariance(&self.market_returns, &self.market_returns, 0)?;
-                Ok(HashMap::from([(String::from("beta"), numerator/denominator)]))
+                Ok(CAPMParams { alpha: None, beta: numerator/denominator, beta_s: None, beta_h: None, beta_r: None, beta_c: None })
             },
             CAPMSolutionType::LinearRegression => {
                 self.train(&risk_premium)
@@ -210,29 +259,28 @@ impl CAPM {
 }
 
 
-#[cfg(test)]
+#[cfg(all(test, feature = "sample_data"))]
 mod tests {
-    use std::collections::HashMap;
-    use crate::utilities::{TEST_ACCURACY, SampleData};
-    use crate::corporate_finance::capm::{CAPMType, CAPMSolutionType, CAPM};
+    use crate::utilities::{TEST_ACCURACY, sample_data::SampleData};
+    use crate::corporate_finance::capm::{CAPMParams, CAPMSolutionType, CAPMType, CAPM};
 
     #[test]
     fn unit_test_capm_get_parameters() -> () {
         let sample: SampleData = SampleData::CAPM; 
         let (_, mut sample_data) = sample.load_sample_data();
         let capm_type: CAPMType = CAPMType::FiveFactorFamaFrench {
-            smb: sample_data.remove("smb").unwrap(), hml: sample_data.remove("hml").unwrap(),
-            rmw: sample_data.remove("rmw").unwrap(), cma: sample_data.remove("cma").unwrap(),
+            smb: sample_data.remove("SMB").unwrap(), hml: sample_data.remove("HML").unwrap(),
+            rmw: sample_data.remove("RMW").unwrap(), cma: sample_data.remove("CMA").unwrap(),
         };
         let solution_type: CAPMSolutionType = CAPMSolutionType::LinearRegression;
-        let capm: CAPM = CAPM::new(sample_data.remove("market").unwrap(), sample_data.remove("rf").unwrap(), capm_type, solution_type).unwrap();
-        let params: HashMap<String, f64> = capm.get_parameters(sample_data.remove("aapl").unwrap()).unwrap();
+        let capm: CAPM = CAPM::new(sample_data.remove("Market").unwrap(), sample_data.remove("RF").unwrap(), capm_type, solution_type).unwrap();
+        let params: CAPMParams = capm.get_parameters(sample_data.remove("Stock Returns").unwrap()).unwrap();
         // The results were found using LinearRegression from sklearn
-        assert!((params.get("alpha").unwrap() - 0.013530149403422963).abs() < TEST_ACCURACY);
-        assert!((params.get("beta").unwrap() - 1.37731033).abs() < TEST_ACCURACY);
-        assert!((params.get("beta_s").unwrap() - -0.38490771).abs() < TEST_ACCURACY);
-        assert!((params.get("beta_h").unwrap() - -0.58771487).abs() < TEST_ACCURACY);
-        assert!((params.get("beta_r").unwrap() - 0.11692186).abs() < TEST_ACCURACY);
-        assert!((params.get("beta_c").unwrap() - 0.4192746).abs() < TEST_ACCURACY);
+        assert!((params.alpha.unwrap() - 0.01353015).abs() < TEST_ACCURACY);
+        assert!((params.beta - 1.37731033).abs() < TEST_ACCURACY);
+        assert!((params.beta_s.unwrap() - -0.38490771).abs() < TEST_ACCURACY);
+        assert!((params.beta_h.unwrap() - -0.58771487).abs() < TEST_ACCURACY);
+        assert!((params.beta_r.unwrap() - 0.11692186).abs() < TEST_ACCURACY);
+        assert!((params.beta_c.unwrap() - 0.4192746).abs() < TEST_ACCURACY);
     }
 }

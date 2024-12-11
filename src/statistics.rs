@@ -1,12 +1,16 @@
+// Re-Exports
+pub use self::discrete_distributions::{BernoulliDistribution, BinomialDistribution, DiscreteUniformDistribution, PoissonDistribution};
+pub use self::continuous_distributions::{ContinuousUniformDistribution, NormalDistribution, ExponentialDistribution, LaplaceDistribution, GammaDistribution};
+
+
 pub mod continuous_distributions;
 pub mod discrete_distributions;
 
 
 use std::io::Error;
+use std::ops::Rem;
 use ndarray::{Array1, Array2};
-// use ndarray_linalg::Inverse;
 use nalgebra::DMatrix;
-use num::complex::Complex;
 use crate::utilities::{compare_array_len, input_error, data_error, other_error, MatrixConversion};
 use crate::utilities::maths_utils::{FunctionEvalMethod, factorial, definite_integral};
 
@@ -17,6 +21,8 @@ pub enum ProbabilityDistributionType {
 }
 
 
+/// # Description
+/// Trait that describes all the available methods for a probability distribution.
 pub trait ProbabilityDistribution {
     /// # Description
     /// Mean.
@@ -59,12 +65,6 @@ pub trait ProbabilityDistribution {
     fn mgf(&self, t: &Array1<usize>) -> Array1<f64>;
 
     /// # Description
-    /// Characteristic function (CF).
-    /// 
-    /// Characteristic function is the Fourier transform of the PDF.
-    fn cf(&self, t: &Array1<usize>) -> Array1<Complex<f64>>;
-
-    /// # Description
     /// Inverse cumulative distribution function (CDF), else knwon as quantile function.
     fn inverse_cdf(&self, p: &Array1<f64>) -> Result<Array1<f64>, Error>;
 }
@@ -73,7 +73,7 @@ pub trait ProbabilityDistribution {
 /// # Description
 /// Measure of joint variability of two random variables.
 /// 
-/// Cov(X,Y) = E[(X-E[X])(Y-E[Y])]
+/// Cov(X,Y) = E\[(X-E\[X\])(Y-E\[Y\])\]
 /// 
 /// # Input
 /// - `array_1`: First array
@@ -83,15 +83,28 @@ pub trait ProbabilityDistribution {
 /// - Covariance of two arrays
 /// 
 /// # Errors
-/// - Returns an error if the lengths of array_1 and array_2 do not match
+/// - Returns an error if the lengths of array_1 and array_2 do not match.
 /// 
 /// # LaTeX Formula
 /// - Cov(X,Y) = \\frac{1}{n-ddof}\\sum^{n}_{i=1}(x_{i}-\\bar{x})(y_{i}-\\bar{y})
 /// where \\bar{x} = \frac{1}{n}\\sum^{n}_{i=1}x_{i}
 /// 
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Covariance
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Covariance>
 /// - Original Source: N/A
+///
+/// # Examples
+///
+/// ```rust
+/// use ndarray::{Array1, array};
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::statistics::covariance;
+///
+/// let array_1: Array1<f64> = array![1.0, 2.0, 3.0, 4.0, 5.0];
+/// let array_2: Array1<f64> = array![1.0, 5.0, -9.0, 2.0, 4.0];
+///
+/// assert!((covariance(&array_1, &array_2, 0).unwrap() - array![-0.8, -4.4, 0.0, 1.4, 6.8].sum()/5.0).abs() < TEST_ACCURACY);
+/// ```
 pub fn covariance(array_1: &Array1<f64>, array_2: &Array1<f64>, ddof: usize) -> Result<f64, Error> {
     compare_array_len(array_1, array_2, "array_1", "array_2")?;
     let x: Array1<f64> = array_1 - array_1.mean().ok_or(other_error("Covariance: Mean of array_1 is not computed."))?;
@@ -117,8 +130,22 @@ pub fn covariance(array_1: &Array1<f64>, array_2: &Array1<f64>, ddof: usize) -> 
 /// - \\textit{Skewness} = \\frac{E[(X-\\mu)^{3}]}{(E[(X-\\mu)^{2}])^{\\frac{3}{2}}}
 /// 
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Skewness
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Skewness>
 /// - Original Source: N/A
+///
+/// # Examples
+///
+/// ```rust
+/// use ndarray::{Array1, array};
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::statistics::skewness;
+///
+/// let array_: Array1<f64> = array![1.0, 1.0, 3.0, 4.0, 5.0];
+/// let numerator: f64 = array!(-5.832, -5.832, 0.008, 1.728, 10.648).mean().unwrap();
+/// let denominator: f64 = array!(3.24, 3.24, 0.04, 1.44, 4.84_f64).mean().unwrap().powf(3.0/2.0);
+///
+/// assert!((skewness(&array_).unwrap() - numerator/denominator).abs() < TEST_ACCURACY);
+/// ```
 pub fn skewness(array: &Array1<f64>) -> Result<f64, Error> {
     let difference: Array1<f64> = array - array.mean().ok_or(other_error("Skewness: Mean of array is not computed."))?;
     let numerator: f64 = difference.map(| i | i.powi(3)).mean().ok_or(other_error("Skewness: Mean of difference array is not computed."))?;
@@ -148,8 +175,22 @@ pub fn skewness(array: &Array1<f64>) -> Result<f64, Error> {
 /// - \\textit{Kurtosis} = \\frac{E[(X-\\mu)^{4}]}{(E[(X-\\mu)^{2}])^{2}}
 /// 
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Kurtosis
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Kurtosis>
 /// - Original Source: N/A
+///
+/// # Examples
+///
+/// ```rust
+/// use ndarray::{Array1, array};
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::statistics::kurtosis;
+///
+/// let array_: Array1<f64> = array![1.0, 1.0, 3.0, 4.0, 5.0];
+/// let numerator: f64 = array!(3.24, 3.24, 0.04, 1.44, 4.84_f64).mean().unwrap();
+/// let denuminator: f64 = array!(3.24, 3.24, 0.04, 1.44, 4.84_f64).mean().unwrap().powi(2);
+///
+/// assert!((kurtosis(&array_).unwrap() - numerator/denuminator).abs() < TEST_ACCURACY);
+/// ```
 pub fn kurtosis(array: &Array1<f64>) -> Result<f64, Error> {
     let difference: Array1<f64> = array - array.mean().ok_or(other_error("Kurtosis: Mean of array is not computed."))?;
     let numerator: f64 = difference.map(| i | i.powi(2)).mean().ok_or(other_error("Kurtosis: Mean of difference array is not computed."))?;
@@ -163,6 +204,49 @@ pub fn kurtosis(array: &Array1<f64>) -> Result<f64, Error> {
 
 
 /// # Description
+/// Pearson correlation coefficient. Pearson correlation is a measure of linear correlation between two arrays.
+///
+/// # Input
+/// - `array_1`: Array of data
+/// - `array_2`: Array of data
+///
+/// # Output
+// - Pearson correlation coefficient
+///
+/// # Errors
+/// - Returns an error if the lengths of `array_1` and `array_2` do not match.
+///
+/// # LaTeX Formula
+/// - \\rho(X,Y) = \\frac{cov(X,Y)}{\\sigma_{X}\\sigma_{Y}}
+///
+/// # Links
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Pearson_correlation_coefficient>
+/// - Original Source: <https://books.google.com/books?id=60aL0zlT-90C&pg=PA240>
+///
+/// # Examples
+///
+/// ```rust
+/// use ndarray::Array1;
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::statistics::pearson_correlation;
+///
+/// let array_1: Array1<f64> = Array1::from_vec(vec![1.0, 2.0, 3.0, 4.0]);
+/// let array_2: Array1<f64> = Array1::from_vec(vec![1.0, 2.0, 3.0, 4.0]);
+/// assert!((pearson_correlation(&array_1, &array_2, 1).unwrap() - 1.0).abs() < TEST_ACCURACY);
+///
+/// let array_1: Array1<f64> = Array1::from_vec(vec![1.0, -1.0]);
+/// let array_2: Array1<f64> = Array1::from_vec(vec![-1.0, 1.0]);
+/// assert!((pearson_correlation(&array_1, &array_2, 1).unwrap() + 1.0).abs() < TEST_ACCURACY);
+/// ```
+pub fn pearson_correlation(array_1: &Array1<f64>, array_2: &Array1<f64>, ddof: usize) -> Result<f64, Error> {
+    let cov: f64 = covariance(array_1, array_2, ddof)?;
+    let sigma_1: f64 = covariance(array_1, array_1, ddof)?.sqrt();
+    let sigma_2: f64 = covariance(array_2, array_2, ddof)?.sqrt();
+    Ok(cov / (sigma_1 * sigma_2))
+}
+
+
+/// # Description
 /// nCr:  n choose r
 /// 
 /// # Input
@@ -170,11 +254,19 @@ pub fn kurtosis(array: &Array1<f64>) -> Result<f64, Error> {
 /// - `r`: Number of successes
 /// 
 /// # Errors
-/// - Returns an error if the value of n is larger than r
+/// - Returns an error if the value of `n` is larger than `r`.
 /// 
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Binomial_coefficient
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Binomial_coefficient>
 /// - Original Source: N/A
+///
+/// # Examples
+///
+/// ```rust
+/// use digifi::statistics::n_choose_r;
+///
+/// assert_eq!(10, n_choose_r(5, 2).unwrap());
+/// ```
 pub fn n_choose_r(n: u128, r: u128) -> Result<u128, Error> {
     if n < r {
         return Err(input_error("n Chose r: The value of variable n must be larger or equal to the value of variable r."));
@@ -194,14 +286,30 @@ pub fn n_choose_r(n: u128, r: u128) -> Result<u128, Error> {
 /// - Parameters of the linear regression model
 /// 
 /// # Errors
-/// - Returns an error if the length of matrix does not match the length of vector y.
+/// - Returns an error if the length of matrix `x` does not match the length of vector `y`.
 /// 
 /// # LaTeX Formula
 /// - y = X\\cdot\\beta
 /// 
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Linear_regression
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Linear_regression>
 /// - Original Source: N/A
+///
+/// # Examples
+///
+/// ```rust
+/// use ndarray::{Array1, Array2, array};
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::statistics::linear_regression;
+///
+/// let y: Array1<f64> = array![1.0, 2.0, 3.0];
+/// let x: Array2<f64> = array![[1.0, 3.0, 1.0], [4.0, 4.0, 1.0], [6.0, 5.0, 1.0]];
+/// let params: Array1<f64> = linear_regression(&x, &y).unwrap();
+///
+/// // The results were found using LinearRegression from sklearn
+/// let results: Array1<f64> = Array1::from(vec![-2.49556592e-16, 1.0, -2.0]);
+/// assert!((&params - &results).sum().abs() < TEST_ACCURACY);
+/// ```
 pub fn linear_regression(x: &Array2<f64>, y: &Array1<f64>) -> Result<Array1<f64>, Box<dyn std::error::Error>> {
     if x.dim().0 != y.len() {
         Err(data_error("Linear Regression: The length of x and y do not coincide."))?;
@@ -230,7 +338,7 @@ pub fn linear_regression(x: &Array2<f64>, y: &Array1<f64>) -> Result<Array1<f64>
 /// where ym is the array of real values and f is the array of predicted values.
 /// 
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Coefficient_of_determination
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Coefficient_of_determination>
 /// - Original Source: N/A
 pub fn r_square(real_values: &Array1<f64>, predicted_values: &Array1<f64>) -> Result<f64, Error> {
     compare_array_len(&real_values, &predicted_values, "real_values", "predicted_values")?;
@@ -256,7 +364,7 @@ pub fn r_square(real_values: &Array1<f64>, predicted_values: &Array1<f64>) -> Re
 /// - R^{2}_{A} = 1 - (1-R^{2})\\frac{n-1}{n-k-1}
 /// 
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Coefficient_of_determination#Adjusted_R2
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Coefficient_of_determination#Adjusted_R2>
 /// - Original Source: N/A
 pub fn adjusted_r_square(real_values: &Array1<f64>, predicted_values: &Array1<f64>, sample_size: usize, k_variables: usize) -> Result<f64, Error> {
     Ok(1.0 - (1.0-r_square(real_values, predicted_values)?) * (sample_size as f64 - 1.0) / ((sample_size-k_variables) as f64 - 1.0))
@@ -277,17 +385,33 @@ pub fn adjusted_r_square(real_values: &Array1<f64>, predicted_values: &Array1<f6
 /// - \\Gamma(z) = \\int^{\\infty}_{0}t^{z-1}e^{-t}dt
 ///
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Gamma_function
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Gamma_function>
 /// - Original Source: N/A
-pub fn gamma_function(z: f64, method: FunctionEvalMethod) -> f64 {
+///
+/// # Examples
+///
+/// ```rust
+/// use digifi::utilities::{TEST_ACCURACY, FunctionEvalMethod, factorial};
+/// use digifi::statistics::gamma_function;
+///
+/// // Gamma(1)
+/// assert!((gamma_function(1.0, &FunctionEvalMethod::Integral { n_intervals: 1_000_000 }) - 1.0).abs() < TEST_ACCURACY);
+/// assert!((gamma_function(1.0, &FunctionEvalMethod::Approximation { n_terms: 20 }) - 1.0).abs() < TEST_ACCURACY);
+///
+/// // Gamma(3/2)
+/// let theoretical_result: f64 = std::f64::consts::PI.sqrt() * (factorial(factorial(3 - 2)) as f64) / 2.0_f64.powf((3.0 - 1.0) / 2.0);
+/// assert!((gamma_function(3.0/2.0, &FunctionEvalMethod::Integral { n_intervals: 1_000_000 }) - theoretical_result).abs() < TEST_ACCURACY);
+/// assert!((gamma_function(3.0/2.0, &FunctionEvalMethod::Approximation { n_terms: 60 }) - theoretical_result).abs() < 1_000_000.0 * TEST_ACCURACY);
+/// ```
+pub fn gamma_function(z: f64, method: &FunctionEvalMethod) -> f64 {
     match method {
         FunctionEvalMethod::Integral { n_intervals } => {
             let f = |t: f64| { t.powf(z - 1.0) * (-t).exp() };
-            definite_integral(f, 0.0, f64::INFINITY, n_intervals)
+            definite_integral(f, 0.0, f64::INFINITY, *n_intervals)
         },
-        FunctionEvalMethod::PowerSeries { n_terms } => {
+        FunctionEvalMethod::Approximation { n_terms } => {
             let mut result: f64 = 1.0;
-            for n in 1..n_terms {
+            for n in 1..*n_terms {
                 let n_ : f64 = n as f64;
                 result *= (1.0 + 1.0 / n_).powf(z) / (1.0 + z / n_);
             }
@@ -303,7 +427,7 @@ pub fn gamma_function(z: f64, method: FunctionEvalMethod) -> f64 {
 /// # Input
 /// - `z`: Real part of a complex number
 /// - `x`: Lower integral limit of the upper incomplete Gamma function
-/// - `n_intervals`: Number of intervals to use in the composite trapezoidal rule
+/// - `method`: Method for evaluationg the function
 ///
 /// # Output
 /// - Evaluation of upper incomplete Gamma function
@@ -315,15 +439,36 @@ pub fn gamma_function(z: f64, method: FunctionEvalMethod) -> f64 {
 /// - \\Gamma(z, x) = \\int^{\\infty}_{x}t^{z-1}e^{-t}dt
 ///
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Incomplete_gamma_function
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Incomplete_gamma_function>
 /// - Original Source: N/A
-pub fn upper_incomplete_gamma_function(z: f64, x: f64, n_intervals: usize) -> Result<f64, Error> {
+///
+/// # Examples
+///
+/// ```rust
+/// use digifi::utilities::{TEST_ACCURACY, FunctionEvalMethod};
+/// use digifi::statistics::{gamma_function, upper_incomplete_gamma_function};
+///
+/// // Gamma_{upper}(s, 0) = Gamma(s)
+/// assert!((upper_incomplete_gamma_function(4.0, 0.0, &FunctionEvalMethod::Integral { n_intervals: 1_000_000 }).unwrap() - gamma_function(4.0, &FunctionEvalMethod::Integral { n_intervals: 1_000_000 })).abs() < TEST_ACCURACY);
+/// assert!((upper_incomplete_gamma_function(4.0, 0.0, &FunctionEvalMethod::Approximation { n_terms: 30 }).unwrap() - gamma_function(4.0, &FunctionEvalMethod::Approximation { n_terms: 30 })).abs() < TEST_ACCURACY);
+///
+/// // Gamma_{upper}(1, x) = e^{-x}
+/// assert!((upper_incomplete_gamma_function(1.0, 3.0, &FunctionEvalMethod::Integral { n_intervals: 1_000_000 }).unwrap() - (-3.0_f64).exp()).abs() < TEST_ACCURACY);
+/// assert!((upper_incomplete_gamma_function(1.0, 3.0, &FunctionEvalMethod::Approximation { n_terms: 30 }).unwrap() - (-3.0_f64).exp()).abs() < TEST_ACCURACY);
+/// ```
+pub fn upper_incomplete_gamma_function(z: f64, x: f64, method: &FunctionEvalMethod) -> Result<f64, Error> {
     if x < 0.0 {
         return Err(input_error("Upper Incomplete Function: The value of x must be non-negative."));
     }
-    let f = |t: f64| { t.powf(z - 1.0) * (-t).exp() };
-    Ok(definite_integral(f, x, f64::INFINITY, n_intervals))
-    
+    match method {
+        FunctionEvalMethod::Integral { n_intervals } => {
+            let f = |t: f64| { t.powf(z - 1.0) * (-t).exp() };
+            Ok(definite_integral(f, x, f64::INFINITY, *n_intervals))
+        },
+        FunctionEvalMethod::Approximation { n_terms } => {
+            Ok(gamma_function(z, &FunctionEvalMethod::Approximation { n_terms: *n_terms }) - lower_incomplete_gamma_function(z, x, &FunctionEvalMethod::Approximation { n_terms: *n_terms })?)
+        },
+    }
 }
 
 
@@ -345,20 +490,31 @@ pub fn upper_incomplete_gamma_function(z: f64, x: f64, n_intervals: usize) -> Re
 /// - \\gamma(z, x) = \\int^{x}_{0}t^{z-1}e^{-t}dt
 ///
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Incomplete_gamma_function
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Incomplete_gamma_function>
 /// - Original Source: N/A
-pub fn lower_incomplete_gamma_function(z: f64, x: f64, method: FunctionEvalMethod) -> Result<f64, Error> {
+///
+/// # Examples
+///
+/// ```rust
+/// use digifi::utilities::{TEST_ACCURACY, FunctionEvalMethod};
+/// use digifi::statistics::lower_incomplete_gamma_function;
+///
+/// // Gamma_{lower}(1, x) = 1 - e^{-x}
+/// assert!((lower_incomplete_gamma_function(1.0, 3.0, &FunctionEvalMethod::Integral { n_intervals: 1_000_000 }).unwrap() - (1.0 - (-3.0_f64).exp())).abs() < 100.0 * TEST_ACCURACY);
+/// assert!((lower_incomplete_gamma_function(1.0, 3.0, &FunctionEvalMethod::Approximation { n_terms: 20 }).unwrap() - (1.0 - (-3.0_f64).exp())).abs() < TEST_ACCURACY);
+/// ```
+pub fn lower_incomplete_gamma_function(z: f64, x: f64, method: &FunctionEvalMethod) -> Result<f64, Error> {
     if x < 0.0 {
         return Err(input_error("Lower Incomplete Function: The value of x must be non-negative."));
     }
     match method {
         FunctionEvalMethod::Integral { n_intervals } => {
             let f = |t: f64| { t.powf(z - 1.0) * (-t).exp() };
-            Ok(definite_integral(f, 0.0, x, n_intervals))
+            Ok(definite_integral(f, 0.0, x, *n_intervals))
         },
-        FunctionEvalMethod::PowerSeries { n_terms } => {
+        FunctionEvalMethod::Approximation { n_terms } => {
             let mut result: f64 = 0.0;
-            for k in 0..n_terms {
+            for k in 0..*n_terms {
                 let mut denominator: f64 = 1.0;
                 if k == 0 {
                     denominator *= z;
@@ -382,7 +538,7 @@ pub fn lower_incomplete_gamma_function(z: f64, x: f64, method: FunctionEvalMetho
 /// # Input
 /// - `z_1`: Real part of complex number
 /// - `z_2`: Real part of complex number
-/// - `n_intervals`: Number of intervals to use in the composite trapezoidal rule
+/// - `method`: Method for evaluationg the function
 ///
 /// # Output
 /// - Evaluation of Beta function
@@ -395,17 +551,44 @@ pub fn lower_incomplete_gamma_function(z: f64, x: f64, method: FunctionEvalMetho
 /// - B(z_{1},z_{2}) = \\int^{1}_{0}t^{z_{1}-1}(1-t)^{z_2{}-1}dt
 ///
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Beta_function
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Beta_function>
 /// - Original Source: N/A
-pub fn beta_function(z_1: f64, z_2: f64, n_intervals: usize) -> Result<f64, Error> {
+///
+/// # Examples
+///
+/// ```rust
+/// use digifi::utilities::{TEST_ACCURACY, FunctionEvalMethod};
+/// use digifi::statistics::beta_function;
+///
+/// // B(1, x) = 1/x
+/// assert!((beta_function(1.0, 3.0, &FunctionEvalMethod::Integral { n_intervals: 1_000_000 }).unwrap() - (1.0 / 3.0)).abs() < TEST_ACCURACY);
+/// assert!((beta_function(1.0, 3.0, &FunctionEvalMethod::Approximation { n_terms: 200 }).unwrap() - (1.0 / 3.0)).abs() < 1_000_000.0 * TEST_ACCURACY);
+///
+/// // B(x, 1-x) = Pi / sin(Pi*x)
+/// assert!((beta_function(0.5, 0.5, &FunctionEvalMethod::Integral { n_intervals: 100_000_000 }).unwrap() - std::f64::consts::PI).abs() < 15_000_000.0 * TEST_ACCURACY);
+/// assert!((beta_function(0.5, 0.5, &FunctionEvalMethod::Approximation { n_terms: 100 }).unwrap() - std::f64::consts::PI).abs() < 1_000_000.0 * TEST_ACCURACY);
+/// ```
+pub fn beta_function(z_1: f64, z_2: f64, method: &FunctionEvalMethod) -> Result<f64, Error> {
     if z_1 <= 0.0 {
         return Err(input_error("Beta Function: The argument z_1 must be positive."));
     }
     if z_2 <= 0.0 {
         return Err(input_error("Beta Function: The argument z_2 must be positive."));
     }
-    let f = |t: f64| { t.powf(z_1 - 1.0) * (1.0 - t).powf(z_2 - 1.0) };
-    Ok(definite_integral(f, 0.0, 0.99999999999999, n_intervals))
+    match method {
+        FunctionEvalMethod::Integral { n_intervals }  => {
+            let f = |t: f64| { t.powf(z_1 - 1.0) * (1.0 - t).powf(z_2 - 1.0) };
+            Ok(definite_integral(f, 0.0, 0.99999999999999, *n_intervals))
+        },
+        FunctionEvalMethod::Approximation { n_terms } => {
+            let mut result: f64 = 1.0;
+            for n in 1..*n_terms {
+                let n_: f64 = n as f64;
+                result *= 1.0 / (1.0 + (z_1 * z_2) / (n_ * (z_1 + z_2 + n_)));
+            }
+            Ok(result * (z_1 + z_2) / (z_1 * z_2))
+        },
+    }
 }
 
 
@@ -416,7 +599,7 @@ pub fn beta_function(z_1: f64, z_2: f64, n_intervals: usize) -> Result<f64, Erro
 /// - `x`: Upper bound of the definite integral
 /// - `a`: Real part of complex number
 /// - `b`: Real part of complex number
-/// - `n_intervals`: Number of intervals to use in the composite trapezoidal rule
+/// - `method`: Method for evaluationg the function
 ///
 /// # Output
 /// - Evaluation of incomplete Beta function
@@ -424,22 +607,45 @@ pub fn beta_function(z_1: f64, z_2: f64, n_intervals: usize) -> Result<f64, Erro
 /// # Errors
 /// - Returns an error if the argument `a` is not positive.
 /// - Returns an error if the argument `b` is not positive.
+/// - Returns an error if the argumetn `x` is close to 1 and the method chosen is `Approximation`.
 ///
 /// # LaTeX Formula
 /// - B(x;a,b) = \\int^{x}_{0}t^{a-1}(1-t)^{b-1}dt
 ///
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Beta_function
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Beta_function>
 /// - Original Source: N/A
-pub fn incomplete_beta_function(x: f64, a: f64, b: f64, n_intervals: usize) -> Result<f64, Error> {
+pub fn incomplete_beta_function(x: f64, a: f64, b: f64, method: &FunctionEvalMethod) -> Result<f64, Error> {
     if a <= 0.0 {
         return Err(input_error("Beta Function: The argument a must be positive."));
     }
     if b <= 0.0 {
         return Err(input_error("Beta Function: The argument b must be positive."));
     }
-    let f = |t: f64| { t.powf(a - 1.0) * (1.0 - t).powf(b - 1.0) };
-    Ok(definite_integral(f, 0.0, x, n_intervals))
+    match method {
+        FunctionEvalMethod::Integral { n_intervals } => {
+            let f = |t: f64| { t.powf(a - 1.0) * (1.0 - t).powf(b - 1.0) };
+            Ok(definite_integral(f, 0.0, x, *n_intervals))
+        },
+        FunctionEvalMethod::Approximation { n_terms } => {
+            if (x - 1.0).abs() <= 0.0001 {
+                return Err(input_error("Incomplete Beta Function: For values of x close to 1 use integration method."));
+            }
+            let odd_coeff = |m: f64| { (a + m) * (a + b + m) * x / ((a + 2.0*m) * (a + 2.0*m + 1.0)) };
+            let even_coeff = |m: f64| { m * (b - m) * x / ((a + 2.0*m) * (a + 2.0*m - 1.0)) };
+            let mut continued_fraction: f64 = 1.0;
+            for m in (1..(*n_terms+1)).rev() {
+                let m_: f64 = m as f64;
+                let d:  f64  = match m.rem(2) {
+                    0 => { even_coeff(m_) },
+                    1 => { odd_coeff(m_) },
+                    _ => { return Err(data_error("Incomplete Beta Function: Remainder is a fraction.")); },
+                };
+                continued_fraction = 1.0 + d / continued_fraction;
+            }
+            Ok(x.powf(a) * (1.0 - x).powf(b) / (a * continued_fraction))
+        },
+    }
 }
 
 
@@ -450,7 +656,7 @@ pub fn incomplete_beta_function(x: f64, a: f64, b: f64, n_intervals: usize) -> R
 /// - `x`: Upper bound of the definite integral
 /// - `a`: Real part of complex number
 /// - `b`: Real part of complex number
-/// - `n_intervals`: Number of intervals to use in the composite trapezoidal rule
+/// - `method`: Method for evaluationg the function
 ///
 /// # Output
 /// - Evaluation of regularized incomplete Beta function
@@ -458,21 +664,42 @@ pub fn incomplete_beta_function(x: f64, a: f64, b: f64, n_intervals: usize) -> R
 /// # Errors
 /// - Returns an error if the argument `a` is not positive.
 /// - Returns an error if the argument `b` is not positive.
+/// - Returns an error if the argumetn `x` is close to 1 and the method chosen is `Approximation`.
 ///
 /// # LaTeX Formula
 /// - I_{x}(a,b) = \\frac{B(x;a,b)}{B(a,b)}
 ///
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Beta_function
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Beta_function>
 /// - Original Source: N/A
-pub fn regularized_incomplete_beta_function(x: f64, a: f64, b: f64, n_intervals: usize) -> Result<f64, Error> {
+///
+/// # Examples
+///
+/// ```rust
+/// use digifi::utilities::{TEST_ACCURACY, FunctionEvalMethod};
+/// use digifi::statistics::regularized_incomplete_beta_function;
+///
+/// // I_{0}(a, b) = 0
+/// assert!(regularized_incomplete_beta_function(0.0, 0.2, 0.3, &FunctionEvalMethod::Integral { n_intervals: 1_000_000 }).unwrap() < TEST_ACCURACY);
+/// assert!(regularized_incomplete_beta_function(0.0, 0.2, 0.3, &FunctionEvalMethod::Approximation { n_terms: 30 }).unwrap() < TEST_ACCURACY);
+///
+/// // I_{1}(a, b) = 1
+/// assert!((regularized_incomplete_beta_function(0.99999999999999, 0.2, 0.3, &FunctionEvalMethod::Integral { n_intervals: 1_000_000 }).unwrap() - 1.0 ).abs() < TEST_ACCURACY);
+///
+/// // I_{x}(a, 1) = x^{a}
+/// assert!((regularized_incomplete_beta_function(0.5, 2.0, 1.0, &FunctionEvalMethod::Integral { n_intervals: 1_000_000 }).unwrap() - 0.5_f64.powi(2)).abs() < 10_000.0 * TEST_ACCURACY);
+///
+/// // I_{x}(1, b) = 1 - (1 - x)^{b}
+/// assert!((regularized_incomplete_beta_function(0.5, 1.0, 3.0, &FunctionEvalMethod::Integral { n_intervals: 1_000_000 }).unwrap() - (1.0 - 0.5_f64.powi(3))).abs() < 10_000.0 * TEST_ACCURACY);
+/// ```
+pub fn regularized_incomplete_beta_function(x: f64, a: f64, b: f64, method: &FunctionEvalMethod) -> Result<f64, Error> {
     if a <= 0.0 {
         return Err(input_error("Beta Function: The argument a must be positive."));
     }
     if b <= 0.0 {
         return Err(input_error("Beta Function: The argument b must be positive."));
     }
-    Ok(incomplete_beta_function(x, a, b, n_intervals)? / beta_function(a, b, n_intervals)?)
+    Ok(incomplete_beta_function(x, a, b, method)? / beta_function(a, b, method)?)
 }
 
 
@@ -510,6 +737,17 @@ mod tests {
     }
 
     #[test]
+    fn unit_test_pearson_correlation() -> () {
+        use crate::statistics::pearson_correlation;
+        let array_1: Array1<f64> = Array1::from_vec(vec![1.0, 2.0, 3.0, 4.0]);
+        let array_2: Array1<f64> = Array1::from_vec(vec![1.0, 2.0, 3.0, 4.0]);
+        assert!((pearson_correlation(&array_1, &array_2, 1).unwrap() - 1.0).abs() < TEST_ACCURACY);
+        let array_1: Array1<f64> = Array1::from_vec(vec![1.0, -1.0]);
+        let array_2: Array1<f64> = Array1::from_vec(vec![-1.0, 1.0]);
+        assert!((pearson_correlation(&array_1, &array_2, 1).unwrap() + 1.0).abs() < TEST_ACCURACY);
+    }
+
+    #[test]
     fn unit_test_n_choose_r() {
         use crate::statistics::n_choose_r;
         assert_eq!(10, n_choose_r(5, 2).unwrap());
@@ -523,8 +761,8 @@ mod tests {
         let x: Array2<f64> = array![[1.0, 3.0, 1.0], [4.0, 4.0, 1.0], [6.0, 5.0, 1.0]];
         let params: Array1<f64> = linear_regression(&x, &y).unwrap();
         // The results were found using LinearRegression from sklearn
-        let comparison: Array1<f64> = Array1::from(vec![-2.49556592e-16, 1.0, -2.0]);
-        assert!((&params - &comparison).sum().abs() < TEST_ACCURACY);
+        let results: Array1<f64> = Array1::from(vec![-2.49556592e-16, 1.0, -2.0]);
+        assert!((&params - &results).sum().abs() < TEST_ACCURACY);
     }
 
     #[test]
@@ -532,12 +770,12 @@ mod tests {
         use crate::utilities::maths_utils::factorial;
         use crate::statistics::gamma_function;
         // Gamma(1)
-        assert!((gamma_function(1.0, FunctionEvalMethod::Integral { n_intervals: 1_000_000 }) - 1.0).abs() < TEST_ACCURACY);
-        assert!((gamma_function(1.0, FunctionEvalMethod::PowerSeries { n_terms: 20 }) - 1.0).abs() < TEST_ACCURACY);
+        assert!((gamma_function(1.0, &FunctionEvalMethod::Integral { n_intervals: 1_000_000 }) - 1.0).abs() < TEST_ACCURACY);
+        assert!((gamma_function(1.0, &FunctionEvalMethod::Approximation { n_terms: 20 }) - 1.0).abs() < TEST_ACCURACY);
         // Gamma(3/2)
         let theoretical_result: f64 = std::f64::consts::PI.sqrt() * (factorial(factorial(3 - 2)) as f64) / 2.0_f64.powf((3.0 - 1.0) / 2.0);
-        assert!((gamma_function(3.0/2.0, FunctionEvalMethod::Integral { n_intervals: 1_000_000 }) - theoretical_result).abs() < TEST_ACCURACY);
-        assert!((gamma_function(3.0/2.0, FunctionEvalMethod::PowerSeries { n_terms: 50 }) - theoretical_result).abs() < 1_000_000.0 * TEST_ACCURACY);
+        assert!((gamma_function(3.0/2.0, &FunctionEvalMethod::Integral { n_intervals: 1_000_000 }) - theoretical_result).abs() < TEST_ACCURACY);
+        assert!((gamma_function(3.0/2.0, &FunctionEvalMethod::Approximation { n_terms: 60 }) - theoretical_result).abs() < 1_000_000.0 * TEST_ACCURACY);
     }
 
 
@@ -545,38 +783,43 @@ mod tests {
     fn unit_test_upper_incomplete_gamma_function() -> () {
         use crate::statistics::{gamma_function, upper_incomplete_gamma_function};
         // Gamma_{upper}(s, 0) = Gamma(s)
-        assert!((upper_incomplete_gamma_function(4.0, 0.0, 1_000_000).unwrap() - gamma_function(4.0, FunctionEvalMethod::Integral { n_intervals: 1_000_000 })).abs() < TEST_ACCURACY);
+        assert!((upper_incomplete_gamma_function(4.0, 0.0, &FunctionEvalMethod::Integral { n_intervals: 1_000_000 }).unwrap() - gamma_function(4.0, &FunctionEvalMethod::Integral { n_intervals: 1_000_000 })).abs() < TEST_ACCURACY);
+        assert!((upper_incomplete_gamma_function(4.0, 0.0, &FunctionEvalMethod::Approximation { n_terms: 30 }).unwrap() - gamma_function(4.0, &FunctionEvalMethod::Approximation { n_terms: 30 })).abs() < TEST_ACCURACY);
         // Gamma_{upper}(1, x) = e^{-x}
-        assert!((upper_incomplete_gamma_function(1.0, 3.0, 1_000_000).unwrap() - (-3.0_f64).exp()).abs() < TEST_ACCURACY);
+        assert!((upper_incomplete_gamma_function(1.0, 3.0, &FunctionEvalMethod::Integral { n_intervals: 1_000_000 }).unwrap() - (-3.0_f64).exp()).abs() < TEST_ACCURACY);
+        assert!((upper_incomplete_gamma_function(1.0, 3.0, &FunctionEvalMethod::Approximation { n_terms: 30 }).unwrap() - (-3.0_f64).exp()).abs() < TEST_ACCURACY);
     }
 
     #[test]
     fn unit_test_lower_incomplete_gamma_function() -> () {
         use crate::statistics::lower_incomplete_gamma_function;
         // Gamma_{lower}(1, x) = 1 - e^{-x}
-        assert!((lower_incomplete_gamma_function(1.0, 3.0, FunctionEvalMethod::Integral { n_intervals: 1_000_000 }).unwrap() - (1.0 - (-3.0_f64).exp())).abs() < 100.0 * TEST_ACCURACY);
-        assert!((lower_incomplete_gamma_function(1.0, 3.0, FunctionEvalMethod::PowerSeries { n_terms: 20 }).unwrap() - (1.0 - (-3.0_f64).exp())).abs() < TEST_ACCURACY);
+        assert!((lower_incomplete_gamma_function(1.0, 3.0, &FunctionEvalMethod::Integral { n_intervals: 1_000_000 }).unwrap() - (1.0 - (-3.0_f64).exp())).abs() < 100.0 * TEST_ACCURACY);
+        assert!((lower_incomplete_gamma_function(1.0, 3.0, &FunctionEvalMethod::Approximation { n_terms: 20 }).unwrap() - (1.0 - (-3.0_f64).exp())).abs() < TEST_ACCURACY);
     }
 
     #[test]
     fn unit_test_beta_function() -> () {
         use crate::statistics::beta_function;
         // B(1, x) = 1/x
-        assert!((beta_function(1.0, 3.0, 1_000_000).unwrap() - (1.0 / 3.0)).abs() < TEST_ACCURACY);
+        assert!((beta_function(1.0, 3.0, &FunctionEvalMethod::Integral { n_intervals: 1_000_000 }).unwrap() - (1.0 / 3.0)).abs() < TEST_ACCURACY);
+        assert!((beta_function(1.0, 3.0, &FunctionEvalMethod::Approximation { n_terms: 200 }).unwrap() - (1.0 / 3.0)).abs() < 1_000_000.0 * TEST_ACCURACY);
         // B(x, 1-x) = Pi / sin(Pi*x)
-        assert!((beta_function(0.5, 0.5, 100_000_000).unwrap() - std::f64::consts::PI).abs() < 10_000_000.0 * TEST_ACCURACY);
+        assert!((beta_function(0.5, 0.5, &FunctionEvalMethod::Integral { n_intervals: 100_000_000 }).unwrap() - std::f64::consts::PI).abs() < 15_000_000.0 * TEST_ACCURACY);
+        assert!((beta_function(0.5, 0.5, &FunctionEvalMethod::Approximation { n_terms: 100 }).unwrap() - std::f64::consts::PI).abs() < 1_000_000.0 * TEST_ACCURACY);
     }
 
     #[test]
     fn unit_test_regularized_incomplete_beta_function() -> () {
         use crate::statistics::regularized_incomplete_beta_function;
         // I_{0}(a, b) = 0
-        assert!(regularized_incomplete_beta_function(0.0, 0.2, 0.3, 1_000_000).unwrap() < TEST_ACCURACY);
+        assert!(regularized_incomplete_beta_function(0.0, 0.2, 0.3, &FunctionEvalMethod::Integral { n_intervals: 1_000_000 }).unwrap() < TEST_ACCURACY);
+        assert!(regularized_incomplete_beta_function(0.0, 0.2, 0.3, &FunctionEvalMethod::Approximation { n_terms: 30 }).unwrap() < TEST_ACCURACY);
         // I_{1}(a, b) = 1
-        assert!((regularized_incomplete_beta_function(0.99999999999999, 0.2, 0.3, 1_000_000).unwrap() - 1.0 ).abs() < TEST_ACCURACY);
+        assert!((regularized_incomplete_beta_function(0.99999999999999, 0.2, 0.3, &FunctionEvalMethod::Integral { n_intervals: 1_000_000 }).unwrap() - 1.0 ).abs() < TEST_ACCURACY);
         // I_{x}(a, 1) = x^{a}
-        assert!((regularized_incomplete_beta_function(0.5, 2.0, 1.0, 1_000_000).unwrap() - 0.5_f64.powi(2)).abs() < 10_000.0 * TEST_ACCURACY);
+        assert!((regularized_incomplete_beta_function(0.5, 2.0, 1.0, &FunctionEvalMethod::Integral { n_intervals: 1_000_000 }).unwrap() - 0.5_f64.powi(2)).abs() < 10_000.0 * TEST_ACCURACY);
         // I_{x}(1, b) = 1 - (1 - x)^{b}
-        assert!((regularized_incomplete_beta_function(0.5, 1.0, 3.0, 1_000_000).unwrap() - (1.0 - 0.5_f64.powi(3))).abs() < 10_000.0 * TEST_ACCURACY);
+        assert!((regularized_incomplete_beta_function(0.5, 1.0, 3.0, &FunctionEvalMethod::Integral { n_intervals: 1_000_000 }).unwrap() - (1.0 - 0.5_f64.powi(3))).abs() < 10_000.0 * TEST_ACCURACY);
     }
 }

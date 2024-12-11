@@ -14,8 +14,32 @@ use crate::statistics::continuous_distributions::GammaDistribution;
 /// - dS_{t} = \\mu*S_{t}*dt + \\sigma*S^{beta+1}_{t}*dW_{t}
 ///
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Constant_elasticity_of_variance_model
-/// - Original Source: https://doi.org/10.3905/jpm.1996.015
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Constant_elasticity_of_variance_model>
+/// - Original Source: <https://doi.org/10.3905/jpm.1996.015>
+///
+/// # Example
+///
+/// ```rust
+/// use ndarray::Array1;
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::stochastic_processes::{StochasticProcess, ConstantElasticityOfVariance};
+///
+/// let n_paths: usize = 100;
+/// let n_steps: usize = 200;
+///
+/// let cev: ConstantElasticityOfVariance = ConstantElasticityOfVariance::new(1.0, 0.4, 0.5, n_paths, n_steps, 1.0, 100.0).unwrap();
+/// let paths: Vec<Array1<f64>> = cev.get_paths().unwrap();
+///
+/// assert_eq!(paths.len(), n_paths);
+/// assert_eq!(paths[0].len(), n_steps+1);
+/// let mut final_steps: Vec<f64> = Vec::<f64>::new();
+/// for i in 0..n_paths {
+///     final_steps.push(paths[i][n_steps]);
+/// }
+/// let final_steps: Array1<f64> = Array1::from_vec(final_steps);
+/// let expected_path: Array1<f64> = cev.get_expectations();
+/// assert!((final_steps.mean().unwrap() - expected_path.last().unwrap()).abs() < 200_000_000.0 * TEST_ACCURACY);
+/// ```
 pub struct ConstantElasticityOfVariance {
     /// Mean of the process
     mu: f64,
@@ -39,7 +63,7 @@ pub struct ConstantElasticityOfVariance {
 
 impl ConstantElasticityOfVariance {
     /// # Description
-    /// Creates a new ArithmeticBrownianMotion instance.
+    /// Creates a new `ConstantElasticityOfVariance` instance.
     /// 
     /// # Input
     /// - `mu`: Mean of the process
@@ -81,6 +105,9 @@ impl StochasticProcess for ConstantElasticityOfVariance {
     ///
     /// # Output
     /// - An array of simulated paths following the CEV process
+    ///
+    /// # LaTeX Formula
+    /// - dS_{t} = \\mu*S_{t}*dt + \\sigma*S^{beta+1}_{t}*dW_{t}
     fn get_paths(&self) -> Result<Vec<Array1<f64>>, Error> {
         let mut paths: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
         for _ in 0..self.n_paths {
@@ -102,11 +129,35 @@ impl StochasticProcess for ConstantElasticityOfVariance {
 /// # LaTeX Formula
 /// - dS_{t} = \\mu*S_{t}*dt + \\sqrt{v_{t}}*S_{t}*dW^{S}_{t}
 /// - dv_{t} = k*(\\theta-v)*dt + \\epsilon*\\sqrt{v}dW^{v}_{t}
-/// - corr(W^{S}_{t}, W^{v}_{t}) = \\rho
+/// - Corr(W^{S}_{t}, W^{v}_{t}) = \\rho
 ///
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Heston_model
-/// - Original Source: https://doi.org/10.1093%2Frfs%2F6.2.327
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Heston_model>
+/// - Original Source: <https://doi.org/10.1093%2Frfs%2F6.2.327>
+///
+/// # Example
+///
+/// ```rust
+/// use ndarray::Array1;
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::stochastic_processes::{StochasticProcess, HestonStochasticVolatility};
+///
+/// let n_paths: usize = 100;
+/// let n_steps: usize = 200;
+///
+/// let hsv: HestonStochasticVolatility = HestonStochasticVolatility::new(0.1, 5.0, 0.07, 0.2, 0.0, n_paths, n_steps, 1.0, 100.0, 0.03);
+/// let paths: Vec<Array1<f64>> = hsv.get_paths().unwrap();
+/// 
+/// assert_eq!(paths.len(), n_paths);
+/// assert_eq!(paths[0].len(), n_steps+1);
+/// let mut final_steps: Vec<f64> = Vec::<f64>::new();
+/// for i in 0..n_paths {
+///     final_steps.push(paths[i][n_steps]);
+/// }
+/// let final_steps: Array1<f64> = Array1::from_vec(final_steps);
+/// let expected_path: Array1<f64> = hsv.get_expectations();
+/// assert!((final_steps.mean().unwrap() - expected_path.last().unwrap()).abs() < 1_000_000.0 * TEST_ACCURACY);
+/// ```
 pub struct HestonStochasticVolatility {
     /// Mean of the process
     mu: f64,
@@ -136,7 +187,7 @@ pub struct HestonStochasticVolatility {
 
 impl HestonStochasticVolatility {
     /// # Description
-    /// Creates a new ArithmeticBrownianMotion instance.
+    /// Creates a new `HestonStochasticVolatility` instance.
     /// 
     /// # Input
     /// - `mu`: Mean of the process
@@ -178,6 +229,11 @@ impl StochasticProcess for HestonStochasticVolatility {
     ///
     /// # Output
     /// - A tuple of arrays representing the simulated paths of stock prices and volatilities
+    ///
+    /// # LaTeX Formula
+    /// - dS_{t} = \\mu*S_{t}*dt + \\sqrt{v_{t}}*S_{t}*dW^{S}_{t}
+    /// - dv_{t} = k*(\\theta-v)*dt + \\epsilon*\\sqrt{v}dW^{v}_{t}
+    /// - Corr(W^{S}_{t}, W^{v}_{t}) = \\rho
     fn get_paths(&self) -> Result<Vec<Array1<f64>>, Error> {
         let mut paths: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
         let a: f64 = self.epsilon.powi(2) / self.k * ((-self.k * self.dt).exp() - (-2.0 * self.k * self.dt).exp());
@@ -208,8 +264,25 @@ impl StochasticProcess for HestonStochasticVolatility {
 /// - dS_{t} = \\mu*dG(t) + \\sigma*\\sqrt{dG(t)}\\mathcal{N}(0,1)
 ///
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Variance_gamma_process
-/// - Original Source: https://doi.org/10.1086%2F296519
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Variance_gamma_process>
+/// - Original Source: <https://doi.org/10.1086%2F296519>
+///
+/// # Example
+///
+/// ```rust
+/// use ndarray::Array1;
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::stochastic_processes::{StochasticProcess, VarianceGammaProcess};
+///
+/// let n_paths: usize = 2;
+/// let n_steps: usize = 200;
+///
+/// let vg: VarianceGammaProcess = VarianceGammaProcess::new(0.2, 0.3, 20.0, n_paths, n_steps, 1.0, 0.03);
+/// let paths: Vec<Array1<f64>> = vg.get_paths().unwrap();
+///
+/// assert_eq!(paths.len(), n_paths);
+/// assert_eq!(paths[0].len(), n_steps+1);
+/// ```
 pub struct VarianceGammaProcess {
     /// Mean of the process
     mu: f64,
@@ -233,7 +306,7 @@ pub struct VarianceGammaProcess {
 
 impl VarianceGammaProcess {
     /// # Description
-    /// Creates a new ArithmeticBrownianMotion instance.
+    /// Creates a new `VarianceGammaProcess` instance.
     /// 
     /// # Input
     /// - `mu`: Mean of the process
@@ -283,11 +356,15 @@ impl StochasticProcess for VarianceGammaProcess {
     ///
     /// # Output
     /// - An array of simulated paths following the Variance Gamma process
+    ///
+    /// # LaTeX Formula
+    /// - dS_{t} = \\mu*dG(t) + \\sigma*\\sqrt{dG(t)}\\mathcal{N}(0,1)
     fn get_paths(&self) -> Result<Vec<Array1<f64>>, Error> {
         let mut paths: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
         for _ in 0..self.n_paths {
             let gamma_dist: GammaDistribution = GammaDistribution::new(self.dt*self.kappa, 1.0/self.kappa)?;
             let dg: Array1<f64> = inverse_transform(&gamma_dist, self.t.len())?;
+            let dg: Array1<f64> = dg.map(|v| { if v.is_nan() { 0.0 } else { *v } } );
             let n: Array1<f64> = StandardNormalInverseTransform::new_shuffle(self.t.len())?.generate()?;
             let mut s: Array1<f64> = Array1::from_vec(vec![self.s_0; self.t.len()]);
             for i in 1..self.t.len() {

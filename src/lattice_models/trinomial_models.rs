@@ -9,16 +9,32 @@ use crate::lattice_models::LatticeModel;
 /// Binomial tree with the defined parameters presented as an array of layers.
 /// 
 /// # Input
-/// - s_0: Starting value
-/// - u: Upward movement factor, must be positive
-/// - d: Downward movement factor, must be positive
-/// - n_steps: Number of steps in the tree
+/// - `s_0`: Starting value
+/// - `u`: Upward movement factor, must be positive
+/// - `d`: Downward movement factor, must be positive
+/// - `n_steps`: Number of steps in the tree
 /// 
 /// # Output
 /// - List of layers with node values at each step
 /// 
 /// # Errors
-/// - Returns an error if the value of `u` or `d` is non-positive
+/// - Returns an error if the value of `u` or `d` is non-positive.
+///
+/// # Examples
+///
+/// ```rust
+/// use ndarray::Array1;
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::lattice_models::trinomial_tree_nodes;
+///
+/// let tree: Vec<Array1<f64>> = trinomial_tree_nodes(10.0, 1.2, 0.9, 2).unwrap();
+/// // Sideways movement factor
+/// let s: f64 = 1.0392304845;
+///
+/// assert!((&tree[0] - Array1::from_vec(vec![10.0])).sum().abs() < TEST_ACCURACY);
+/// assert!((&tree[1] - Array1::from_vec(vec![9.0, 10.0*s, 12.0])).sum().abs() < TEST_ACCURACY);
+/// assert!((&tree[2] - Array1::from_vec(vec![8.1, 9.0*s, 10.0*s*s, 12.0*s, 14.4])).sum().abs() < TEST_ACCURACY);
+/// ```
 pub fn trinomial_tree_nodes(s_0: f64, u: f64, d: f64, n_steps: usize) -> Result<Vec<Array1<f64>>, Error> {
     if (u <= 0.0) || (d <= 0.0) {
         return Err(input_error( "Trinomial Tree Nodes: The arguments u and d must be positive multiplicative factors of the trinomial model."));
@@ -46,23 +62,59 @@ pub fn trinomial_tree_nodes(s_0: f64, u: f64, d: f64, n_steps: usize) -> Result<
 /// This function does not discount future cashflows.
 /// 
 /// # Input
-/// - payoff_object: Custom payoff object defining the payoff at each node
-/// - s_0: Initial underlying asset value
-/// - u: Upward movement factor
-/// - d: Downward movement factor
-/// - p_u: Probability of an upward movement
-/// - p_d: Probability of a downward movement
-/// - n_steps: Number of steps in the model
-/// - exercise_time_steps: List of booleans indicating if there's a payoff at each step
+/// - `payoff_object`: Custom payoff object defining the payoff at each node
+/// - `s_0`: Initial underlying asset value
+/// - `u`: Upward movement factor
+/// - `d`: Downward movement factor
+/// - `p_u`: Probability of an upward movement
+/// - `p_d`: Probability of a downward movement
+/// - `n_steps`: Number of steps in the model
+/// - `exercise_time_steps`: List of booleans indicating if there's a payoff at each step
 /// 
 /// # Output
 /// - Fair value calculated by the trinomial model
 /// 
 /// # Errors
-/// - Returns an error if the value of either `u` or `d` is negative
-/// - Returns an error if the value of `p_u` or `p_d` is not in the range \[0,1\]
-/// - Returns an error if the sum of probabilities `p_u` and `p_d` exceeds 1
-/// - Returns an error if the length of exercise_time_steps is not of length n_steps
+/// - Returns an error if the value of either `u` or `d` is negative.
+/// - Returns an error if the value of `p_u` or `p_d` is not in the range \[0,1\].
+/// - Returns an error if the sum of probabilities `p_u` and `p_d` exceeds `1`.
+/// - Returns an error if the length of exercise_time_steps is not of length n_steps.
+///
+/// # Examples
+///
+/// 1. Pricing European Long Call option:
+///
+/// ```rust
+/// use ndarray::Array1;
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::lattice_models::trinomial_model;
+/// use digifi::financial_instruments::LongCall;
+///
+/// let long_call: LongCall = LongCall { k: 11.0, cost: 0.0 };
+/// let fair_value: f64 = trinomial_model(&long_call, 10.0, 1.2, 0.9, 0.25, 0.25, 2, Some(vec![false, false])).unwrap();
+/// // Sideways movement factor 
+/// let s: f64 = 1.0392304845;
+///
+/// let analytic_solution: f64 = 0.25*(0.25*3.4 + 0.5*(12.0*s - 11.0) + 0.25*0.0) + 0.5*(0.25*(12.0*s - 11.0) + 0.5*0.0 + 0.25*0.0) + 0.25*(0.25*0.0 + 0.5*0.0 + 0.25*0.0);
+/// assert!((fair_value - analytic_solution).abs() < TEST_ACCURACY);
+/// ```
+///
+/// 2. Pricing European Long Straddle option:
+///
+/// ```rust
+/// use ndarray::Array1;
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::lattice_models::trinomial_model;
+/// use digifi::financial_instruments::Straddle;
+///
+/// let straddle: Straddle = Straddle { k: 11.0, cost_c: 0.0, cost_p: 0.0 };
+/// let fair_value: f64 = trinomial_model(&straddle, 10.0, 1.2, 0.9, 0.25, 0.25, 2, Some(vec![false, false])).unwrap();
+/// // Sideways movement factor 
+/// let s: f64 = 1.0392304845;
+///
+/// let analytic_solution: f64 = 0.25*(0.25*3.4 + 0.5*(12.0*s - 11.0) + 0.25*(11.0 - 10.0*s*s)) + 0.5*(0.25*(12.0*s - 11.0) + 0.5*(11.0 - 10.0*s*s) + 0.25*(11.0 - 9.0*s)) + 0.25*(0.25*(11.0 - 10.0*s*s) + 0.5*(11.0 - 9.0*s) + 0.25*2.9);
+/// assert!((fair_value - analytic_solution).abs() < TEST_ACCURACY);
+/// ```
 pub fn trinomial_model(payoff_object: &dyn Payoff, s_0: f64, u: f64, d: f64, p_u: f64, p_d: f64, n_steps: usize, exercise_time_steps: Option<Vec<bool>>) -> Result<f64, Error> {
     // Data validation.
     payoff_object.validate_payoff(5)?;
@@ -109,6 +161,22 @@ pub fn trinomial_model(payoff_object: &dyn Payoff, s_0: f64, u: f64, d: f64, p_u
 
 /// # Description
 /// Trinomial models that are scaled to emulate Brownian motion.
+///
+/// # Examples
+///
+/// ```rust
+/// use ndarray::Array1;
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::lattice_models::{LatticeModel, BrownianMotionTrinomialModel};
+/// use digifi::financial_instruments::LongCall;
+///
+/// let long_call: LongCall = LongCall { k: 11.0, cost: 0.0 };
+/// let bmtm: BrownianMotionTrinomialModel = BrownianMotionTrinomialModel::new(Box::new(long_call), 10.0, 1.0, 0.02, 0.2, 0.0, 30).unwrap();
+/// let predicted_value = bmtm.european().unwrap();
+///
+/// // Test accuracy depends on the conversion between Brownian-scaled binomial model and Black-Scholes analytic solution
+/// assert!((predicted_value - 0.49).abs() < 1_000_000.0 * TEST_ACCURACY);
+/// ```
 pub struct BrownianMotionTrinomialModel {
     /// Payoff function
     payoff_object: Box<dyn Payoff>,
@@ -138,16 +206,16 @@ pub struct BrownianMotionTrinomialModel {
 
 impl BrownianMotionTrinomialModel {
     /// # Description
-    /// Creates a new BrownianMotionTrinomialModel instance.
+    /// Creates a new `BrownianMotionTrinomialModel` instance.
     /// 
     /// # Input
-    /// - payoff_object: Payoff function
-    /// - s_0: Initial underlying asset price
-    /// - time_to_maturity: Time to maturity
-    /// - r: Risk-free interest rate
-    /// - sigma: Volatility of the underlying asset
-    /// - q: Dividend yield
-    /// - n_steps: Number of steps in the trinomial model
+    /// - `payoff_object`: Payoff function
+    /// - `s_0`: Initial underlying asset price
+    /// - `time_to_maturity`: Time to maturity
+    /// - `r`: Risk-free interest rate
+    /// - `sigma`: Volatility of the underlying asset
+    /// - `q`: Dividend yield
+    /// - `n_steps`: Number of steps in the trinomial model
     ///
     /// # Errors
     /// - Returns an error if the condition \\Delta t<\\frac{{\\sigma^{{2}}}}{{(r-q)^{{2}}}} is not satisfied
@@ -196,12 +264,12 @@ impl LatticeModel for BrownianMotionTrinomialModel {
     /// Trinomial model that computes the payoffs for each node in the trinomial tree to determine the initial payoff value.
     /// 
     /// # Input
-    /// - exercise_time_steps: Indicators for exercise opportunity at each timestep
+    /// - `exercise_time_steps`: Indicators for exercise opportunity at each timestep
     /// 
     /// # Output
     /// - The present value of an instrument with the Bermudan exercise style
-    fn bermudan(&self, exercise_time_steps: Vec<bool>) -> Result<f64, Error> {
-        Ok((-self.r*self.time_to_maturity).exp() * trinomial_model(self.payoff_object.as_ref(), self.s_0, self.u, self.d, self.p_u, self.p_d, self.n_steps, Some(exercise_time_steps))?)
+    fn bermudan(&self, exercise_time_steps: &Vec<bool>) -> Result<f64, Error> {
+        Ok((-self.r*self.time_to_maturity).exp() * trinomial_model(self.payoff_object.as_ref(), self.s_0, self.u, self.d, self.p_u, self.p_d, self.n_steps, Some(exercise_time_steps.clone()))?)
     }
 }
 
@@ -215,6 +283,7 @@ mod tests {
     fn unit_test_trinomial_tree_nodes() -> () {
         use crate::lattice_models::trinomial_models::trinomial_tree_nodes;
         let tree: Vec<Array1<f64>> = trinomial_tree_nodes(10.0, 1.2, 0.9, 2).unwrap();
+        // Sideways movement factor
         let s: f64 = 1.0392304845;
         assert!((&tree[0] - Array1::from_vec(vec![10.0])).sum().abs() < TEST_ACCURACY);
         assert!((&tree[1] - Array1::from_vec(vec![9.0, 10.0*s, 12.0])).sum().abs() < TEST_ACCURACY);
@@ -226,10 +295,11 @@ mod tests {
         use crate::lattice_models::trinomial_models::trinomial_model;
         use crate::financial_instruments::LongCall;
         let long_call: LongCall = LongCall { k: 11.0, cost: 0.0 };
-        let fair_value: f64 = trinomial_model(&long_call, 10.0, 1.2, 0.9, 0.25, 0.25, 2, Some(vec![false, false])).unwrap();
+        let predicted_value: f64 = trinomial_model(&long_call, 10.0, 1.2, 0.9, 0.25, 0.25, 2, Some(vec![false, false])).unwrap();
+        // Sideways movement factor 
         let s: f64 = 1.0392304845;
         let analytic_solution: f64 = 0.25*(0.25*3.4 + 0.5*(12.0*s - 11.0) + 0.25*0.0) + 0.5*(0.25*(12.0*s - 11.0) + 0.5*0.0 + 0.25*0.0) + 0.25*(0.25*0.0 + 0.5*0.0 + 0.25*0.0);
-        assert!((fair_value - analytic_solution).abs() < TEST_ACCURACY);
+        assert!((predicted_value - analytic_solution).abs() < TEST_ACCURACY);
     }
 
     #[test]
@@ -237,10 +307,11 @@ mod tests {
         use crate::lattice_models::trinomial_models::trinomial_model;
         use crate::financial_instruments::Straddle;
         let straddle: Straddle = Straddle { k: 11.0, cost_c: 0.0, cost_p: 0.0 };
-        let fair_value: f64 = trinomial_model(&straddle, 10.0, 1.2, 0.9, 0.25, 0.25, 2, Some(vec![false, false])).unwrap();
+        let predicted_value: f64 = trinomial_model(&straddle, 10.0, 1.2, 0.9, 0.25, 0.25, 2, Some(vec![false, false])).unwrap();
+        // Sideways movement factor 
         let s: f64 = 1.0392304845;
         let analytic_solution: f64 = 0.25*(0.25*3.4 + 0.5*(12.0*s - 11.0) + 0.25*(11.0 - 10.0*s*s)) + 0.5*(0.25*(12.0*s - 11.0) + 0.5*(11.0 - 10.0*s*s) + 0.25*(11.0 - 9.0*s)) + 0.25*(0.25*(11.0 - 10.0*s*s) + 0.5*(11.0 - 9.0*s) + 0.25*2.9);
-        assert!((fair_value - analytic_solution).abs() < TEST_ACCURACY);
+        assert!((predicted_value - analytic_solution).abs() < TEST_ACCURACY);
     }
 
     #[test]
@@ -249,10 +320,9 @@ mod tests {
         use crate::lattice_models::LatticeModel;
         use crate::financial_instruments::LongCall;
         let long_call: LongCall = LongCall { k: 11.0, cost: 0.0 };
-        let bmbm: BrownianMotionTrinomialModel = BrownianMotionTrinomialModel::new(Box::new(long_call), 10.0, 1.0, 0.02, 0.2, 0.0, 30).unwrap();
-        let fair_value = bmbm.european().unwrap();
+        let bmtm: BrownianMotionTrinomialModel = BrownianMotionTrinomialModel::new(Box::new(long_call), 10.0, 1.0, 0.02, 0.2, 0.0, 30).unwrap();
+        let predicted_value: f64 = bmtm.european().unwrap();
         // Test accuracy depends on the conversion between Brownian-scaled binomial model and Black-Scholes analytic solution
-        // The result were found using Black-Scholes calculator online
-        assert!((fair_value - 0.49).abs() < 1_000_000.0*TEST_ACCURACY);
+        assert!((predicted_value - 0.49).abs() < 1_000_000.0*TEST_ACCURACY);
     }
 }

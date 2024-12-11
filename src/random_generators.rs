@@ -1,3 +1,11 @@
+// Re-Exports
+pub use self::generator_algorithms::{accept_reject, inverse_transform, box_muller, marsaglia, ziggurat};
+pub use self::uniform_generators::{LinearCongruentialGenerator, FibonacciGenerator};
+pub use self::standard_normal_generators::{
+    StandardNormalAcceptReject, StandardNormalInverseTransform, StandardNormalBoxMuller, StandardNormalMarsaglia, StandardNormalZiggurat,
+};
+
+
 pub mod generator_algorithms;
 pub mod standard_normal_generators;
 pub mod uniform_generators;
@@ -17,6 +25,17 @@ pub trait RandomGenerator<T> {
 
 /// # Description
 /// Generates a seed from nanosecond timestamp of the system.
+///
+/// # Examples
+///
+/// ```rust
+/// use digifi::random_generators::generate_seed;
+///
+/// let seed_1: u32 = generate_seed().unwrap();
+/// let seed_2: u32 = generate_seed().unwrap();
+///
+/// assert!(seed_1 != seed_2);
+/// ```
 pub fn generate_seed () -> Result<u32, Error> {
     let start: SystemTime = SystemTime::now();
     let delta: f64;

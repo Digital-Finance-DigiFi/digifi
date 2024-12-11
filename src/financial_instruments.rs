@@ -1,4 +1,16 @@
+// Re-Exports
+pub use self::bonds::{bootstrap, YtMMethod, BondType, Bond};
+pub use self::derivatives::{
+    minimum_variance_hedge_ratio, ContractType, OptionType, BlackScholesType, OptionPricingMethod, PresentValueSurface, Contract, OptionContract,
+};
+pub use self::rates_and_swaps::ForwardRateAgreement;
+pub use self::stocks::{QuoteValues, StockValuationType, ValuationByComparablesParams, Stock};
+
+
+pub mod bonds;
+pub mod derivatives;
 pub mod rates_and_swaps;
+pub mod stocks;
 
 
 use std::io::Error;
@@ -40,15 +52,39 @@ pub struct FinancialInstrumentId {
 pub trait FinancialInstrument {
     /// # Description
     /// Computes the present value of the financial instrument.
-    fn present_value(&self) -> f64;
+    fn present_value(&self) -> Result<f64, Box<dyn std::error::Error>>;
 
     /// # Description
     /// Computes the net present value of the financial instrument.
-    fn net_present_value(&self) -> f64;
+    fn net_present_value(&self) -> Result<f64, Box<dyn std::error::Error>>;
 
     /// # Description
     /// Computes the future value of the financial instrument.
-    fn future_value(&self) -> f64;
+    fn future_value(&self) -> Result<f64, Box<dyn std::error::Error>>;
+
+    /// # Description
+    /// Returns an array of asset prices.
+    ///
+    /// # Input
+    /// - `end_index`: Time index beyond which no data will be returned
+    /// - `start_index`: Time index below which no data will be returned
+    fn get_prices(&self, end_index: usize, start_index: Option<usize>) -> Result<Array1<f64>, Error>;
+
+    /// # Description
+    /// Returns an array of predictable incomes for an asset (i.e., dividends, coupons, etc.).
+    ///
+    /// # Input
+    /// - `end_index`: Time index beyond which no data will be returned
+    /// - `start_index`: Time index below which no data will be returned
+    fn get_predictable_income(&self, end_index: usize, start_index: Option<usize>) -> Result<Array1<f64>, Error>;
+
+    /// # Description
+    /// Returns an array of time steps at which the asset price and predictable_income are recorded.
+    fn get_time_array(&self) -> Array1<f64>;
+
+    /// # Description
+    /// Updates the number of paths the stochastic model will produce when called.
+    fn update_n_stochastic_paths(&mut self, n_paths: usize) -> ();
 
     /// # Description
     /// Simulates the paths of price action for the financial instrument.
@@ -123,6 +159,20 @@ impl Payoff for LongCall {
     /// 
     /// # LaTeX Formula
     /// - \\textit{Long Call Payoff} = max(S_{t}-K, 0)
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use ndarray::{Array1, array};
+    /// use digifi::utilities::TEST_ACCURACY;
+    /// use digifi::financial_instruments::{Payoff, LongCall};
+    ///
+    /// let s: Array1<f64> = array![10.0, 9.0, 13.0];
+    ///
+    /// let long_call: LongCall = LongCall { k: 10.0, cost: 1.0 };
+    ///
+    /// assert!((long_call.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, 3.0])).sum().abs() < TEST_ACCURACY);
+    /// ```
     fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
         (s - self.k).map(| p | p.max(0.0))
     }
@@ -166,6 +216,20 @@ impl Payoff for ShortCall {
     /// 
     /// # LaTeX Formula
     /// - \\textit{Short Call Payoff} = min(K-S_{t}, 0)
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use ndarray::{Array1, array};
+    /// use digifi::utilities::TEST_ACCURACY;
+    /// use digifi::financial_instruments::{Payoff, ShortCall};
+    ///
+    /// let s: Array1<f64> = array![10.0, 9.0, 13.0];
+    ///
+    /// let short_call: ShortCall = ShortCall { k: 10.0, cost: 1.0 };
+    ///
+    /// assert!((short_call.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, -3.0])).sum().abs() < TEST_ACCURACY);
+    /// ```
     fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
         (self.k - s).map(| p | p.min(0.0))
     }
@@ -209,6 +273,20 @@ impl Payoff for LongPut {
     /// 
     /// # LaTeX Formula
     /// - \\textit{Long Put Payoff} = max(K-S_{t}, 0)
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use ndarray::{Array1, array};
+    /// use digifi::utilities::TEST_ACCURACY;
+    /// use digifi::financial_instruments::{Payoff, LongPut};
+    ///
+    /// let s: Array1<f64> = array![10.0, 9.0, 13.0];
+    ///
+    /// let long_put: LongPut = LongPut { k: 10.0, cost: 1.0 };
+    ///
+    /// assert!((long_put.payoff(&s) - Array1::from_vec(vec![0.0, 1.0, 0.0])).sum().abs() < TEST_ACCURACY);
+    /// ```
     fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
         (self.k - s).map(| p | p.max(0.0))
     }
@@ -252,6 +330,20 @@ impl Payoff for ShortPut {
     /// 
     /// # LaTeX Formula
     /// - \\textit{Short Put Payoff} = min(S_{t}-K, 0)
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use ndarray::{Array1, array};
+    /// use digifi::utilities::TEST_ACCURACY;
+    /// use digifi::financial_instruments::{Payoff, ShortPut};
+    ///
+    /// let s: Array1<f64> = array![10.0, 9.0, 13.0];
+    ///
+    /// let short_put: ShortPut = ShortPut { k: 10.0, cost: 1.0 };
+    ///
+    /// assert!((short_put.payoff(&s) - Array1::from_vec(vec![0.0, -1.0, 0.0])).sum().abs() < TEST_ACCURACY);
+    /// ```
     fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
         (s - self.k).map(| p | p.min(0.0))
     }
@@ -293,7 +385,7 @@ pub struct BullCollar {
 
 impl BullCollar {
     /// # Description
-    /// Creates a new BullCollar instance.
+    /// Creates a new `BullCollar` instance.
     /// 
     /// # Input
     /// - `k_p`: Long put option strike price
@@ -303,7 +395,7 @@ impl BullCollar {
     /// - `cost_s`: Initial asset price (cost)
     /// 
     /// # Errors
-    /// - Returns an error if the long put strike price is larger than the short call strike price
+    /// - Returns an error if the long put strike price is larger than the short call strike price.
     pub fn new(k_p: f64, k_c: f64, cost_p: f64, cost_c: f64, cost_s: f64) -> Result<Self, Error> {
         if k_c < k_p {
             return Err(input_error("Bull Collar: The argument k_p must be smaller or equal to k_c."));
@@ -324,6 +416,20 @@ impl Payoff for BullCollar {
     /// 
     /// # LaTeX Formula
     /// - \\textit{Bull Collar Payoff} = S_{t} - S_{0} + max(K_{p}-S_{t}, 0) + min(K_{c}-S_{t}, 0)
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use ndarray::{Array1, array};
+    /// use digifi::utilities::TEST_ACCURACY;
+    /// use digifi::financial_instruments::{Payoff, BullCollar};
+    ///
+    /// let s: Array1<f64> = Array1::range(3.0, 7.0, 0.5);
+    ///
+    /// let bull_collar: BullCollar = BullCollar::new(4.0, 6.0, 1.0, 1.0, 5.0).unwrap();
+    ///
+    /// assert!((bull_collar.profit(&s) - Array1::from_vec(vec![-1.0, -1.0, -1.0, -0.5, 0.0, 0.5, 1.0, 1.0])).sum().abs() < TEST_ACCURACY);
+    /// ```
     fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
         s - self.cost_s + (self.k_p - s).map(| p | p.max(0.0)) + (self.k_c - s).map(| p | p.min(0.0))
     }
@@ -365,7 +471,7 @@ pub struct BearCollar {
 
 impl BearCollar {
     /// # Description
-    /// Creates a new BearCollar instance.
+    /// Creates a new `BearCollar` instance.
     /// 
     /// # Input
     /// - `k_p`: Short put option strike price
@@ -375,7 +481,7 @@ impl BearCollar {
     /// - `cost_s`: Initial asset price (cost)
     /// 
     /// # Errors
-    /// - Returns an error if the short put strike price is larger than the long call strike price
+    /// - Returns an error if the short put strike price is larger than the long call strike price.
     pub fn new(k_p: f64, k_c: f64, cost_p: f64, cost_c: f64, cost_s: f64) -> Result<Self, Error> {
         if k_c < k_p {
             return Err(input_error("Bear Collar: The argument k_p must be smaller or equal to k_c."));
@@ -396,6 +502,20 @@ impl Payoff for BearCollar {
     /// 
     /// # LaTeX Formula
     /// - \\textit{Bear Collar Payoff} = S_{0} - S_{t} + min(S_{t}-K_{p}, 0) + max(S_{t}-K_{c}, 0)
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use ndarray::{Array1, array};
+    /// use digifi::utilities::TEST_ACCURACY;
+    /// use digifi::financial_instruments::{Payoff, BearCollar};
+    ///
+    /// let s: Array1<f64> = Array1::range(3.0, 7.0, 0.5);
+    ///
+    /// let bear_collar: BearCollar = BearCollar::new(4.0, 6.0, 1.0, 1.0, 5.0).unwrap();
+    ///
+    /// assert!((bear_collar.profit(&s) - Array1::from_vec(vec![1.0, 1.0, 1.0, 0.5, 0.0, -0.5, -1.0, -1.0])).sum().abs() < TEST_ACCURACY);
+    /// ```
     fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
         self.cost_s - s + (s - self.k_p).map(| p | p.min(0.0)) + (s - self.k_c).map(| p | p.max(0.0))
     }
@@ -435,7 +555,7 @@ pub struct BullSpread {
 
 impl BullSpread {
     /// # Description
-    /// Creates a new BullSpread instance.
+    /// Creates a new `BullSpread` instance.
     /// 
     /// # Input
     /// - `k_l`: Long call option strike price
@@ -444,7 +564,7 @@ impl BullSpread {
     /// - `cost_s`: Initial short call option price (cost)
     /// 
     /// # Errors
-    /// - Returns an error if the short call strike price is smaller than the long call strike price
+    /// - Returns an error if the short call strike price is smaller than the long call strike price.
     pub fn new(k_l: f64, k_s: f64, cost_l: f64, cost_s: f64) -> Result<Self, Error> {
         if k_s < k_l {
             return Err(input_error("Bull Spread: The argument k_l must be smaller or equal to k_s."));
@@ -465,6 +585,20 @@ impl Payoff for BullSpread {
     /// 
     /// # LaTeX Formula
     /// - \\textit{Bull Spread Payoff} = max(S_{t}-K_{l}, 0) + min(K_{s}-S_{t}, 0)
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use ndarray::{Array1, array};
+    /// use digifi::utilities::TEST_ACCURACY;
+    /// use digifi::financial_instruments::{Payoff, BullSpread};
+    ///
+    /// let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
+    ///
+    /// let bull_spread: BullSpread = BullSpread::new(4.0, 6.0, 1.0, 1.0).unwrap();
+    ///
+    /// assert!((bull_spread.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, 1.0, 2.0, 2.0])).sum().abs() < TEST_ACCURACY);
+    /// ```
     fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
         (s - self.k_l).map(| p | p.max(0.0)) + (self.k_s - s).map(| p | p.min(0.0))
     }
@@ -504,7 +638,7 @@ pub struct BearSpread {
 
 impl BearSpread {
     /// # Description
-    /// Creates a new BearSpread instance.
+    /// Creates a new `BearSpread` instance.
     /// 
     /// # Input
     /// - `k_l`: Long put option strike price
@@ -513,7 +647,7 @@ impl BearSpread {
     /// - `cost_s`: Initial short put option price (cost)
     /// 
     /// # Errors
-    /// - Returns an error if the long put strike price is smaller than the short put strike price
+    /// - Returns an error if the long put strike price is smaller than the short put strike price.
     pub fn new(k_l: f64, k_s: f64, cost_l: f64, cost_s: f64) -> Result<Self, Error> {
         if k_l < k_s {
             return Err(input_error("Bear Spread: The argument k_s must be smaller or equal to k_l."));
@@ -534,6 +668,20 @@ impl Payoff for BearSpread {
     /// 
     /// # LaTeX Formula
     /// - \\textit{Bear Spread Payoff} = max(K_{l}-S_{t}, 0) + min(S_{t}-K_{s}, 0)
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use ndarray::{Array1, array};
+    /// use digifi::utilities::TEST_ACCURACY;
+    /// use digifi::financial_instruments::{Payoff, BearSpread};
+    ///
+    /// let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
+    ///
+    /// let bear_spread: BearSpread = BearSpread::new(6.0, 4.0, 1.0, 1.0).unwrap();
+    ///
+    /// assert!((bear_spread.payoff(&s) - Array1::from_vec(vec![2.0, 2.0, 1.0, 0.0, 0.0])).sum().abs() < TEST_ACCURACY);
+    /// ```
     fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
         (self.k_l - s).map(| p | p.max(0.0)) + (s - self.k_s).map(| p | p.min(0.0))
     }
@@ -577,7 +725,7 @@ pub struct LongButterfly {
 
 impl LongButterfly {
     /// # Description
-    /// Creates a new LongButterfly instance.
+    /// Creates a new `LongButterfly` instance.
     /// 
     /// # Input
     /// - `k1_c`: Smaller long call option strike price
@@ -588,7 +736,7 @@ impl LongButterfly {
     /// - `cost_p`: Initial short put option price (cost)
     /// 
     /// # Errors
-    /// - Returns an error if the long put strike price is smaller than the short put strike price
+    /// - Returns an error if the long put strike price is smaller than the short put strike price.
     pub fn new(k1_c: f64, k2_c: f64, k_p: f64, cost1_c: f64, cost2_c: f64, cost_p: f64) -> Result<Self, Error> {
         // Check that k1_c <= k_p <= k2_c
         if k2_c < k_p {
@@ -613,6 +761,20 @@ impl Payoff for LongButterfly {
     /// 
     /// # LaTeX Formula
     /// - \\textit{Butterfly Spread Payoff} = max(S_{t}-K1_{c}, 0) + 2min(K_{p}-S_{t}, 0) + max(S_{t}-K2_{c}, 0)
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use ndarray::{Array1, array};
+    /// use digifi::utilities::TEST_ACCURACY;
+    /// use digifi::financial_instruments::{Payoff, LongButterfly};
+    ///
+    /// let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
+    ///
+    /// let long_butterfly: LongButterfly = LongButterfly::new(4.0, 6.0, 5.0, 1.0, 1.0, 1.0).unwrap();
+    ///
+    /// assert!((long_butterfly.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, 1.0, 0.0, 0.0])).sum().abs() < TEST_ACCURACY);
+    /// ```
     fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
         (s - self.k1_c).map(| p | p.max(0.0)) + 2.0*(self.k_p - s).map(| p | p.min(0.0)) + (s - self.k2_c).map(| p | p.max(0.0))
     }
@@ -657,7 +819,7 @@ pub struct BoxSpread {
 
 impl BoxSpread {
     /// # Description
-    /// Creates a new BoxSpread instance.
+    /// Creates a new `BoxSpread` instance.
     /// 
     /// # Input
     /// - `k_1`: Smaller option strike price
@@ -668,7 +830,7 @@ impl BoxSpread {
     /// - `cost_lp`: Initial long put option price (cost)
     /// 
     /// # Errors
-    /// - Returns an error if the k_2 strike price is smaller than the k_1 strike price
+    /// - Returns an error if the k_2 strike price is smaller than the k_1 strike price.
     pub fn new(k_1: f64, k_2: f64, cost_lc: f64, cost_sp: f64, cost_sc: f64, cost_lp: f64) -> Result<Self, Error> {
         if k_2 < k_1 {
             return Err(input_error("Box Spread: The argument k_1 must be smaller or equal to k_2."));
@@ -689,6 +851,20 @@ impl Payoff for BoxSpread {
     /// 
     /// # LaTeX Formula
     /// - \\textit{Box Spread Payoff} = max(S_{t}-K_{1}, 0) + min(K_{2}-S_{t}, 0) + max(K_{2}-S_{t}, 0) + min(S_{t}-K_{1}, 0)
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use ndarray::{Array1, array};
+    /// use digifi::utilities::TEST_ACCURACY;
+    /// use digifi::financial_instruments::{Payoff, BoxSpread};
+    ///
+    /// let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
+    ///
+    /// let box_spread: BoxSpread = BoxSpread::new(4.0, 6.0, 1.0, 1.0, 1.0, 1.0).unwrap();
+    ///
+    /// assert!((box_spread.payoff(&s) - Array1::from_vec(vec![2.0, 2.0, 2.0, 2.0, 2.0])).sum().abs() < TEST_ACCURACY);
+    /// ```
     fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
         (s - self.k_1).map(| p | p.max(0.0)) + (self.k_2 - s).map(| p | p.min(0.0)) + (self.k_2 - s).map(| p | p.max(0.0)) + (s - self.k_1).map(| p | p.min(0.0))
     }
@@ -737,6 +913,20 @@ impl Payoff for Straddle {
     /// 
     /// # LaTeX Formula
     /// - \\textit{Straddle Payoff} = max(S_{t}-K, 0) + max(K-S_{t}, 0)
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use ndarray::{Array1, array};
+    /// use digifi::utilities::TEST_ACCURACY;
+    /// use digifi::financial_instruments::{Payoff, Straddle};
+    ///
+    /// let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
+    ///
+    /// let straddle: Straddle = Straddle { k: 5.0, cost_c: 1.0, cost_p: 1.0 };
+    ///
+    /// assert!((straddle.payoff(&s) - Array1::from_vec(vec![2.0, 1.0, 0.0, 1.0, 2.0])).sum().abs() < TEST_ACCURACY);
+    /// ```
     fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
         (s - self.k).map(| p | p.max(0.0)) + (self.k - s).map(| p | p.max(0.0))
     }
@@ -776,7 +966,7 @@ pub struct Strangle {
 
 impl Strangle {
     /// # Description
-    /// Creates a new Strangle instance.
+    /// Creates a new `Strangle` instance.
     /// 
     /// # Input
     /// - `k_c`: Call option strike price
@@ -785,7 +975,7 @@ impl Strangle {
     /// - `cost_p`: initial long put option price (cost)
     /// 
     /// # Errors
-    /// - Returns an error if the k_c strike price is smaller or equal to the k_p strike price
+    /// - Returns an error if the `k_c` strike price is smaller or equal to the `k_p` strike price.
     pub fn new(k_c: f64, k_p: f64, cost_c: f64, cost_p: f64) -> Result<Self, Error> {
         if k_c <= k_p {
             return Err(input_error("Strangle: The argument k_p must be smaller than k_c."));
@@ -806,6 +996,20 @@ impl Payoff for Strangle {
     /// 
     /// # LaTeX Formula
     /// - \\textit{Strangle Payoff} = max(S_{t}-K_{c}, 0) + max(K_{p}-S_{t}, 0)
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use ndarray::{Array1, array};
+    /// use digifi::utilities::TEST_ACCURACY;
+    /// use digifi::financial_instruments::{Payoff, Strangle};
+    ///
+    /// let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
+    ///
+    /// let strangle: Strangle = Strangle::new(6.0, 4.0, 1.0, 1.0).unwrap();
+    ///
+    /// assert!((strangle.payoff(&s) - Array1::from_vec(vec![1.0, 0.0, 0.0, 0.0, 1.0])).sum().abs() < TEST_ACCURACY);
+    /// ```
     fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
         (s - self.k_c).map(| p | p.max(0.0)) + (self.k_p - s).map(| p | p.max(0.0))
     }
@@ -853,6 +1057,20 @@ impl Payoff for Strip {
     /// 
     /// # LaTeX Formula
     /// - \\textit{Strip Payoff} = max(S_{t}-K, 0) + 2max(K-S_{t}, 0)
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use ndarray::{Array1, array};
+    /// use digifi::utilities::TEST_ACCURACY;
+    /// use digifi::financial_instruments::{Payoff, Strip};
+    ///
+    /// let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
+    ///
+    /// let strip: Strip = Strip { k: 5.0, cost_c: 1.0, cost_p: 1.0 };
+    ///
+    /// assert!((strip.payoff(&s) - Array1::from_vec(vec![4.0, 2.0, 0.0, 1.0, 2.0])).sum().abs() < TEST_ACCURACY);
+    /// ```
     fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
         (s - self.k).map(| p | p.max(0.0)) + 2.0*(self.k - s).map(| p | p.max(0.0))
     }
@@ -900,6 +1118,20 @@ impl Payoff for Strap {
     /// 
     /// # LaTeX Formula
     /// - \\textit{Strap Payoff} = 2max(S_{t}-K, 0) + max(K-S_{t}, 0)
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use ndarray::{Array1, array};
+    /// use digifi::utilities::TEST_ACCURACY;
+    /// use digifi::financial_instruments::{Payoff, Strap};
+    ///
+    /// let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
+    ///
+    ///  let strap: Strap = Strap { k: 5.0, cost_c: 1.0, cost_p: 1.0 };
+    ///
+    ///  assert!((strap.payoff(&s) - Array1::from_vec(vec![2.0, 1.0, 0.0, 2.0, 4.0])).sum().abs() < TEST_ACCURACY);
+    /// ```
     fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
         2.0*(s - self.k).map(| p | p.max(0.0)) + (self.k - s).map(| p | p.max(0.0))
     }
@@ -980,7 +1212,7 @@ mod tests {
         use crate::financial_instruments::BullSpread;
         let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
         let bull_spread: BullSpread = BullSpread::new(4.0, 6.0, 1.0, 1.0).unwrap();
-        assert!((bull_spread.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, 1.0, 2.0, 2.0])).sum().abs() < TEST_ACCURACY)
+        assert!((bull_spread.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, 1.0, 2.0, 2.0])).sum().abs() < TEST_ACCURACY);
     }
 
     #[test]
@@ -988,7 +1220,7 @@ mod tests {
         use crate::financial_instruments::BearSpread;
         let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
         let bear_spread: BearSpread = BearSpread::new(6.0, 4.0, 1.0, 1.0).unwrap();
-        assert!((bear_spread.payoff(&s) - Array1::from_vec(vec![2.0, 2.0, 1.0, 0.0, 0.0])).sum().abs() < TEST_ACCURACY)
+        assert!((bear_spread.payoff(&s) - Array1::from_vec(vec![2.0, 2.0, 1.0, 0.0, 0.0])).sum().abs() < TEST_ACCURACY);
     }
 
     #[test]

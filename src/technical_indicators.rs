@@ -18,7 +18,7 @@ use crate::utilities::{compare_array_len, input_error, data_error, other_error};
 /// - \\textit{Maximum Drawdown} = \\frac{\\textit{Peak Value} - \\textit{Trough Value}}{\\textit{Peak Value}}
 /// 
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Drawdown_(economics)
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Drawdown_(economics)>
 /// - Original Source: N/A
 pub fn maximum_drawdown(asset_value: &Array1<f64>) -> f64 {
     let mut maximum_drowdown: f64 = 0.0;
@@ -50,10 +50,10 @@ pub fn maximum_drawdown(asset_value: &Array1<f64>) -> f64 {
 /// - An array of SMA readings
 ///
 /// # Errors
-/// - Returns an error if the mean of SMA slice cannot be computed
+/// - Returns an error if the mean of SMA slice cannot be computed.
 /// 
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Moving_average#Simple_moving_average
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Moving_average#Simple_moving_average>
 /// - Original Source: N/A
 pub fn sma(price_array: &Array1<f64>, period: usize) -> Result<Array1<f64>, Error> {
     let mut sma: Vec<f64> = vec![f64::NAN; period - 1];
@@ -78,10 +78,10 @@ pub fn sma(price_array: &Array1<f64>, period: usize) -> Result<Array1<f64>, Erro
 /// - An array of EMA readings
 ///
 /// # Errors
-/// - Returns an error if the mean of price array cannot be computed
+/// - Returns an error if the mean of price array cannot be computed.
 /// 
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Moving_average#Exponential_moving_average
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Moving_average#Exponential_moving_average>
 /// - Original Source: N/A
 pub fn ema(price_array: &Array1<f64>, period: usize, smoothing: i32) -> Result<Array1<f64>, Error> {
     let multiplier: f64 = smoothing as f64 / (1.0 + period as f64);
@@ -123,10 +123,10 @@ pub struct MACD {
 /// - MACD data
 /// 
 /// # Errors
-/// - Returns an error if the large ema pariod is smaller or equal to the small ema period
+/// - Returns an error if the large ema pariod is smaller or equal to the small ema period.
 /// 
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/MACD
+/// - Wikipedia: <https://en.wikipedia.org/wiki/MACD>
 /// - Original Source: N/A
 pub fn macd(price_array: &Array1<f64>, small_ema_period: usize, large_ema_period: usize, signal_line: usize, smoothing: i32) -> Result<MACD, Error> {
     if large_ema_period <= small_ema_period {
@@ -176,10 +176,10 @@ pub struct BollingerBands {
 /// - Bollinger Bands data
 /// 
 /// # Errors
-/// - Returns an error if the mean of SMA slice cannot be computed
+/// - Returns an error if the mean of SMA slice cannot be computed.
 ///
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Bollinger_Bands
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Bollinger_Bands>
 /// - Original Source: N/A
 pub fn bollinger_bands(price_array: &Array1<f64>, period: usize, n_std: i32) -> Result<BollingerBands, Error> {
     let sma: Array1<f64> = sma(price_array, period)?;
@@ -230,11 +230,11 @@ pub struct RSI {
 /// - RSI data 
 ///
 /// # Errors
-/// - Returns an error if the mean of U slice cannot be computed
-/// - Returns an error if the mean of D slide cannot be computed
+/// - Returns an error if the mean of `U` slice cannot be computed.
+/// - Returns an error if the mean of `D` slide cannot be computed.
 /// 
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Relative_strength_index
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Relative_strength_index>
 /// - Original Source: N/A
 pub fn rsi(price_array: &Array1<f64>, period: usize, oversold_band: f64, overbought_band: f64) -> Result<RSI, Error> {
     let price_array_length: usize = price_array.len();
@@ -301,15 +301,15 @@ pub struct ADX {
 /// - ADX data 
 /// 
 /// # Errors
-/// - Returns an error if the lengths of price arrays do not coincide
-/// - Returns an error if the lengths of price arrays are smaller than (2*period + 1)
-/// - Returns an error if the mean of TR slice cannot be computed
-/// - Returns an error if the mean of +DM slice cannot be computed
-/// - Returns an error if the mean of -DM slice cannot be computed
-/// - Returns an error if the mean of |+DM - -DM| slice cannot be computed
+/// - Returns an error if the lengths of price arrays do not coincide.
+/// - Returns an error if the lengths of price arrays are smaller than `2*period + 1`.
+/// - Returns an error if the mean of `TR` slice cannot be computed.
+/// - Returns an error if the mean of `+DM` slice cannot be computed.
+/// - Returns an error if the mean of `-DM` slice cannot be computed.
+/// - Returns an error if the mean of `|+DM - -DM|` slice cannot be computed.
 /// 
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Average_directional_movement_index
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Average_directional_movement_index>
 /// - Original Source: N/A
 pub fn adx(high_price: &Array1<f64>, low_price: &Array1<f64>, close_price: &Array1<f64>, period: usize, benchmark: f64) -> Result<ADX, Error> {
     compare_array_len(close_price, high_price, "close_price", "high_price")?;
@@ -383,10 +383,10 @@ pub fn adx(high_price: &Array1<f64>, low_price: &Array1<f64>, close_price: &Arra
 /// - An array of OBV readings
 /// 
 /// # Errors
-/// - Returns an error if the lengths of close price and volume array do not match
+/// - Returns an error if the lengths of close price and volume array do not match.
 /// 
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/On-balance_volume
+/// - Wikipedia: <https://en.wikipedia.org/wiki/On-balance_volume>
 /// - Original Source: N/A
 pub fn obv(close_price: &Array1<f64>, volume: &Array1<f64>) -> Result<Array1<f64>, Error> {
     compare_array_len(close_price, volume, "close_price", "volume")?;

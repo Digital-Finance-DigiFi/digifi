@@ -22,8 +22,21 @@ use crate::statistics::ProbabilityDistribution;
 /// - Returns an error if the argument `alpha` is not in the range \[0, 1\].
 ///
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Value_at_risk#
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Value_at_risk#>
 /// - Original Source: N/A
+///
+/// # Examples
+///
+/// ```rust
+/// use ndarray::arr1;
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::statistics::{ProbabilityDistribution, NormalDistribution};
+/// use digifi::portfolio_applications::value_at_risk;
+///
+/// let norm_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0).unwrap();
+///
+/// assert!((value_at_risk(0.1, &norm_dist).unwrap() - 1.28).abs() < 1_000_000.0 * TEST_ACCURACY);
+/// ```
 pub fn value_at_risk(alpha: f64, returns_distribution: &impl ProbabilityDistribution) -> Result<f64, Error> {
     if (alpha < 0.0) || (1.0 < alpha) {
         return Err(input_error("Value at Risk: The argument alpha must be in the range [0, 1]."));
@@ -48,8 +61,24 @@ pub fn value_at_risk(alpha: f64, returns_distribution: &impl ProbabilityDistribu
 /// - Returns an error if the argument `alpha` is not in the range \[0, 1\].
 ///
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Expected_shortfall
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Expected_shortfall>
 /// - Original Source: N/A
+///
+/// # Examples
+///
+/// ```rust
+/// use ndarray::arr1;
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::statistics::{ProbabilityDistribution, NormalDistribution};
+/// use digifi::portfolio_applications::expected_shortfall;
+///
+/// let norm_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0).unwrap();
+///
+/// let es: f64 = expected_shortfall(0.1, &norm_dist).unwrap();
+///
+/// let theor: f64 = (-norm_dist.inverse_cdf(&arr1(&[0.1])).unwrap()[0].powi(2) / 2.0).exp() / (2.0 * std::f64::consts::PI).sqrt() / 0.1;
+/// assert!((es - theor).abs() < 10_000_000.0 * TEST_ACCURACY);
+/// ```
 pub fn expected_shortfall(alpha: f64, returns_distribution: &impl ProbabilityDistribution) -> Result<f64, Error> {
     if (alpha < 0.0) || (1.0 < alpha) {
         return Err(input_error("Expected Shortfall: The argument alpha must be in the range [0, 1]."));

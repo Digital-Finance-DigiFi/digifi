@@ -1,6 +1,5 @@
 use std::io::Error;
 use ndarray::Array1;
-use num::Signed;
 use crate::utilities::{input_error, other_error};
 use crate::random_generators::{RandomGenerator, generate_seed, uniform_generators::FibonacciGenerator};
 use crate::random_generators::generator_algorithms::{accept_reject, inverse_transform, box_muller, marsaglia, ziggurat};
@@ -14,8 +13,23 @@ use crate::statistics::ProbabilityDistribution;
 /// It samples the Laplace distribution to generate the standard normal distribution (i.e., exponential tilting).
 /// 
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Rejection_sampling
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Rejection_sampling>
 /// - Original Source: N/A
+///
+/// # Examples
+///
+/// ```rust
+/// use ndarray::Array1;
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::statistics::covariance;
+/// use digifi::random_generators::{RandomGenerator, StandardNormalAcceptReject};
+///
+/// let snar: StandardNormalAcceptReject = StandardNormalAcceptReject::new_shuffle(100_000).unwrap();
+/// let sample: Array1<f64> = snar.generate().unwrap();
+///
+/// assert!((sample.mean().unwrap() - 0.0).abs() < 1_000_000.0 * TEST_ACCURACY);
+/// assert!((covariance(&sample, &sample, 0).unwrap() - 1.0).abs() < 30_000_000.0 * TEST_ACCURACY);
+/// ```
 pub struct StandardNormalAcceptReject {
     /// The maximum size of the sample to generate
     max_sample_size: usize,
@@ -29,7 +43,7 @@ pub struct StandardNormalAcceptReject {
 
 impl StandardNormalAcceptReject {
     /// # Description
-    /// Creates a new StandardNormalAcceptReject instance.
+    /// Creates a new `StandardNormalAcceptReject` instance.
     /// 
     /// # Input
     /// - `sample_size`: The maximum size of the sample to generate
@@ -38,7 +52,7 @@ impl StandardNormalAcceptReject {
     /// - `seed_2`: Seed for the second random number generator
     /// 
     /// # Errors
-    /// - Returns an error if the argument `lap_b` is not positive
+    /// - Returns an error if the argument `lap_b` is not positive.
     pub fn new(max_sample_size: usize, lap_b: f64, seed_1: u32, seed_2: u32) -> Result<Self, Error> {
         if lap_b <= 0.0 {
             return Err(input_error("Accept-Reject Algorithm: The argument lap_b must be positive."));
@@ -49,7 +63,7 @@ impl StandardNormalAcceptReject {
 
 impl RandomGenerator<StandardNormalAcceptReject> for StandardNormalAcceptReject {
     /// # Description
-    /// Creates a new StandardNormalAcceptReject instance with random parameters.
+    /// Creates a new `StandardNormalAcceptReject` instance with random parameters.
     /// 
     /// # Input
     /// - `sample_size`: The maximum size of the sample to generate
@@ -69,7 +83,7 @@ impl RandomGenerator<StandardNormalAcceptReject> for StandardNormalAcceptReject 
         // Laplace distribution sampling.
         let laplace_dist: LaplaceDistribution = LaplaceDistribution::new(0.0, self.lap_b)?;
         let l: Array1<f64> = laplace_dist.inverse_cdf(&u_1)?
-            .map(|i| { if i.is_infinite() && i.is_positive() { 1.0 } else if i.is_infinite() && i.is_negative() { 0.0 } else { *i } });
+            .map(|i| { if i.is_infinite() && i.is_sign_positive() { 1.0 } else if i.is_infinite() && i.is_sign_negative() { 0.0 } else { *i } });
         // Accept-Reject algorithm.
         let standard_normal_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0)?;
         accept_reject(&standard_normal_dist, &laplace_dist, &l, m, &u_2)
@@ -83,8 +97,23 @@ impl RandomGenerator<StandardNormalAcceptReject> for StandardNormalAcceptReject 
 /// It returns the array of values from sampling an inverse CDF.
 /// 
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Inverse_transform_sampling
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Inverse_transform_sampling>
 /// - Original Source: N/A
+///
+/// # Examples
+///
+/// ```rust
+/// use ndarray::Array1;
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::statistics::covariance;
+/// use digifi::random_generators::{RandomGenerator, StandardNormalInverseTransform};
+///
+/// let snit: StandardNormalInverseTransform = StandardNormalInverseTransform::new_shuffle(100_000).unwrap();
+/// let sample: Array1<f64> = snit.generate().unwrap();
+///
+/// assert!((sample.mean().unwrap() - 0.0).abs() < 1_000_000.0 * TEST_ACCURACY);
+/// assert!((covariance(&sample, &sample, 0).unwrap() - 1.0).abs() < 30_000_000.0 * TEST_ACCURACY);
+/// ```
 pub struct StandardNormalInverseTransform {
     /// Number of random samples to generate
     sample_size: usize,
@@ -92,7 +121,7 @@ pub struct StandardNormalInverseTransform {
 
 impl StandardNormalInverseTransform {
     /// # Description
-    /// Creates a new StandardNormalAcceptReject instance.
+    /// Creates a new `StandardNormalInverseTransform` instance.
     /// 
     /// # Input
     /// - `sample_size`: Number of random samples to generate
@@ -103,7 +132,7 @@ impl StandardNormalInverseTransform {
 
 impl RandomGenerator<StandardNormalInverseTransform> for StandardNormalInverseTransform {
     /// # Description
-    /// Creates a new StandardNormalInverseTransform instance.
+    /// Creates a new `StandardNormalInverseTransform` instance.
     /// 
     /// # Input
     /// - `sample_size`: Number of pseudo-random numbers to generate
@@ -134,8 +163,23 @@ impl RandomGenerator<StandardNormalInverseTransform> for StandardNormalInverseTr
 /// - U_{1}, U_{2} are independent uniform random variables
 /// 
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Box–Muller_transform
-/// - Original Source: https://doi.org/10.1214%2Faoms%2F1177706645
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Box–Muller_transform>
+/// - Original Source: <https://doi.org/10.1214%2Faoms%2F1177706645>
+///
+/// # Examples
+///
+/// ```rust
+/// use ndarray::Array1;
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::statistics::covariance;
+/// use digifi::random_generators::{RandomGenerator, StandardNormalBoxMuller};
+///
+/// let snbm: StandardNormalBoxMuller = StandardNormalBoxMuller::new_shuffle(100_000).unwrap();
+/// let sample: Array1<f64> = snbm.generate().unwrap();
+///
+/// assert!((sample.mean().unwrap() - 0.0).abs() < 30_000_000.0 * TEST_ACCURACY);
+/// assert!((covariance(&sample, &sample, 0).unwrap() - 1.0).abs() < 30_000_000.0 * TEST_ACCURACY);
+/// ```
 pub struct StandardNormalBoxMuller {
     /// Number of random samples to generate
     sample_size: usize,
@@ -147,7 +191,7 @@ pub struct StandardNormalBoxMuller {
 
 impl StandardNormalBoxMuller {
     /// # Description
-    /// Creates a new StandardNormalBoxMuller instance.
+    /// Creates a new `StandardNormalBoxMuller` instance.
     /// 
     /// # Input
     /// - `sample_size`: Number of random samples to generate
@@ -160,7 +204,7 @@ impl StandardNormalBoxMuller {
 
 impl RandomGenerator<StandardNormalBoxMuller> for StandardNormalBoxMuller {
     /// # Description
-    /// Creates a new StandardNormalBoxMuller instance with random parameters.
+    /// Creates a new `StandardNormalBoxMuller` instance with random parameters.
     /// 
     /// # Input
     /// - `sample_size`: Number of pseudo-random numbers to generate
@@ -194,8 +238,23 @@ impl RandomGenerator<StandardNormalBoxMuller> for StandardNormalBoxMuller {
 /// - Z_{1} = W_{2} \\sqrt{\\frac{-2ln(S)}{S}}
 /// 
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Marsaglia_polar_method
-/// - Original Source: https://doi.org/10.1137%2F1006063
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Marsaglia_polar_method>
+/// - Original Source: <https://doi.org/10.1137%2F1006063>
+///
+/// # Examples
+///
+/// ```rust
+/// use ndarray::Array1;
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::statistics::covariance;
+/// use digifi::random_generators::{RandomGenerator, StandardNormalMarsaglia};
+///
+/// let snm: StandardNormalMarsaglia = StandardNormalMarsaglia::new_shuffle(10_000).unwrap();
+/// let sample: Array1<f64> = snm.generate().unwrap();
+///
+/// assert!((sample.mean().unwrap() - 0.0).abs() < 100_000_000.0 * TEST_ACCURACY);
+/// assert!((covariance(&sample, &sample, 0).unwrap() - 1.0).abs() < 100_000_000.0 * TEST_ACCURACY);
+/// ```
 pub struct StandardNormalMarsaglia {
     /// Number of random samples to generate
     sample_size: usize,
@@ -205,7 +264,7 @@ pub struct StandardNormalMarsaglia {
 
 impl StandardNormalMarsaglia {
     /// # Description
-    /// Creates a new StandardNormalMarsaglia instance.
+    /// Creates a new `StandardNormalMarsaglia` instance.
     /// 
     /// # Input
     /// - `sample_size`: Number of random samples to generate
@@ -217,7 +276,7 @@ impl StandardNormalMarsaglia {
 
 impl RandomGenerator<StandardNormalMarsaglia> for StandardNormalMarsaglia {
     /// # Description
-    /// Creates a new StandardNormalMarsaglia instance with random parameters.
+    /// Creates a new `StandardNormalMarsaglia` instance with random parameters.
     /// 
     /// # Input
     /// - `sample_size`: Number of pseudo-random numbers to generate
@@ -246,8 +305,21 @@ impl RandomGenerator<StandardNormalMarsaglia> for StandardNormalMarsaglia {
 /// Pseudo-random number generator for standard normal distribution.
 /// 
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Ziggurat_algorithm
-/// - Original Source: https://doi.org/10.1145/1464291.1464310
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Ziggurat_algorithm>
+/// - Original Source: <https://doi.org/10.1145/1464291.1464310>
+///
+/// # Examples
+///
+/// ```rust
+/// use ndarray::Array1;
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::random_generators::{RandomGenerator, StandardNormalZiggurat};
+///
+/// let snz: StandardNormalZiggurat = StandardNormalZiggurat::new_shuffle(1_000).unwrap();
+/// let sample: Array1<f64> = snz.generate().unwrap();
+///
+/// assert!((sample.mean().unwrap() - 0.0).abs() < 10_000_000.0 * TEST_ACCURACY);
+/// ```
 pub struct StandardNormalZiggurat {
     /// Number of random samples to generate
     sample_size: usize,
@@ -263,7 +335,7 @@ pub struct StandardNormalZiggurat {
 
 impl StandardNormalZiggurat {
     /// # Description
-    /// Creates a new StandardNormalZiggurat instance.
+    /// Creates a new `StandardNormalZiggurat` instance.
     /// 
     /// # Input
     /// - `sample_size`: Number of random samples to generate
@@ -276,7 +348,7 @@ impl StandardNormalZiggurat {
 
 impl RandomGenerator<StandardNormalZiggurat> for StandardNormalZiggurat {
     /// # Description
-    /// Creates a new StandardNormalZiggurat instance with random parameters.
+    /// Creates a new `StandardNormalZiggurat` instance with random parameters.
     /// 
     /// # Input
     /// - `sample_size`: Number of pseudo-random numbers to generate
@@ -286,6 +358,8 @@ impl RandomGenerator<StandardNormalZiggurat> for StandardNormalZiggurat {
 
     /// # Description
     /// Array of pseudo-random generated numbers based on the Ziggurat Algorithm.
+    ///
+    /// Note: This version of Ziggurat algorithm does not implement a fallback algorithm for the tail.
     /// 
     /// # Output
     /// - An array of pseudo-random numbers following a standard normal distribution
@@ -338,8 +412,8 @@ mod tests {
     fn unit_test_box_muller() -> () {
         use crate::random_generators::standard_normal_generators::StandardNormalBoxMuller;
         use crate::statistics::covariance;
-        let snit: StandardNormalBoxMuller = StandardNormalBoxMuller::new_shuffle(100_000).unwrap();
-        let sample: Array1<f64> = snit.generate().unwrap();
+        let snbm: StandardNormalBoxMuller = StandardNormalBoxMuller::new_shuffle(100_000).unwrap();
+        let sample: Array1<f64> = snbm.generate().unwrap();
         assert!((sample.mean().unwrap() - 0.0).abs() < 30_000_000.0 * TEST_ACCURACY);
         assert!((covariance(&sample, &sample, 0).unwrap() - 1.0).abs() < 30_000_000.0 * TEST_ACCURACY);
     }
@@ -348,8 +422,8 @@ mod tests {
     fn unit_test_marsaglia() -> () {
         use crate::random_generators::standard_normal_generators::StandardNormalMarsaglia;
         use crate::statistics::covariance;
-        let snit: StandardNormalMarsaglia = StandardNormalMarsaglia::new_shuffle(10_000).unwrap();
-        let sample: Array1<f64> = snit.generate().unwrap();
+        let snm: StandardNormalMarsaglia = StandardNormalMarsaglia::new_shuffle(10_000).unwrap();
+        let sample: Array1<f64> = snm.generate().unwrap();
         assert!((sample.mean().unwrap() - 0.0).abs() < 100_000_000.0 * TEST_ACCURACY);
         assert!((covariance(&sample, &sample, 0).unwrap() - 1.0).abs() < 100_000_000.0 * TEST_ACCURACY);
     }
@@ -357,12 +431,8 @@ mod tests {
     #[test]
     fn unit_test_ziggurat() -> () {
         use crate::random_generators::standard_normal_generators::StandardNormalZiggurat;
-        use crate::statistics::covariance;
-        let snit: StandardNormalZiggurat = StandardNormalZiggurat::new_shuffle(1_000).unwrap();
-        let sample: Array1<f64> = snit.generate().unwrap();
-        println!("{} \t {}", sample.mean().unwrap(), covariance(&sample, &sample, 0).unwrap());
-        // TODO: Debug Ziggurat results
-        // assert!((sample.mean().unwrap() - 0.0).abs() < 30_000_000.0 * TEST_ACCURACY);
-        // assert!((covariance(&sample, &sample, 0) - 1.0).abs() < 30_000_000.0 * TEST_ACCURACY);
+        let snz: StandardNormalZiggurat = StandardNormalZiggurat::new_shuffle(1_000).unwrap();
+        let sample: Array1<f64> = snz.generate().unwrap();
+        assert!((sample.mean().unwrap() - 0.0).abs() < 10_000_000.0 * TEST_ACCURACY);
     }
 }

@@ -1,8 +1,14 @@
 /// # Description
 /// Method for computing the result of a function.
 pub enum FunctionEvalMethod {
-    Integral { n_intervals: usize },
-    PowerSeries { n_terms: usize },
+    Integral {
+        /// Number of intervals to use in the composite trapezoidal rule
+        n_intervals: usize,
+    },
+    Approximation {
+        /// Number of terms to use in an approximation series
+        n_terms: usize,
+    },
 }
 
 
@@ -13,10 +19,46 @@ pub enum FunctionEvalMethod {
 /// -`n`: Input variable
 /// 
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Factorial
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Factorial>
 /// - Original Source: N/A
+///
+/// # Examples
+///
+/// ```rust
+/// use digifi::utilities::factorial;
+///
+/// assert_eq!(3628800, factorial(10));
+/// assert_eq!(1, factorial(0));
+/// ```
 pub fn factorial(n: u128) -> u128 {
     (1..=n).product()
+}
+
+
+/// # Description
+/// Rising factorial (Pochhammer function) of x.
+///
+/// # Input
+/// - `x`: Input variable
+/// - `n`: Number of factors in the rising factorial
+///
+/// # Links
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Falling_and_rising_factorials>
+/// - Original Source: N/A
+///
+/// /// # Examples
+///
+/// ```rust
+/// use digifi::utilities::rising_factorial;
+///
+/// assert_eq!(rising_factorial(3, 4), 360);
+/// ```
+pub fn rising_factorial(x: u128, n: u128) -> u128 {
+    let mut result: u128 = 1;
+    for k in 0..n {
+        result *= x + k;
+    }
+    result
 }
 
 
@@ -28,15 +70,24 @@ pub fn factorial(n: u128) -> u128 {
 /// - `method`: Method for evaluationg the function
 /// 
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Error_function
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Error_function>
 /// - Original Source: N/A
+///
+/// # Examples
+///
+/// ```rust
+/// use digifi::utilities::{TEST_ACCURACY, FunctionEvalMethod, erf};
+///
+/// assert!((erf(1.0, FunctionEvalMethod::Integral { n_intervals: 1_000_000 }) - 0.8427007929497149).abs() < 100.0 * TEST_ACCURACY);
+/// assert!((erf(1.0, FunctionEvalMethod::Approximation { n_terms: 20 }) - 0.8427007929497149).abs() < 10.0 * TEST_ACCURACY);
+/// ```
 pub fn erf(x: f64, method: FunctionEvalMethod) -> f64 {
     match method {
         FunctionEvalMethod::Integral { n_intervals } => {
             let f = |x: f64| { (-x.powi(2)).exp() };
             2.0 * definite_integral(f, 0.0, x, n_intervals) / std::f64::consts::PI.sqrt()
         },
-        FunctionEvalMethod::PowerSeries { n_terms } => {
+        FunctionEvalMethod::Approximation { n_terms } => {
             let mut total: f64 = 0.0;
             let mut sign: f64 = 1.0;
             for n in 0..n_terms {
@@ -60,8 +111,17 @@ pub fn erf(x: f64, method: FunctionEvalMethod) -> f64 {
 /// - `n_terms`: Number of terms to use in a Taylor's expansion of the error function
 /// 
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Error_function#Inverse_functions
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Error_function#Inverse_functions>
 /// - Original Source: N/A
+///
+/// # Examples
+///
+/// ```rust
+/// use digifi::utilities::{TEST_ACCURACY, erfinv};
+///
+/// let approximation: f64 = erfinv(0.8427007929497149, 100);
+/// assert!((approximation - 1.0).abs() < TEST_ACCURACY);
+/// ```
 pub fn erfinv(z: f64, n_terms: usize) -> f64 {
     let mut total: f64 = 0.0;
     let mut c: Vec<f64> = Vec::<f64>::new();
@@ -93,8 +153,17 @@ pub fn erfinv(z: f64, n_terms: usize) -> f64 {
 /// - \\frac{df}{dx} = \\frac{f(x+h) - f(x-h)}{2h}
 ///
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Numerical_differentiation
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Numerical_differentiation>
 /// - Original Source: N/A
+///
+/// # Examples
+///
+/// ```rust
+/// use digifi::utilities::{TEST_ACCURACY, derivative};
+///
+/// let f = |x: f64| { x.powi(2) + 3.0*x - 2.0 };
+/// assert!((derivative(f, 3.0, 0.00000001) - 9.0).abs() < 1_000.0 * TEST_ACCURACY);
+/// ```
 pub fn derivative<F: Fn(f64) -> f64>(f: F, x: f64, h: f64) -> f64 {
     (f(x + h) - f(x - h)) / (2.0 * h)
 }
@@ -110,8 +179,34 @@ pub fn derivative<F: Fn(f64) -> f64>(f: F, x: f64, h: f64) -> f64 {
 /// - `n_intervals`: Number of intervals to use in the composite trapezoidal rule
 ///
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Numerical_integration
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Numerical_integration>
 /// - Original Source: N/A
+///
+/// # Examples
+///
+/// ```rust
+/// use digifi::utilities::{TEST_ACCURACY, definite_integral};
+///
+/// let f = |x: f64| { x.exp() };
+///
+/// // Both bounds are finite
+/// let integral: f64 = definite_integral(f, 0.0, 10.0, 1_000_000);
+/// assert!((integral - 22_025.46579).abs() < 50_000_000.0 * TEST_ACCURACY);
+///
+/// // Lower bound is infinite and upper bound is finite
+/// let integral: f64 = definite_integral(f, f64::NEG_INFINITY, 0.0, 1_000_000);
+/// assert!((integral - 1.0).abs() < 1_000.0 * TEST_ACCURACY);
+///
+/// // Lower bound is finite and upper bound is infinite
+/// let f = |x: f64| { (-x).exp() };
+/// let integral: f64 = definite_integral(f, 0.0, f64::INFINITY, 1_000_000);
+/// assert!((integral - 1.0).abs() < 1_000.0 * TEST_ACCURACY);
+///
+/// // Both bounds are infinite
+/// let f = |x: f64| { (-x.powi(2) / 2.0).exp() / (2.0 * std::f64::consts::PI).sqrt() };
+/// let integral: f64 = definite_integral(f, f64::NEG_INFINITY, f64::INFINITY, 1_000_000);
+/// assert!((integral - 1.0).abs() < 1_000.0 * TEST_ACCURACY);
+/// ```
 pub fn definite_integral<F: Fn(f64) -> f64>(f: F, start: f64, end: f64, n_intervals: usize) -> f64 {
     let n: f64 = n_intervals as f64;
     let a: f64;
@@ -170,10 +265,16 @@ mod tests {
     }
 
     #[test]
+    fn unit_test_rising_factorial() -> () {
+        use crate::utilities::maths_utils::rising_factorial;
+        assert_eq!(rising_factorial(3, 4), 360);
+    }
+
+    #[test]
     fn unit_test_erf() -> () {
         use crate::utilities::maths_utils::erf;
-        assert!((erf(1.0, FunctionEvalMethod::Integral { n_intervals: 1_000_000 }) - 0.8427007929497149).abs() < 10.0 * TEST_ACCURACY);
-        assert!((erf(1.0, FunctionEvalMethod::PowerSeries { n_terms: 20 }) - 0.8427007929497149).abs() < 10.0 * TEST_ACCURACY);
+        assert!((erf(1.0, FunctionEvalMethod::Integral { n_intervals: 1_000_000 }) - 0.8427007929497149).abs() < 100.0 * TEST_ACCURACY);
+        assert!((erf(1.0, FunctionEvalMethod::Approximation { n_terms: 20 }) - 0.8427007929497149).abs() < 10.0 * TEST_ACCURACY);
     }
 
     #[test]

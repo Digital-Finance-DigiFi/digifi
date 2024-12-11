@@ -1,7 +1,15 @@
+// Re-Exports
+pub use self::portfolio_performance::{PortfolioPerformanceMetric, SharpeRatio, InformationRatio, TreynorRatio, JensensAlpha, SortinoRatio};
+pub use self::risk_measures::{value_at_risk, expected_shortfall};
+pub use self::utility_functions::{cara, crra};
+pub use self::portfolio_composition::{AssetReturnsType, PortfolioReturnsType, PortfolioOptimizationResult, EfficientFrontier, Asset, generate_portfolio, Portfolio};
+
+
 pub mod portfolio_performance;
-pub mod portfolio_taxonomy;
+// pub mod portfolio_taxonomy;
 pub mod risk_measures;
 pub mod utility_functions;
+pub mod portfolio_composition;
 
 
 use std::io::Error;
@@ -10,23 +18,13 @@ use crate::utilities::{compare_array_len, data_error, other_error};
 use crate::statistics::covariance;
 
 
+/// # Description
+/// Type of returns calculation.
 pub enum ReturnsMethod {
+    /// Computes returns of the mean returns per interval of the time series (e.g., average daily returns) and then extrapolates it over a specified period
     ImpliedAverageReturn,
+    /// Computes compounded return of the time series and then reduces it to the specified period
     EstimatedFromTotalReturn,
-}
-
-
-pub enum ArrayReturnsFormat {
-    ReturnsOfAssets,
-    WeightedReturnsOfAssets,
-    PortfolioReturns,
-    CumulativePortfolioReturns,
-}
-
-
-pub enum PortfolioOptimizationResultFormat {
-    Value,
-    Weights,
 }
 
 
@@ -44,15 +42,15 @@ pub struct AssetHistData {
 
 impl AssetHistData {
     /// # Description
-    /// Creates a new AssetHistData instance.
+    /// Creates a new `AssetHistData` instance.
     /// 
     /// # Input
-    /// - price_array: Historical price series of the instrument
-    /// - predictable_income: An array of preditable income readings (e.g., dividends for stocks, copouns for bonds, overnight fees, etc.)
-    /// - time_array: An array of time accompanying the price series
+    /// - `price_array`: Historical price series of the instrument
+    /// - `predictable_income`: An array of preditable income readings (e.g., dividends for stocks, copouns for bonds, overnight fees, etc.)
+    /// - `time_array`: An array of time accompanying the price series
     /// 
     /// # Errors
-    /// - Returns an error if the length of price_array, predictable_income and/or time_array do not match
+    /// - Returns an error if the length of `price_array`, `predictable_income` and/or `time_array` do not match.
     pub fn new(price_array: Array1<f64>, predictable_income: Array1<f64>, time_array: Array1<f64>) -> Result<Self, Error> {
         compare_array_len(&price_array, &predictable_income, "price_array", "predictable_income")?;
         compare_array_len(&price_array, &time_array, "price_array", "time_array")?;
@@ -63,11 +61,11 @@ impl AssetHistData {
     /// Validation method for an index.
     /// 
     /// # Input
-    /// - index: Time index beyond which no data will be returned
-    /// - index_lable: Label of the index that will be included in the error message
+    /// - `index`: Time index beyond which no data will be returned
+    /// - `index_lable`: Label of the index that will be included in the error message
     /// 
     /// # Errors
-    /// - Returns an error if the index provided is out of bounds for the price array
+    /// - Returns an error if the index provided is out of bounds for the price array.
     fn validate_index(&self, index: usize, index_label: &str) -> Result<(), Error> {
         if self.price_array.len() < index {
             return Err(data_error(format!("AssetHistData: The argument {} is out of range for price array of length {}.", index_label, self.price_array.len())));
@@ -76,19 +74,27 @@ impl AssetHistData {
     }
 
     /// # Description
+    /// Returns the number of datapoints in the price time series.
+    ///
+    /// Note: Predictable income and time arrays will have the same length as the price array.
+    pub fn get_n_datapoints(&self) -> usize {
+        self.price_array.len()
+    }
+
+    /// # Description
     /// Safe method for working with historical price data.
     /// 
     /// This method prevents the user from using the future prices based on the indices value provided.
     /// 
     /// # Input
-    /// - end_index: Time index beyond which no data will be returned
-    /// - start_index: Time index below which no data will be returned
+    /// - `end_index`: Time index beyond which no data will be returned
+    /// - `start_index`: Time index below which no data will be returned
     /// 
     /// # Output
     /// - Historical and/or current prices(s)
     /// 
     /// # Errors
-    /// - Returns an error if the index provided is out of bounds for the price array
+    /// - Returns an error if the index provided is out of bounds for the price array.
     pub fn get_price(&self, end_index: usize, start_index: Option<usize>) -> Result<Array1<f64>, Error> {
         self.validate_index(end_index, "end_index")?;
         let mut start_index_: usize = 0;
@@ -106,13 +112,19 @@ impl AssetHistData {
     }
 
     /// # Description
+    /// Returns the entire price time series.
+    pub fn get_price_all(&self) -> Array1<f64> {
+        self.price_array.clone()
+    }
+
+    /// # Description
     /// Safe method for working with historical predictable income data.
     /// 
     /// This method prevents the user from using the future predictable incomes based on the indices value provided.
     /// 
     /// # Input
-    /// - end_index: Time index beyond which no data will be returned
-    /// - start_index: Time index below which no data will be returned
+    /// - `end_index`: Time index beyond which no data will be returned
+    /// - `start_index`: Time index below which no data will be returned
     /// 
     /// # Output
     /// - Historical and/or current predictable income(s)
@@ -131,24 +143,26 @@ impl AssetHistData {
         }
         Ok(self.predictable_income.slice(s![start_index_..end_index]).to_owned())
     }
+
+    /// # Description
+    /// Returns the entire predictable income time series.
+    pub fn get_predictable_income_all(&self) -> Array1<f64> {
+        self.predictable_income.clone()
+    }
 }
 
 
 /// # Description
-/// Calculate the volatility of a price array from historical data.
-/// 
-/// Note: There must be fixed time intervals between prices, and the distribution of prices is considered to be log-normal.
-/// 
-/// # Input
-/// - price_array: Price time series
-/// - n_periods: Number of periods used to estimate the volatility over (e.g., for daily prices n_periods=252 produces annualized volatility)
-/// 
-/// # Output
-/// - Volatility of price over a certain period
-pub fn price_volatility(price_array: &Array1<f64>, n_periods: usize) -> Result<f64, Error> {
-    let log_price_diff: Array1<f64> = price_array.slice(s![1..]).map(|x| x.ln()) - price_array.slice(s![0..(price_array.len()-1)]).map(|x| x.ln());
-    let std: f64 = covariance(&log_price_diff, &log_price_diff, 0)?.sqrt();
-    Ok(std * (n_periods as f64).sqrt())
+/// Provides access to the historical data of the financial instrument.
+pub trait PortfolioInstrument {
+
+    /// # Description
+    /// Returns asset name/label.
+    fn asset_name(&self) -> String;
+
+    /// # Description
+    /// Returns the historical data about the financial instrument.
+    fn historical_data(&self) -> &AssetHistData;
 }
 
 
@@ -156,10 +170,22 @@ pub fn price_volatility(price_array: &Array1<f64>, n_periods: usize) -> Result<f
 /// Convert an array of prices to an array of returns.
 /// 
 /// # Input
-/// - price_array: Price time series
+/// - `price_array`: Price time series
 /// 
 /// # Output
 /// - Time series of returns
+///
+/// # Examples
+///
+/// ```rust
+/// use ndarray::Array1;
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::portfolio_applications::prices_to_returns;
+///
+/// let price_array: Array1<f64> = Array1::from_vec(vec![100.0, 101.0, 102.0, 101.0, 103.0, 102.0]);
+/// let result: Array1<f64> = prices_to_returns(&price_array);
+///
+/// assert!((result - Array1::from_vec(vec![0.0, 0.01, 1.0/101.0, -1.0/102.0, 2.0/101.0, -1.0/103.0])).sum().abs() < TEST_ACCURACY);
 pub fn prices_to_returns(price_array: &Array1<f64>) -> Array1<f64> {
     let price_diff: Array1<f64> = &price_array.slice(s![1..(price_array.len())]) - &price_array.slice(s![0..(price_array.len()-1)]);
     let returns: Array1<f64> = price_diff / price_array.slice(s![0..(price_array.len()-1)]);
@@ -171,13 +197,13 @@ pub fn prices_to_returns(price_array: &Array1<f64>) -> Array1<f64> {
 /// Calculate the average return of a price array.
 /// 
 /// # Input
-/// - price_array: Price time series
-/// - method: Method for computing the returns
-/// - n_periods: Number of periods used to estimate the average over (e.g., for daily prices n_periods=252 produces annualized average)
+/// - `price_array`: Price time series
+/// - `method`: Method for computing the returns
+/// - `n_periods`: Number of periods used to estimate the average over (e.g., for daily prices n_periods=252 produces annualized average)
 /// 
 /// # Output
 /// - Average return over a certain period
-pub fn returns_average(price_array: &Array1<f64>, method: ReturnsMethod, n_periods: usize) -> Result<f64, Error> {
+pub fn returns_average(price_array: &Array1<f64>, method: &ReturnsMethod, n_periods: usize) -> Result<f64, Error> {
     let returns: Array1<f64> = prices_to_returns(price_array);
     match method {
         ReturnsMethod::ImpliedAverageReturn => {
@@ -195,8 +221,8 @@ pub fn returns_average(price_array: &Array1<f64>, method: ReturnsMethod, n_perio
 /// Calculate the standard deviation of the returns of a price array.
 /// 
 /// # Input
-/// - price_array: Price time series
-/// - n_periods: Number of periods used to estimate the standard deviation over (e.g., for daily prices n_periods=252 produces annualized standard deviation)
+/// - `price_array`: Price time series
+/// - `n_periods`: Number of periods used to estimate the standard deviation over (e.g., for daily prices n_periods=252 produces annualized standard deviation)
 /// 
 /// # Output
 /// - Standard deviation of returns over a certain period
@@ -211,8 +237,8 @@ pub fn returns_std(price_array: &Array1<f64>, n_periods: usize) -> Result<f64, E
 /// Calculate the variance of the returns of a price array.
 /// 
 /// # Input
-/// - price_array: Price time series
-/// - n_periods: Number of periods used to estimate the variance over (e.g., for daily prices n_periods=252 produces annualized variance)
+/// - `price_array`: Price time series
+/// - `n_periods`: Number of periods used to estimate the variance over (e.g., for daily prices n_periods=252 produces annualized variance)
 /// 
 /// # Output
 /// - Variance of returns over a certain period
@@ -226,15 +252,6 @@ pub fn returns_variance(price_array: &Array1<f64>, n_periods: usize) -> Result<f
 mod tests {
     use ndarray::Array1;
     use crate::utilities::TEST_ACCURACY;
-
-    #[test]
-    fn unit_test_price_volatility() -> () {
-        use crate::portfolio_applications::price_volatility;
-        let price_array: Array1<f64> = Array1::from_vec(vec![100.0, 101.0, 102.0, 101.0, 103.0, 102.0]);
-        let vol: f64 = price_volatility(&price_array, 252).unwrap();
-        // The result was found using alternative Python code
-        assert!((vol - 0.18707565202263976).abs() < TEST_ACCURACY);
-    }
 
     #[test]
     fn unit_test_prices_to_returns() -> () {

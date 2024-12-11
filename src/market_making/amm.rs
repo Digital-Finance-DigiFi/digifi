@@ -1,7 +1,15 @@
 use std::io::Error;
-use std::collections::HashMap;
 use ndarray::Array1;
 use crate::utilities::{input_error, data_error};
+
+
+/// Liquidity curve data for the AMM.
+pub struct LiquidityCurve {
+    /// x-axis of the liquidity curve
+    pub x: Array1<f64>,
+    /// y-axis of the liquidity curve
+    pub y: Array1<f64>,
+}
 
 
 #[derive(Clone)]
@@ -20,7 +28,7 @@ pub struct AMMToken {
 
 
 /// # Description
-/// Liquidity data for an AMM.
+/// Liquidity data for the `AMM`.
 /// 
 /// Characteristic Number = Token 1 Supply * Token 2 Supply
 /// 
@@ -35,17 +43,17 @@ pub struct AMMLiquidityPool {
 
 impl AMMLiquidityPool {
     /// # Description
-    /// Creates a new AMMLiquidityPool instance.
+    /// Creates a new `AMMLiquidityPool` instance.
     /// 
     /// # Input
-    /// - token_1: Token 1 data
-    /// - token_2: Token 2 data
-    /// - char_number: Characteristic number
-    /// - tolerance: Error margin for computing validating token supplies
+    /// - `token_1`: Token 1 data
+    /// - `token_2`: Token 2 data
+    /// - `char_number`: Characteristic number
+    /// - `tolerance`: Error margin for computing validating token supplies
     /// 
     /// # Errors
-    /// - Returns an error if the characteristic number is not positive
-    /// - Returns an error if the product of supplies of the two tokens do not equal to the characteristic number
+    /// - Returns an error if the characteristic number is not positive.
+    /// - Returns an error if the product of supplies of the two tokens do not equal to the characteristic number.
     pub fn new(token_1: AMMToken, token_2: AMMToken, char_number: f64, tolerance: f64) -> Result<Self, Error> {
         if char_number <= 0.0 {
             return Err(input_error("AMM Liquidity Pool: The argument char_number must be positive."));
@@ -72,12 +80,12 @@ impl AMMLiquidityPool {
     /// Updates the state of the liquidity pool while preserving the characteristic number
     /// 
     /// # Input
-    /// - token_1: Token 1 updated data
-    /// - token_2: Token 2 updated data
+    /// - `token_1`: Token 1 updated data
+    /// - `token_2`: Token 2 updated data
     /// 
     /// # Errors
-    /// - Returns an error if the product of updated supplies of the two tokens do not equal to the characteristic number
-    /// - Returns an error if the wrong id for either `token_1` or `token_2` are provided
+    /// - Returns an error if the product of updated supplies of the two tokens do not equal to the characteristic number.
+    /// - Returns an error if the wrong id for either `token_1` or `token_2` are provided.
     pub fn update_token_supply(&mut self, token_1: AMMToken, token_2: AMMToken) -> Result<(), Error> {
         if self.tolerance < ((token_1.supply * token_2.supply) - self.char_number).abs() {
             return Err(data_error("AMM Liquidity Pool: The argument char_number must be the product of supplies of the tokens."));
@@ -131,6 +139,17 @@ impl AMMTransactionData {
 }
 
 
+/// Receipt of the transaction on the AMM.
+pub struct AMMTransactionResult {
+    /// Amount of token that has to be sold to the AMM in exchange for the token being purchased
+    pub quantity_to_sell: f64,
+    /// Exchange rate produced by the AMM
+    pub exchange_price: f64,
+    /// Transaction fee that has to be paid quoted in quantity of purchased token (e.g., fee is `2.1` Purchased Tokens)
+    pub fee_in_purchased_token: f64,
+}
+
+
 /// # Description
 /// Contains computational methods for an AMM with the liquidity pool given by:
 /// 
@@ -141,31 +160,56 @@ impl AMMTransactionData {
 /// 
 /// # Links
 /// - Wikipedia: N/A
-/// - Original Source: https://doi.org/10.48550/arXiv.2106.14404
+/// - Original Source: <https://doi.org/10.48550/arXiv.2106.14404>
+///
+/// # Examples
+///
+/// ```rust
+/// use digifi::market_making::{AMMToken, AMMLiquidityPool, AMMTransactionData, AMMTransactionResult, SimpleAMM};
+///
+/// let token_1: AMMToken = AMMToken { id: String::from("BTC"), supply: 10.0, fee_lower_bound: 0.0, fee_upper_bound: 0.03  };
+/// let token_2: AMMToken = AMMToken { id: String::from("ETH"), supply: 1_000.0, fee_lower_bound: 0.0, fee_upper_bound: 0.03  };
+/// let liquidity_pool: AMMLiquidityPool = AMMLiquidityPool::new(token_1, token_2, 10_000.0, 0.00001).unwrap();
+/// let tx_data: AMMTransactionData = AMMTransactionData::new(String::from("BTC"), 1.0, 0.01).unwrap();
+///
+/// let mut amm: SimpleAMM = SimpleAMM::new(liquidity_pool);
+/// let receipt: AMMTransactionResult = amm.make_transaction(tx_data).unwrap();
+///
+/// assert_eq!(receipt.quantity_to_sell, 10_000.0/8.99 - 1_000.0);
+/// assert_eq!(receipt.exchange_price, (10_000.0/8.99) / 8.99);
+/// ```
 pub struct SimpleAMM {
     /// State of the liquidity pool to initiate the AMM with
     liquidity_pool: AMMLiquidityPool,
 }
 
 impl SimpleAMM {
+
+    /// # Description
+    /// Creates a new `SimpleAMM` instance.
+    /// 
+    /// # Input
+    /// - `liquidity_pool`: State of the liquidity pool to initiate the AMM with
+    pub fn new(liquidity_pool: AMMLiquidityPool) -> Self {
+        SimpleAMM { liquidity_pool }
+    }
+
     /// # Description
     /// Buy a quntity of a token from the AMM by submitting the buy order quoted in terms of the token to putchase.
     /// 
     /// Transaction includes fee as the percentage of the quantity purchased.
     /// 
     /// # Input
-    /// - tx_data: Transaction data for AMM to process
+    /// - `tx_data`: Transaction data for AMM to process
     /// 
     /// # Output
-    /// - quantity_to_sell: Amount of token that has to be sold to the AMM in exchange for the token being purchased
-    /// - exchange_price: Exchange rate produced by the AMM
-    /// - fee_in_purchased_token: Transaction fee that has to be paid quoted in quantity of purchased token (e.g., fee is 2.1 Purchased Tokens)
+    /// - Transaction receipt (i.e., qunatity of token to sell, exchange price and transaction fee)
     /// 
     /// # Errors
-    /// - Returns an error if the id of token in transaction does not match the id of any token in the liquidity pool
-    /// - Returns an error if cannot fill the buy order due to lack of supply in the liquidity pool
-    /// - Returns an error if the transaction fee is outside the fee range specified by the liquidity pool
-    pub fn make_transaction(&mut self, tx_data: AMMTransactionData) -> Result<HashMap<String, f64>, Error> {
+    /// - Returns an error if the id of token in transaction does not match the id of any token in the liquidity pool.
+    /// - Returns an error if cannot fill the buy order due to lack of supply in the liquidity pool.
+    /// - Returns an error if the transaction fee is outside the fee range specified by the liquidity pool.
+    pub fn make_transaction(&mut self, tx_data: AMMTransactionData) -> Result<AMMTransactionResult, Error> {
         let mut token_1: AMMToken = self.liquidity_pool.token_1();
         let mut token_2: AMMToken = self.liquidity_pool.token_2();
         let token_id: &String;
@@ -214,31 +258,23 @@ impl SimpleAMM {
             token_2.supply = updated_token_supply;
         }
         self.liquidity_pool.update_token_supply(token_1, token_2)?;
-        let mut receipt: HashMap<String, f64> = HashMap::<String, f64>::new();
-        receipt.insert(String::from("quantity_to_sell"), dx);
-        receipt.insert(String::from("exchange_price"), price);
-        receipt.insert(String::from("fee_in_purchased_token"), fee);
-        Ok(receipt)
+        Ok(AMMTransactionResult { quantity_to_sell: dx, exchange_price: price, fee_in_purchased_token: fee })
     }
 
     /// # Description
     /// Generates points to plot the liquidity curve of the AMM.
     /// 
     /// # Input
-    /// - n_points: Number of points to generate
-    /// - token_1_start: Starting point of the x-axis
-    /// - token_1_end: Final point of the x-axis
+    /// - `n_points`: Number of points to generate
+    /// - `token_1_start`: Starting point of the x-axis
+    /// - `token_1_end`: Final point of the x-axis
     /// 
     /// # Output
-    /// - x: x-axis of the liquidity curve
-    /// - y: y-axis of the liquidity curve
-    pub fn get_liquidity_curve(&self, n_points: usize, token_1_start: f64, token_1_end: f64) -> HashMap<String, Array1<f64>> {
+    /// - Liquidity curve data for the AMM
+    pub fn get_liquidity_curve(&self, n_points: usize, token_1_start: f64, token_1_end: f64) -> LiquidityCurve {
         let x: Array1<f64> = Array1::linspace(token_1_start, token_1_end, n_points);
         let y: Array1<f64> = self.liquidity_pool.char_number() / &x;
-        let mut liquidity_curve: HashMap<String, Array1<f64>> = HashMap::<String, Array1<f64>>::new();
-        liquidity_curve.insert(String::from("x"), x);
-        liquidity_curve.insert(String::from("y"), y);
-        liquidity_curve
+        LiquidityCurve { x, y }
     }
 }
 
@@ -248,14 +284,14 @@ mod tests {
 
     #[test]
     fn unit_test_simple_amm_make_transaction() -> () {
-        use crate::market_making::amm::{AMMToken, AMMLiquidityPool, AMMTransactionData, SimpleAMM};
+        use crate::market_making::amm::{AMMToken, AMMLiquidityPool, AMMTransactionData, AMMTransactionResult, SimpleAMM};
         let token_1: AMMToken = AMMToken { id: String::from("BTC"), supply: 10.0, fee_lower_bound: 0.0, fee_upper_bound: 0.03  };
         let token_2: AMMToken = AMMToken { id: String::from("ETH"), supply: 1_000.0, fee_lower_bound: 0.0, fee_upper_bound: 0.03  };
         let liquidity_pool: AMMLiquidityPool = AMMLiquidityPool::new(token_1, token_2, 10_000.0, 0.00001).unwrap();
         let tx_data: AMMTransactionData = AMMTransactionData::new(String::from("BTC"), 1.0, 0.01).unwrap();
-        let mut amm: SimpleAMM = SimpleAMM { liquidity_pool };
-        let receipt = amm.make_transaction(tx_data).unwrap();
-        assert_eq!(*receipt.get("quantity_to_sell").unwrap(), 10_000.0/8.99 - 1_000.0);
-        assert_eq!(*receipt.get("exchange_price").unwrap(), (10_000.0/8.99) / 8.99);
+        let mut amm: SimpleAMM = SimpleAMM::new(liquidity_pool);
+        let receipt: AMMTransactionResult = amm.make_transaction(tx_data).unwrap();
+        assert_eq!(receipt.quantity_to_sell, 10_000.0/8.99 - 1_000.0);
+        assert_eq!(receipt.exchange_price, (10_000.0/8.99) / 8.99);
     }
 }

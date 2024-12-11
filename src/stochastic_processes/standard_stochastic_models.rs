@@ -21,8 +21,32 @@ pub enum FSRSimulationMethod {
 /// - dS_{t} = \\mu*dt + \\sigma*dW_{t}
 /// 
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Geometric_Brownian_motion#:~:text=solution%20claimed%20above.-,Arithmetic%20Brownian%20Motion,-%5Bedit%5D
-/// - Original Source: https://doi.org/10.24033/asens.476
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Geometric_Brownian_motion#:~:text=solution%20claimed%20above.-,Arithmetic%20Brownian%20Motion,-%5Bedit%5D>
+/// - Original Source: <https://doi.org/10.24033/asens.476>
+///
+/// # Examples
+///
+/// ```rust
+/// use ndarray::Array1;
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::stochastic_processes::{StochasticProcess, ArithmeticBrownianMotion};
+///
+/// let n_paths: usize = 100;
+/// let n_steps: usize = 200;
+///
+/// let abm: ArithmeticBrownianMotion = ArithmeticBrownianMotion::new(1.0, 0.4, n_paths, n_steps, 1.0, 100.0);
+/// let paths: Vec<Array1<f64>> = abm.get_paths().unwrap();
+///
+/// assert_eq!(paths.len(), n_paths);
+/// assert_eq!(paths[0].len(), n_steps+1);
+/// let mut final_steps: Vec<f64> = Vec::<f64>::new();
+/// for i in 0..n_paths {
+///     final_steps.push(paths[i][n_steps]);
+/// }
+/// let final_steps: Array1<f64> = Array1::from_vec(final_steps);
+/// let expected_path: Array1<f64> = abm.get_expectations();
+/// assert!((final_steps.mean().unwrap() - expected_path.last().unwrap()).abs() < 10_000_000.0 * TEST_ACCURACY);
+/// ```
 pub struct ArithmeticBrownianMotion {
     /// Drift constant of the process
     mu: f64,
@@ -44,7 +68,7 @@ pub struct ArithmeticBrownianMotion {
 
 impl ArithmeticBrownianMotion {
     /// # Description
-    /// Creates a new ArithmeticBrownianMotion instance.
+    /// Creates a new `ArithmeticBrownianMotion` instance.
     /// 
     /// # Input
     /// - `mu`: Drift constant of the process
@@ -82,7 +106,7 @@ impl ArithmeticBrownianMotion {
     /// - Auto-covariance of the process between times t1 and t2
     /// 
     /// # Errors
-    /// - Returns an error if the index provided is out of bounds for the time array
+    /// - Returns an error if the index provided is out of bounds for the time array.
     /// 
     /// # LaTeX Formula
     /// - \\textit{Cov}(S_{t_{1}}, S_{t_{2}}) = \\sigma^{2} \\min(S_{t_{1}}, S_{t_{2}})
@@ -104,13 +128,13 @@ impl StochasticProcess for ArithmeticBrownianMotion {
     }
 
     /// # Description
-    /// Calculates the expected path of the Arithmetic Brownian Motion
+    /// Calculates the expected path of the Arithmetic Brownian Motion.
     /// 
     /// # Output
     /// - An array of expected values of the stock price at each time step
     /// 
     /// # LaTeX Formula
-    /// - E[S_t] = \\mu t + S_{0}
+    /// - E\[S_t\] = \\mu t + S_{0}
     fn get_expectations(&self) -> Array1<f64> {
         self.mu * &self.t + self.s_0
     }
@@ -144,8 +168,31 @@ impl StochasticProcess for ArithmeticBrownianMotion {
 /// - dS_{t} = \\mu*S_{t}*dt + \\sigma*S_{t}*dW_{t}\n
 /// 
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Geometric_Brownian_motion
-/// - Original Source: http://dx.doi.org/10.1086/260062
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Geometric_Brownian_motion>
+/// - Original Source: <http://dx.doi.org/10.1086/260062>
+///
+/// # Examples
+///
+/// ```rust
+/// use ndarray::Array1;
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::stochastic_processes::{StochasticProcess, GeometricBrownianMotion};
+///
+/// let n_paths: usize = 1_000;
+/// let n_steps: usize = 200;
+/// let gbm: GeometricBrownianMotion = GeometricBrownianMotion::new(0.0, 0.2, n_paths, n_steps, 1.0, 100.0);
+/// let paths: Vec<Array1<f64>> = gbm.get_paths().unwrap();
+///
+/// assert_eq!(paths.len(), n_paths);
+/// assert_eq!(paths[0].len(), n_steps+1);
+/// let mut final_steps: Vec<f64> = Vec::<f64>::new();
+/// for i in 0..n_paths {
+///     final_steps.push(paths[i][n_steps]);
+/// }
+/// let final_steps: Array1<f64> = Array1::from_vec(final_steps);
+/// let expected_path: Array1<f64> = gbm.get_expectations();
+/// assert!((final_steps.mean().unwrap() - expected_path.last().unwrap()).abs() < 100_000_000.0 * TEST_ACCURACY);
+/// ```
 pub struct GeometricBrownianMotion {
     /// Drift constant of the process
     mu: f64,
@@ -167,7 +214,7 @@ pub struct GeometricBrownianMotion {
 
 impl GeometricBrownianMotion {
     /// # Description
-    /// Creates a new GoemetricBrownianMotion instance.
+    /// Creates a new `GoemetricBrownianMotion` instance.
     /// 
     /// # Input
     /// - `mu`: Drift constant of the process
@@ -209,7 +256,7 @@ impl StochasticProcess for GeometricBrownianMotion {
     /// - An array of expected values of the stock price at each time step, representing the mean trajectory
     /// 
     /// # LaTeX Formula:
-    /// - E[S_t] = S_{0} e^{\\mu t}
+    /// - E\[S_t\] = S_{0} e^{\\mu t}
     fn get_expectations(&self) -> Array1<f64> {
         self.s_0 * (self.mu * &self.t).map(|i| i.exp() )
     }
@@ -245,8 +292,32 @@ impl StochasticProcess for GeometricBrownianMotion {
 /// - dS_{t} = \\alpha*(\\mu-S_{t})*dt + \\sigma*dW_{t}
 /// 
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Ornstein%E2%80%93Uhlenbeck_process
-/// - Original Source: https://doi.org/10.1103%2FPhysRev.36.823
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Ornstein%E2%80%93Uhlenbeck_process>
+/// - Original Source: <https://doi.org/10.1103%2FPhysRev.36.823>
+///
+/// # Examples
+///
+/// ```rust
+/// use ndarray::Array1;
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::stochastic_processes::{StochasticProcess, OrnsteinUhlenbeckProcess};
+///
+/// let n_paths: usize = 100;
+/// let n_steps: usize = 200;
+///
+/// let oup: OrnsteinUhlenbeckProcess = OrnsteinUhlenbeckProcess::new(0.07, 0.1, 10.0, n_paths, n_steps, 1.0, 0.05, true);
+/// let paths: Vec<Array1<f64>> = oup.get_paths().unwrap();
+/// 
+/// assert_eq!(paths.len(), n_paths);
+/// assert_eq!(paths[0].len(), n_steps+1);
+/// let mut final_steps: Vec<f64> = Vec::<f64>::new();
+/// for i in 0..n_paths {
+///     final_steps.push(paths[i][n_steps]);
+/// }
+/// let final_steps: Array1<f64> = Array1::from_vec(final_steps);
+/// let expected_path: Array1<f64> = oup.get_expectations();
+/// assert!((final_steps.mean().unwrap() - expected_path.last().unwrap()).abs() < 1_000_000.0 * TEST_ACCURACY);
+/// ```
 pub struct OrnsteinUhlenbeckProcess {
     /// Drift constant of the process
     mu: f64,
@@ -272,7 +343,7 @@ pub struct OrnsteinUhlenbeckProcess {
 
 impl OrnsteinUhlenbeckProcess {
     /// # Description
-    /// Creates a new OrnsteinUhlenbeckProcess instance.
+    /// Creates a new `OrnsteinUhlenbeckProcess` instance.
     /// 
     /// # Input
     /// - `mu`: Drift constant of the process
@@ -314,7 +385,7 @@ impl StochasticProcess for OrnsteinUhlenbeckProcess {
     /// - An array (np.ndarray) of expected values of the process at each time step
     /// 
     /// # LaTeX Formula
-    /// - E[S_t] = \\mu + (S_{0} - \\mu) e^{-\\alpha t}
+    /// - E\[S_t\] = \\mu + (S_{0} - \\mu) e^{-\\alpha t}
     fn get_expectations(&self) -> Array1<f64> {
         self.mu + (self.s_0 * self.mu) * (-self.alpha * &self.t).map(|i| i.exp() )
     }
@@ -366,8 +437,31 @@ impl StochasticProcess for OrnsteinUhlenbeckProcess {
 /// - dS_{t} = ((b-a)/(T-t))*dt + \\sigma*dW_{t}
 /// 
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Brownian_bridge
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Brownian_bridge>
 /// - Original Source: N/A
+///
+/// # Examples
+///
+/// ```rust
+/// use ndarray::Array1;
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::stochastic_processes::{StochasticProcess, BrownianBridge};
+///
+/// let n_paths: usize = 100;
+/// let n_steps: usize = 200;
+/// let bb: BrownianBridge = BrownianBridge::new(1.0, 2.0, 0.5, n_paths, n_steps, 1.0);
+/// let paths: Vec<Array1<f64>> = bb.get_paths().unwrap();
+///
+/// assert_eq!(paths.len(), n_paths);
+/// assert_eq!(paths[0].len(), n_steps+1);
+/// let mut final_steps: Vec<f64> = Vec::<f64>::new();
+/// for i in 0..n_paths {
+///    final_steps.push(paths[i][n_steps-1]);
+/// }
+/// let final_steps: Array1<f64> = Array1::from_vec(final_steps);
+/// let expected_path: Array1<f64> = bb.get_expectations();
+/// assert!((final_steps.mean().unwrap() - expected_path[expected_path.len()-2]).abs() < 10_000_000.0 * TEST_ACCURACY);
+/// ```
 pub struct BrownianBridge {
     /// Initial value of the process
     alpha: f64,
@@ -389,7 +483,7 @@ pub struct BrownianBridge {
 
 impl BrownianBridge {
     /// # Description
-    /// Creates a new OrnsteinUhlenbeckProcess instance.
+    /// Creates a new `BrownianBridge` instance.
     /// 
     /// # Input
     /// - `alpha`: Initial value of the process
@@ -469,8 +563,32 @@ impl StochasticProcess for BrownianBridge {
 /// - dS_{t} = \\alpha*(\\mu-S_{t})*dt + \\sigma\\sqrt(S_{t})*dW_{t}
 /// 
 /// # Links
-/// - Wikipedia: https://en.wikipedia.org/wiki/Cox%E2%80%93Ingersoll%E2%80%93Ross_model
-/// - Original Source: https://doi.org/10.2307/1911242
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Cox%E2%80%93Ingersoll%E2%80%93Ross_model>
+/// - Original Source: <https://doi.org/10.2307/1911242>
+///
+/// # Examples
+///
+/// ```rust
+/// use ndarray::Array1;
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::stochastic_processes::{StochasticProcess, FellerSquareRootProcess, FSRSimulationMethod};
+///
+/// let n_paths: usize = 100;
+/// let n_steps: usize = 200;
+///
+/// let fsrp: FellerSquareRootProcess = FellerSquareRootProcess::new(0.05, 0.265, 5.0, n_paths, n_steps, 1.0, 0.03, FSRSimulationMethod::EulerMaruyama);
+/// let paths: Vec<Array1<f64>> = fsrp.get_paths().unwrap();
+///
+/// assert_eq!(paths.len(), n_paths);
+/// assert_eq!(paths[0].len(), n_steps+1);
+/// let mut final_steps: Vec<f64> = Vec::<f64>::new();
+/// for i in 0..n_paths {
+///    final_steps.push(paths[i][n_steps]);
+/// }
+/// let final_steps: Array1<f64> = Array1::from_vec(final_steps);
+/// let expected_path: Array1<f64> = fsrp.get_expectations();
+/// assert!((final_steps.mean().unwrap() - expected_path.last().unwrap()).abs() < 10_000_000.0 * TEST_ACCURACY);
+/// ```
 pub struct FellerSquareRootProcess {
     /// Drift constant of the process
     mu: f64,
@@ -496,7 +614,7 @@ pub struct FellerSquareRootProcess {
 
 impl FellerSquareRootProcess {
     /// # Description
-    /// Creates a new FellerSquareRootProcess instance.
+    /// Creates a new `FellerSquareRootProcess` instance.
     /// 
     /// # Input
     /// - `mu`: Mean of the process
@@ -548,6 +666,9 @@ impl StochasticProcess for FellerSquareRootProcess {
     /// 
     /// # Output
     /// - An array of simulated paths of the process for each path and time step, following the chosen simulation method
+    ///
+    /// # LaTeX Formula
+    /// - dS_{t} = \\alpha*(\\mu-S_{t})*dt + \\sigma\\sqrt(S_{t})*dW_{t}
     fn get_paths(&self) -> Result<Vec<Array1<f64>>, Error> {
         let mut paths: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
         for _ in 0..self.n_paths {
@@ -639,7 +760,7 @@ mod tests {
     #[test]
     fn unit_test_brownian_bridge() -> () {
         use crate::stochastic_processes::standard_stochastic_models::BrownianBridge;
-        let n_paths: usize = 1;
+        let n_paths: usize = 100;
         let n_steps: usize = 200;
         let bb: BrownianBridge = BrownianBridge::new(1.0, 2.0, 0.5, n_paths, n_steps, 1.0);
         let paths: Vec<Array1<f64>> = bb.get_paths().unwrap();
@@ -657,7 +778,7 @@ mod tests {
     #[test]
     fn unit_test_feller_square_root_process() -> () {
         use crate::stochastic_processes::standard_stochastic_models::{FellerSquareRootProcess, FSRSimulationMethod};
-        let n_paths: usize = 1;
+        let n_paths: usize = 100;
         let n_steps: usize = 200;
         let fsrp: FellerSquareRootProcess = FellerSquareRootProcess::new(0.05, 0.265, 5.0, n_paths, n_steps,
                                                                          1.0, 0.03, FSRSimulationMethod::EulerMaruyama);
