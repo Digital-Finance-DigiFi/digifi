@@ -9,6 +9,7 @@ repository = "https://github.com/Digital-Finance-DigiFi/digifi"
 documentation = "https://docs.rs/digifi"
 keywords = ["stochastic", "portfolio", "pricing", "investment", "asset"]
 categories = ["finance", "mathematics", "science", "simulation"]
+exclude = ["cargo_commands.md"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
