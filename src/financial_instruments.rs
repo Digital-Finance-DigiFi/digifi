@@ -15,6 +15,8 @@ pub mod stocks;
 
 use std::io::Error;
 use ndarray::Array1;
+#[cfg(feature = "plotly")]
+use plotly::{Plot, Scatter, Layout, layout::Axis};
 use crate::utilities::{input_error, data_error};
 use crate::portfolio_applications::AssetHistData;
 
@@ -134,6 +136,13 @@ pub trait Payoff: PayoffClone {
     /// 
     /// Profit = Payoff - Cost
     fn profit(&self, s: &Array1<f64>) -> Array1<f64>;
+
+    /// # Description
+    /// Updates the cost/premium of the instrument.
+    ///
+    /// # Input
+    /// - `new_cost`: Updated cost/premium of the instrument
+    fn update_cost(&mut self, new_cost: f64) -> ();
 }
 
 
@@ -190,6 +199,10 @@ impl Payoff for LongCall {
     /// - \\textit{Long Call Profit} = max(S_{t}-K, 0) - \\textit{Cost}
     fn profit(&self, s: &Array1<f64>) -> Array1<f64> {
         self.payoff(s) - self.cost
+    }
+
+    fn update_cost(&mut self, new_cost: f64) -> () {
+        self.cost = new_cost;
     }
 }
 
@@ -248,6 +261,10 @@ impl Payoff for ShortCall {
     fn profit(&self, s: &Array1<f64>) -> Array1<f64> {
         self.payoff(s) + self.cost
     }
+
+    fn update_cost(&mut self, new_cost: f64) -> () {
+        self.cost = new_cost;
+    }
 }
 
 
@@ -304,6 +321,10 @@ impl Payoff for LongPut {
     /// - \\textit{Long Put Profit} = max(K-S_{t}, 0) - \\textit{Cost}
     fn profit(&self, s: &Array1<f64>) -> Array1<f64> {
         self.payoff(s) - self.cost
+    }
+
+    fn update_cost(&mut self, new_cost: f64) -> () {
+        self.cost = new_cost;
     }
 }
 
@@ -362,6 +383,10 @@ impl Payoff for ShortPut {
     fn profit(&self, s: &Array1<f64>) -> Array1<f64> {
         self.payoff(s) + self.cost
     }
+
+    fn update_cost(&mut self, new_cost: f64) -> () {
+        self.cost = new_cost;
+    }
 }
 
 
@@ -375,10 +400,8 @@ pub struct BullCollar {
     k_p: f64,
     /// Short call option strike price
     k_c: f64,
-    /// Initial long put option price (cost)
-    cost_p: f64,
-    /// Initial short call option price (cost)
-    cost_c: f64,
+    /// Initial option price (cost)
+    cost: f64,
     /// Initial asset cost
     cost_s: f64,
 }
@@ -390,17 +413,16 @@ impl BullCollar {
     /// # Input
     /// - `k_p`: Long put option strike price
     /// - `k_c`: Short call option strike price
-    /// - `cost_p`: Initial long put option price (cost)
-    /// - `cost_c`: Initial short call option price (cost)
+    /// - `cost`: Initial option price (cost)
     /// - `cost_s`: Initial asset price (cost)
     /// 
     /// # Errors
     /// - Returns an error if the long put strike price is larger than the short call strike price.
-    pub fn new(k_p: f64, k_c: f64, cost_p: f64, cost_c: f64, cost_s: f64) -> Result<Self, Error> {
+    pub fn new(k_p: f64, k_c: f64, cost: f64, cost_s: f64) -> Result<Self, Error> {
         if k_c < k_p {
             return Err(input_error("Bull Collar: The argument k_p must be smaller or equal to k_c."));
         }
-        Ok(BullCollar { k_p, k_c, cost_p, cost_c, cost_s })
+        Ok(BullCollar { k_p, k_c, cost, cost_s })
     }
 }
 
@@ -426,9 +448,9 @@ impl Payoff for BullCollar {
     ///
     /// let s: Array1<f64> = Array1::range(3.0, 7.0, 0.5);
     ///
-    /// let bull_collar: BullCollar = BullCollar::new(4.0, 6.0, 1.0, 1.0, 5.0).unwrap();
+    /// let bull_collar: BullCollar = BullCollar::new(4.0, 6.0, 0.0, 5.0).unwrap();
     ///
-    /// assert!((bull_collar.profit(&s) - Array1::from_vec(vec![-1.0, -1.0, -1.0, -0.5, 0.0, 0.5, 1.0, 1.0])).sum().abs() < TEST_ACCURACY);
+    /// assert!((bull_collar.payoff(&s) - Array1::from_vec(vec![-1.0, -1.0, -1.0, -0.5, 0.0, 0.5, 1.0, 1.0])).sum().abs() < TEST_ACCURACY);
     /// ```
     fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
         s - self.cost_s + (self.k_p - s).map(| p | p.max(0.0)) + (self.k_c - s).map(| p | p.min(0.0))
@@ -444,9 +466,13 @@ impl Payoff for BullCollar {
     /// - Profit of the bull collar strategy
     /// 
     /// # LaTeX Formula
-    /// - \\textit{Bull Collar Profit} = S_{t} - S_{0} + max(K_{p}-S_{t}, 0) - \\textit{Cost}_{p} + min(K_{c}-S_{t}, 0) + \\textit{Cost}_{c}
+    /// - \\textit{Bull Collar Profit} = S_{t} - S_{0} + max(K_{p}-S_{t}, 0) + min(K_{c}-S_{t}, 0) - \\textit{Cost}
     fn profit(&self, s: &Array1<f64>) -> Array1<f64> {
-        self.payoff(s) - self.cost_p + self.cost_c
+        self.payoff(s) - self.cost
+    }
+
+    fn update_cost(&mut self, new_cost: f64) -> () {
+        self.cost = new_cost;
     }
 }
 
@@ -461,10 +487,8 @@ pub struct BearCollar {
     k_p: f64,
     /// Long call option strike price
     k_c: f64,
-    /// Initial short put option price (cost)
-    cost_p: f64,
-    /// Initial long call option price (cost)
-    cost_c: f64,
+    /// Initial option price (cost)
+    cost: f64,
     /// Initial asset cost
     cost_s: f64,
 }
@@ -476,17 +500,16 @@ impl BearCollar {
     /// # Input
     /// - `k_p`: Short put option strike price
     /// - `k_c`: Long call option strike price
-    /// - `cost_p`: Initial short put option price (cost)
-    /// - `cost_c`: Initial long call option price (cost)
+    /// - `cost`: Initial option price (cost)
     /// - `cost_s`: Initial asset price (cost)
     /// 
     /// # Errors
     /// - Returns an error if the short put strike price is larger than the long call strike price.
-    pub fn new(k_p: f64, k_c: f64, cost_p: f64, cost_c: f64, cost_s: f64) -> Result<Self, Error> {
+    pub fn new(k_p: f64, k_c: f64, cost: f64, cost_s: f64) -> Result<Self, Error> {
         if k_c < k_p {
             return Err(input_error("Bear Collar: The argument k_p must be smaller or equal to k_c."));
         }
-        Ok(BearCollar { k_p, k_c, cost_p, cost_c, cost_s })
+        Ok(BearCollar { k_p, k_c, cost, cost_s })
     }
 }
 
@@ -512,9 +535,9 @@ impl Payoff for BearCollar {
     ///
     /// let s: Array1<f64> = Array1::range(3.0, 7.0, 0.5);
     ///
-    /// let bear_collar: BearCollar = BearCollar::new(4.0, 6.0, 1.0, 1.0, 5.0).unwrap();
+    /// let bear_collar: BearCollar = BearCollar::new(4.0, 6.0, 0.0, 5.0).unwrap();
     ///
-    /// assert!((bear_collar.profit(&s) - Array1::from_vec(vec![1.0, 1.0, 1.0, 0.5, 0.0, -0.5, -1.0, -1.0])).sum().abs() < TEST_ACCURACY);
+    /// assert!((bear_collar.payoff(&s) - Array1::from_vec(vec![1.0, 1.0, 1.0, 0.5, 0.0, -0.5, -1.0, -1.0])).sum().abs() < TEST_ACCURACY);
     /// ```
     fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
         self.cost_s - s + (s - self.k_p).map(| p | p.min(0.0)) + (s - self.k_c).map(| p | p.max(0.0))
@@ -530,9 +553,13 @@ impl Payoff for BearCollar {
     /// - Profit of the bear collar strategy
     /// 
     /// # LaTeX Formula
-    /// - \\textit{Bear Collar Profit} = S_{0} - S_{t} + min(S_{t}-K_{p}, 0) + \\textit{Cost}_{p} + max(S_{t}-K_{c}, 0) - \\textit{Cost}_{c}
+    /// - \\textit{Bear Collar Profit} = S_{0} - S_{t} + min(S_{t}-K_{p}, 0) + max(S_{t}-K_{c}, 0) - \\textit{Cost}
     fn profit(&self, s: &Array1<f64>) -> Array1<f64> {
-        self.payoff(s) + self.cost_p - self.cost_c 
+        self.payoff(s) - self.cost
+    }
+
+    fn update_cost(&mut self, new_cost: f64) -> () {
+        self.cost = new_cost;
     }
 }
 
@@ -547,10 +574,8 @@ pub struct BullSpread {
     k_l: f64,
     /// Short call option strike price
     k_s: f64,
-    /// Initial long call oprion price (cost)
-    cost_l: f64,
-    /// Initial short call option price (cost)
-    cost_s: f64,
+    /// Initial oprion price (cost)
+    cost: f64,
 }
 
 impl BullSpread {
@@ -560,16 +585,15 @@ impl BullSpread {
     /// # Input
     /// - `k_l`: Long call option strike price
     /// - `k_s`: Short call option strike price
-    /// - `cost_l`: Initial long call option price (cost)
-    /// - `cost_s`: Initial short call option price (cost)
+    /// - `cost`: Initial option price (cost)
     /// 
     /// # Errors
     /// - Returns an error if the short call strike price is smaller than the long call strike price.
-    pub fn new(k_l: f64, k_s: f64, cost_l: f64, cost_s: f64) -> Result<Self, Error> {
+    pub fn new(k_l: f64, k_s: f64, cost: f64) -> Result<Self, Error> {
         if k_s < k_l {
             return Err(input_error("Bull Spread: The argument k_l must be smaller or equal to k_s."));
         }
-        Ok(BullSpread { k_l, k_s, cost_l, cost_s })
+        Ok(BullSpread { k_l, k_s, cost })
     }
 }
 
@@ -595,7 +619,7 @@ impl Payoff for BullSpread {
     ///
     /// let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
     ///
-    /// let bull_spread: BullSpread = BullSpread::new(4.0, 6.0, 1.0, 1.0).unwrap();
+    /// let bull_spread: BullSpread = BullSpread::new(4.0, 6.0, 1.0).unwrap();
     ///
     /// assert!((bull_spread.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, 1.0, 2.0, 2.0])).sum().abs() < TEST_ACCURACY);
     /// ```
@@ -613,9 +637,13 @@ impl Payoff for BullSpread {
     /// - Profit of the bull spread option
     /// 
     /// # LaTeX Formula
-    /// - \\textit{Bull Spread Profit} = max(S_{t}-K_{l}, 0) - \\textit{Cost}_{l} + min(K_{s}-S_{t}, 0) + \\textit{Cost}_{s}
+    /// - \\textit{Bull Spread Profit} = max(S_{t}-K_{l}, 0) + min(K_{s}-S_{t}, 0) - \\textit{Cost}
     fn profit(&self, s: &Array1<f64>) -> Array1<f64> {
-        self.payoff(s) - self.cost_l + self.cost_s
+        self.payoff(s) - self.cost
+    }
+
+    fn update_cost(&mut self, new_cost: f64) -> () {
+        self.cost = new_cost;
     }
 }
 
@@ -630,10 +658,8 @@ pub struct BearSpread {
     k_l: f64,
     /// Short put option strike price
     k_s: f64,
-    /// Initial long put option price (cost)
-    cost_l: f64,
-    /// Initial short put option price (cost)
-    cost_s: f64,
+    /// Initial option price (cost)
+    cost: f64,
 }
 
 impl BearSpread {
@@ -643,16 +669,15 @@ impl BearSpread {
     /// # Input
     /// - `k_l`: Long put option strike price
     /// - `k_s`: Short put option strike price
-    /// - `cost_l`: Initial long put option price (cost)
-    /// - `cost_s`: Initial short put option price (cost)
+    /// - `cost`: Initial option price (cost)
     /// 
     /// # Errors
     /// - Returns an error if the long put strike price is smaller than the short put strike price.
-    pub fn new(k_l: f64, k_s: f64, cost_l: f64, cost_s: f64) -> Result<Self, Error> {
+    pub fn new(k_l: f64, k_s: f64, cost: f64) -> Result<Self, Error> {
         if k_l < k_s {
             return Err(input_error("Bear Spread: The argument k_s must be smaller or equal to k_l."));
         }
-        Ok(BearSpread { k_l, k_s, cost_l, cost_s })
+        Ok(BearSpread { k_l, k_s, cost })
     }
 }
 
@@ -678,7 +703,7 @@ impl Payoff for BearSpread {
     ///
     /// let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
     ///
-    /// let bear_spread: BearSpread = BearSpread::new(6.0, 4.0, 1.0, 1.0).unwrap();
+    /// let bear_spread: BearSpread = BearSpread::new(6.0, 4.0, 1.0).unwrap();
     ///
     /// assert!((bear_spread.payoff(&s) - Array1::from_vec(vec![2.0, 2.0, 1.0, 0.0, 0.0])).sum().abs() < TEST_ACCURACY);
     /// ```
@@ -696,9 +721,13 @@ impl Payoff for BearSpread {
     /// - Profit of the bear spread option
     /// 
     /// # LaTeX Formula
-    /// - \\textit{Bear Spread Profit} = max(K_{l}-S_{t}, 0) - \\textit{Cost}_{l} + min(S_{t}-K_{s}, 0) + \\textit{Cost}_{s}
+    /// - \\textit{Bear Spread Profit} = max(K_{l}-S_{t}, 0) + min(S_{t}-K_{s}, 0) - \\textit{Cost}
     fn profit(&self, s: &Array1<f64>) -> Array1<f64> {
-        self.payoff(s) - self.cost_l + self.cost_s
+        self.payoff(s) - self.cost
+    }
+
+    fn update_cost(&mut self, new_cost: f64) -> () {
+        self.cost = new_cost;
     }
 }
 
@@ -707,7 +736,7 @@ impl Payoff for BearSpread {
 /// # Description
 /// Butterfly spread option payoff and profit.
 /// 
-/// Buttefly Spread = Smaller Long Call + 2*Short Put + Larger Long Call
+/// Buttefly Spread = Smaller Long Call + 2*Short Call + Larger Long Call
 pub struct LongButterfly {
     /// Smaller long call option strike price
     k1_c: f64,
@@ -715,12 +744,8 @@ pub struct LongButterfly {
     k2_c: f64,
     /// Short put option strike price
     k_p: f64,
-    /// Initial smaller long call option price (cost)
-    cost1_c: f64,
-    /// Initial larger long call option price (cost)
-    cost2_c: f64,
-    /// Initial short put option price (cost)
-    cost_p: f64,
+    /// Initial option price (cost)
+    cost: f64,
 }
 
 impl LongButterfly {
@@ -731,13 +756,11 @@ impl LongButterfly {
     /// - `k1_c`: Smaller long call option strike price
     /// - `k2_c`: Larger long call option strike price
     /// - `k_p`: Short put option strike price
-    /// - `cost1_c`: Initial smaller long call option price (cost)
-    /// - `cost2_c`: Initial larger long call option price (cost)
-    /// - `cost_p`: Initial short put option price (cost)
+    /// - `cost`: Initial option price (cost)
     /// 
     /// # Errors
     /// - Returns an error if the long put strike price is smaller than the short put strike price.
-    pub fn new(k1_c: f64, k2_c: f64, k_p: f64, cost1_c: f64, cost2_c: f64, cost_p: f64) -> Result<Self, Error> {
+    pub fn new(k1_c: f64, k2_c: f64, k_p: f64, cost: f64) -> Result<Self, Error> {
         // Check that k1_c <= k_p <= k2_c
         if k2_c < k_p {
             return Err(input_error("Long Butterfly: The argument k_p must be smaller or equal to k1_c."));
@@ -745,7 +768,7 @@ impl LongButterfly {
         if k_p < k1_c {
             return Err(input_error("Long Butterfly: The argument k1_c must be smaller or equal to k_p."));
         }
-        Ok(LongButterfly { k1_c, k2_c, k_p, cost1_c, cost2_c, cost_p })
+        Ok(LongButterfly { k1_c, k2_c, k_p, cost })
     }
 }
 
@@ -771,7 +794,7 @@ impl Payoff for LongButterfly {
     ///
     /// let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
     ///
-    /// let long_butterfly: LongButterfly = LongButterfly::new(4.0, 6.0, 5.0, 1.0, 1.0, 1.0).unwrap();
+    /// let long_butterfly: LongButterfly = LongButterfly::new(4.0, 6.0, 5.0, 1.0).unwrap();
     ///
     /// assert!((long_butterfly.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, 1.0, 0.0, 0.0])).sum().abs() < TEST_ACCURACY);
     /// ```
@@ -789,10 +812,13 @@ impl Payoff for LongButterfly {
     /// - Profit of the long butterfly option
     /// 
     /// # LaTeX Formula
-    /// - \\textit{Butterfly Spread Payoff} = max(S_{t}-K1_{c}, 0) - \\textit{Cost}1_{c} + 2min(K_{p}-S_{t}, 0) +
-    /// 2\\textit{Cost}_{p} + max(S_{t}-K2_{c}, 0) - \\textit{Cost}2_{c}
+    /// - \\textit{Butterfly Spread Payoff} = max(S_{t}-K1_{c}, 0) + 2min(K_{p}-S_{t}, 0) + max(S_{t}-K2_{c}, 0) - \\textit{Cost}
     fn profit(&self, s: &Array1<f64>) -> Array1<f64> {
-        self.payoff(s) - self.cost1_c + 2.0*self.cost_p - self.cost2_c
+        self.payoff(s) - self.cost
+    }
+
+    fn update_cost(&mut self, new_cost: f64) -> () {
+        self.cost = new_cost;
     }
 }
 
@@ -807,14 +833,8 @@ pub struct BoxSpread {
     k_1: f64,
     /// Larger option strike price
     k_2: f64,
-    /// Initial long call option price (cost)
-    cost_lc: f64,
-    /// Initial short put option price (cost)
-    cost_sp: f64,
-    /// Initial short call option price (cost)
-    cost_sc: f64,
-    /// Initial long put option price (cost)
-    cost_lp: f64,
+    /// Initial option price (cost)
+    cost: f64,
 }
 
 impl BoxSpread {
@@ -824,18 +844,15 @@ impl BoxSpread {
     /// # Input
     /// - `k_1`: Smaller option strike price
     /// - `k_2`: Larger option strike price
-    /// - `cost_lc`: Initial long call option price (cost)
-    /// - `cost_sp`: Initial short put option price (cost)
-    /// - `cost_sc`: Initial short call option price (cost)
-    /// - `cost_lp`: Initial long put option price (cost)
+    /// - `cost`: Initial option price (cost)
     /// 
     /// # Errors
     /// - Returns an error if the k_2 strike price is smaller than the k_1 strike price.
-    pub fn new(k_1: f64, k_2: f64, cost_lc: f64, cost_sp: f64, cost_sc: f64, cost_lp: f64) -> Result<Self, Error> {
+    pub fn new(k_1: f64, k_2: f64, cost: f64) -> Result<Self, Error> {
         if k_2 < k_1 {
             return Err(input_error("Box Spread: The argument k_1 must be smaller or equal to k_2."));
         }
-        Ok(BoxSpread { k_1, k_2, cost_lc, cost_sp, cost_sc, cost_lp })
+        Ok(BoxSpread { k_1, k_2, cost })
     }
 }
 
@@ -861,7 +878,7 @@ impl Payoff for BoxSpread {
     ///
     /// let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
     ///
-    /// let box_spread: BoxSpread = BoxSpread::new(4.0, 6.0, 1.0, 1.0, 1.0, 1.0).unwrap();
+    /// let box_spread: BoxSpread = BoxSpread::new(4.0, 6.0, 1.0).unwrap();
     ///
     /// assert!((box_spread.payoff(&s) - Array1::from_vec(vec![2.0, 2.0, 2.0, 2.0, 2.0])).sum().abs() < TEST_ACCURACY);
     /// ```
@@ -879,10 +896,13 @@ impl Payoff for BoxSpread {
     /// - Profit of the box spread option
     /// 
     /// # LaTeX Formula
-    /// - \\textit{Box Spread Payoff} = max(S_{t}-K_{1}, 0) - \\textit{Cost}_{lc} + min(K_{2}-S_{t}, 0) + \\textit{Cost}_{sc} +
-    /// max(K_{2}-S_{t}, 0) - \\textit{Cost}_{lp} + min(S_{t}-K_{1}, 0) + \\textit{Cost}_{sp}
+    /// - \\textit{Box Spread Payoff} = max(S_{t}-K_{1}, 0) + min(K_{2}-S_{t}, 0) + max(K_{2}-S_{t}, 0) + min(S_{t}-K_{1}, 0) - \\textit{Cost}
     fn profit(&self, s: &Array1<f64>) -> Array1<f64> {
-        self.payoff(s) - self.cost_lc  + self.cost_sp + self.cost_sc - self.cost_lp
+        self.payoff(s) - self.cost
+    }
+
+    fn update_cost(&mut self, new_cost: f64) -> () {
+        self.cost = new_cost;
     }
 }
 
@@ -895,10 +915,8 @@ impl Payoff for BoxSpread {
 pub struct Straddle {
     /// Option strike price
     pub k: f64,
-    /// Initial long call option price (cost)
-    pub cost_c: f64,
-    /// Initial long put option price (cost)
-    pub cost_p: f64,
+    /// Initial option price (cost)
+    pub cost: f64,
 }
 
 impl Payoff for Straddle {
@@ -923,7 +941,7 @@ impl Payoff for Straddle {
     ///
     /// let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
     ///
-    /// let straddle: Straddle = Straddle { k: 5.0, cost_c: 1.0, cost_p: 1.0 };
+    /// let straddle: Straddle = Straddle { k: 5.0, cost: 1.0 };
     ///
     /// assert!((straddle.payoff(&s) - Array1::from_vec(vec![2.0, 1.0, 0.0, 1.0, 2.0])).sum().abs() < TEST_ACCURACY);
     /// ```
@@ -941,9 +959,13 @@ impl Payoff for Straddle {
     /// - Profit of the straddle option
     /// 
     /// # LaTeX Formula
-    /// - \\textit{Straddle Profit} = max(S_{t}-K, 0) - \\textit{Cost}_{c} + max(K-S_{t}, 0) - \\textit{Cost}_{p}
+    /// - \\textit{Straddle Profit} = max(S_{t}-K, 0) + max(K-S_{t}, 0) - \\textit{Cost}
     fn profit(&self, s: &Array1<f64>) -> Array1<f64> {
-        self.payoff(s) - self.cost_c - self.cost_p
+        self.payoff(s) - self.cost
+    }
+
+    fn update_cost(&mut self, new_cost: f64) -> () {
+        self.cost = new_cost;
     }
 }
 
@@ -958,10 +980,8 @@ pub struct Strangle {
     k_c: f64,
     /// Put option strike price
     k_p: f64,
-    /// Initial long call option price (cost)
-    cost_c: f64,
-    /// Initial long put option price (cost)
-    cost_p: f64,
+    /// Initial option price (cost)
+    cost: f64,
 }
 
 impl Strangle {
@@ -971,16 +991,15 @@ impl Strangle {
     /// # Input
     /// - `k_c`: Call option strike price
     /// - `k_p`: Put option strike price
-    /// - `cost_c`: Initial long call option price (cost)
-    /// - `cost_p`: initial long put option price (cost)
+    /// - `cost`: Initial option price (cost)
     /// 
     /// # Errors
     /// - Returns an error if the `k_c` strike price is smaller or equal to the `k_p` strike price.
-    pub fn new(k_c: f64, k_p: f64, cost_c: f64, cost_p: f64) -> Result<Self, Error> {
+    pub fn new(k_c: f64, k_p: f64, cost: f64) -> Result<Self, Error> {
         if k_c <= k_p {
             return Err(input_error("Strangle: The argument k_p must be smaller than k_c."));
         }
-        Ok(Strangle { k_c, k_p, cost_c, cost_p })
+        Ok(Strangle { k_c, k_p, cost })
     }
 }
 
@@ -1006,7 +1025,7 @@ impl Payoff for Strangle {
     ///
     /// let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
     ///
-    /// let strangle: Strangle = Strangle::new(6.0, 4.0, 1.0, 1.0).unwrap();
+    /// let strangle: Strangle = Strangle::new(6.0, 4.0, 1.0).unwrap();
     ///
     /// assert!((strangle.payoff(&s) - Array1::from_vec(vec![1.0, 0.0, 0.0, 0.0, 1.0])).sum().abs() < TEST_ACCURACY);
     /// ```
@@ -1024,9 +1043,13 @@ impl Payoff for Strangle {
     /// - Profit of the strangle option
     /// 
     /// # LaTeX Formula
-    /// - \\textit{Strangle Profit} = max(S_{t}-K_{c}, 0) - \\textit{Cost}_{c} + max(K_{p}-S_{t}, 0) - \\textit{Cost}_{p}
+    /// - \\textit{Strangle Profit} = max(S_{t}-K_{c}, 0) + max(K_{p}-S_{t}, 0) - \\textit{Cost}
     fn profit(&self, s: &Array1<f64>) -> Array1<f64> {
-        self.payoff(s) - self.cost_c - self.cost_p
+        self.payoff(s) - self.cost
+    }
+
+    fn update_cost(&mut self, new_cost: f64) -> () {
+        self.cost = new_cost;
     }
 }
 
@@ -1039,10 +1062,8 @@ impl Payoff for Strangle {
 pub struct Strip {
     /// Option strike price
     pub k: f64,
-    /// Initial long call option price (cost)
-    pub cost_c: f64,
-    /// Initial long put option price (cost)
-    pub cost_p: f64,
+    /// Initial option price (cost)
+    pub cost: f64,
 }
 
 impl Payoff for Strip {
@@ -1067,7 +1088,7 @@ impl Payoff for Strip {
     ///
     /// let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
     ///
-    /// let strip: Strip = Strip { k: 5.0, cost_c: 1.0, cost_p: 1.0 };
+    /// let strip: Strip = Strip { k: 5.0, cost: 1.0 };
     ///
     /// assert!((strip.payoff(&s) - Array1::from_vec(vec![4.0, 2.0, 0.0, 1.0, 2.0])).sum().abs() < TEST_ACCURACY);
     /// ```
@@ -1085,9 +1106,13 @@ impl Payoff for Strip {
     /// - Profit of the strip option
     /// 
     /// # LaTeX Formula
-    /// - \\textit{Strip Profit} = max(S_{t}-K, 0) - \\textit{Cost}_{c} + 2max(K-S_{t}, 0) - 2\\text{Cost}_{p}
+    /// - \\textit{Strip Profit} = max(S_{t}-K, 0) + 2max(K-S_{t}, 0) - \\text{Cost}
     fn profit(&self, s: &Array1<f64>) -> Array1<f64> {
-        self.payoff(s) - self.cost_c - 2.0*self.cost_p
+        self.payoff(s) - self.cost
+    }
+
+    fn update_cost(&mut self, new_cost: f64) -> () {
+        self.cost = new_cost;
     }
 }
 
@@ -1100,10 +1125,8 @@ impl Payoff for Strip {
 pub struct Strap {
     /// Option strike price
     pub k: f64,
-    /// Initial long call option price (cost)
-    pub cost_c: f64,
-    /// Initial long put option price (cost)
-    pub cost_p: f64,
+    /// Initial option price (cost)
+    pub cost: f64,
 }
 
 impl Payoff for Strap {
@@ -1128,7 +1151,7 @@ impl Payoff for Strap {
     ///
     /// let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
     ///
-    ///  let strap: Strap = Strap { k: 5.0, cost_c: 1.0, cost_p: 1.0 };
+    ///  let strap: Strap = Strap { k: 5.0, cost: 1.0 };
     ///
     ///  assert!((strap.payoff(&s) - Array1::from_vec(vec![2.0, 1.0, 0.0, 2.0, 4.0])).sum().abs() < TEST_ACCURACY);
     /// ```
@@ -1146,16 +1169,104 @@ impl Payoff for Strap {
     /// - Profit of the strap option
     /// 
     /// # LaTeX Formula
-    /// - \\textit{Strap Profit} = 2max(S_{t}-K, 0) - 2\\textit{Cost}_{c} + max(K-S_{t}, 0) - \\text{Cost}_{p}
+    /// - \\textit{Strap Profit} = 2max(S_{t}-K, 0) + max(K-S_{t}, 0) - \\text{Cost}
     fn profit(&self, s: &Array1<f64>) -> Array1<f64> {
-        self.payoff(s) - 2.0*self.cost_c - self.cost_p
+        self.payoff(s) - self.cost
     }
+
+    fn update_cost(&mut self, new_cost: f64) -> () {
+        self.cost = new_cost;
+    }
+}
+
+
+#[cfg(feature = "plotly")]
+/// # Description
+/// Plots the payoff function.
+///
+/// # Input
+/// - `payoff_obj`: An instrument with a payoff function
+/// - `start_price`: Start of the price range (i.e., the start point of the x-axis)
+/// - `stop_price`: End of the price range (i.e., the end point of the x-axis)
+/// - `n_points`: Number of points to produce on the plot
+///
+/// # Output
+/// - Plot of the payoff function
+///
+/// # Examples
+///
+/// ```rust
+/// use digifi::financial_instruments::Strangle;
+///
+/// #[cfg(feature = "plotly")]
+/// fn test_plot_payoff() -> () {
+///     use plotly::Plot;
+///     use digifi::plots::plot_payoff;
+///     
+///     let payoff_obj: Strangle = Strangle::new(6.0, 4.0, 1.0).unwrap();
+///     let payoff_plot: Plot = plot_payoff(&payoff_obj, 0.0, 10.0, 21);
+///     payoff_plot.show();
+/// }
+/// ```
+pub fn plot_payoff(payoff_obj: &impl Payoff, start_price: f64, stop_price: f64, n_points: usize) -> Plot {
+    let prices: Array1<f64> = Array1::linspace(start_price, stop_price, n_points);
+    let payoff: Array1<f64> = payoff_obj.payoff(&prices);
+    let mut plot: Plot = Plot::new();
+    plot.add_trace(Scatter::new(prices.to_vec(), payoff.to_vec()));
+    let x_axis: Axis = Axis::new().title("Price at Maturity");
+    let y_axis: Axis = Axis::new().title("Payoff at Maturity");
+    let layout: Layout = Layout::new().title("<b>Payoff Plot</b>").x_axis(x_axis).y_axis(y_axis);
+    plot.set_layout(layout);
+    plot
+}
+
+
+#[cfg(feature = "plotly")]
+/// # Description
+/// Plots the profit function.
+///
+/// # Input
+/// - `payoff_obj`: An instrument with a profit function
+/// - `start_price`: Start of the price range (i.e., the start point of the x-axis)
+/// - `stop_price`: End of the price range (i.e., the end point of the x-axis)
+/// - `n_points`: Number of points to produce on the plot
+///
+/// # Output
+/// - Plot of the profit function
+///
+/// # Examples
+///
+/// ```rust
+/// use digifi::financial_instruments::Strangle;
+///
+/// #[cfg(feature = "plotly")]
+/// fn test_plot_payoff() -> () {
+///     use plotly::Plot;
+///     use digifi::plots::plot_profit;
+///     
+///     let payoff_obj: Strangle = Strangle::new(6.0, 4.0, 1.0).unwrap();
+///     let profit_plot: Plot = plot_profit(&payoff_obj, 0.0, 10.0, 21);
+///     profit_plot.show();
+/// }
+/// ```
+pub fn plot_profit(payoff_obj: &impl Payoff, start_price: f64, stop_price: f64, n_points: usize) -> Plot {
+    let prices: Array1<f64> = Array1::linspace(start_price, stop_price, n_points);
+    let profit: Array1<f64> = payoff_obj.profit(&prices);
+    let mut plot: Plot = Plot::new();
+    plot.add_trace(Scatter::new(prices.to_vec(), profit.to_vec()));
+    let x_axis: Axis = Axis::new().title("Price at Maturity");
+    let y_axis: Axis = Axis::new().title("Profit at Maturity");
+    let layout: Layout = Layout::new().title("<b>Profit Plot</b>").x_axis(x_axis).y_axis(y_axis);
+    plot.set_layout(layout);
+    plot
 }
 
 
 #[cfg(test)]
 mod tests {
     use ndarray::{Array1, array};
+    #[cfg(feature = "plotly")]
+    use plotly::Plot;
     use crate::utilities::TEST_ACCURACY;
     use crate::financial_instruments::Payoff;
 
@@ -1195,23 +1306,24 @@ mod tests {
     fn unit_test_bull_collar() -> () {
         use crate::financial_instruments::BullCollar;
         let s: Array1<f64> = Array1::range(3.0, 7.0, 0.5);
-        let bull_collar: BullCollar = BullCollar::new(4.0, 6.0, 1.0, 1.0, 5.0).unwrap();
-        assert!((bull_collar.profit(&s) - Array1::from_vec(vec![-1.0, -1.0, -1.0, -0.5, 0.0, 0.5, 1.0, 1.0])).sum().abs() < TEST_ACCURACY);
+        let bull_collar: BullCollar = BullCollar::new(4.0, 6.0, 0.0, 5.0).unwrap();
+        println!("{}", bull_collar.profit(&s));
+        assert!((bull_collar.payoff(&s) - Array1::from_vec(vec![-1.0, -1.0, -1.0, -0.5, 0.0, 0.5, 1.0, 1.0])).sum().abs() < TEST_ACCURACY);
     }
 
     #[test]
     fn unit_test_bear_collar() -> () {
         use crate::financial_instruments::BearCollar;
         let s: Array1<f64> = Array1::range(3.0, 7.0, 0.5);
-        let bear_collar: BearCollar = BearCollar::new(4.0, 6.0, 1.0, 1.0, 5.0).unwrap();
-        assert!((bear_collar.profit(&s) - Array1::from_vec(vec![1.0, 1.0, 1.0, 0.5, 0.0, -0.5, -1.0, -1.0])).sum().abs() < TEST_ACCURACY);
+        let bear_collar: BearCollar = BearCollar::new(4.0, 6.0, 0.0, 5.0).unwrap();
+        assert!((bear_collar.payoff(&s) - Array1::from_vec(vec![1.0, 1.0, 1.0, 0.5, 0.0, -0.5, -1.0, -1.0])).sum().abs() < TEST_ACCURACY);
     }
 
     #[test]
     fn unit_test_bull_spread() -> () {
         use crate::financial_instruments::BullSpread;
         let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
-        let bull_spread: BullSpread = BullSpread::new(4.0, 6.0, 1.0, 1.0).unwrap();
+        let bull_spread: BullSpread = BullSpread::new(4.0, 6.0, 1.0).unwrap();
         assert!((bull_spread.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, 1.0, 2.0, 2.0])).sum().abs() < TEST_ACCURACY);
     }
 
@@ -1219,7 +1331,7 @@ mod tests {
     fn unit_test_bear_spread() -> () {
         use crate::financial_instruments::BearSpread;
         let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
-        let bear_spread: BearSpread = BearSpread::new(6.0, 4.0, 1.0, 1.0).unwrap();
+        let bear_spread: BearSpread = BearSpread::new(6.0, 4.0, 1.0).unwrap();
         assert!((bear_spread.payoff(&s) - Array1::from_vec(vec![2.0, 2.0, 1.0, 0.0, 0.0])).sum().abs() < TEST_ACCURACY);
     }
 
@@ -1227,7 +1339,7 @@ mod tests {
     fn unit_test_long_butterfly() -> () {
         use crate::financial_instruments::LongButterfly;
         let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
-        let long_butterfly: LongButterfly = LongButterfly::new(4.0, 6.0, 5.0, 1.0, 1.0, 1.0).unwrap();
+        let long_butterfly: LongButterfly = LongButterfly::new(4.0, 6.0, 5.0, 1.0).unwrap();
         assert!((long_butterfly.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, 1.0, 0.0, 0.0])).sum().abs() < TEST_ACCURACY);
     }
 
@@ -1235,7 +1347,7 @@ mod tests {
     fn unit_test_box_spread() -> () {
         use crate::financial_instruments::BoxSpread;
         let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
-        let box_spread: BoxSpread = BoxSpread::new(4.0, 6.0, 1.0, 1.0, 1.0, 1.0).unwrap();
+        let box_spread: BoxSpread = BoxSpread::new(4.0, 6.0, 1.0).unwrap();
         assert!((box_spread.payoff(&s) - Array1::from_vec(vec![2.0, 2.0, 2.0, 2.0, 2.0])).sum().abs() < TEST_ACCURACY);
     }
 
@@ -1243,7 +1355,7 @@ mod tests {
     fn unit_test_straddle() -> () {
         use crate::financial_instruments::Straddle;
         let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
-        let straddle: Straddle = Straddle { k: 5.0, cost_c: 1.0, cost_p: 1.0 };
+        let straddle: Straddle = Straddle { k: 5.0, cost: 1.0 };
         assert!((straddle.payoff(&s) - Array1::from_vec(vec![2.0, 1.0, 0.0, 1.0, 2.0])).sum().abs() < TEST_ACCURACY);
     }
 
@@ -1251,7 +1363,7 @@ mod tests {
     fn unit_test_strangle() -> () {
         use crate::financial_instruments::Strangle;
         let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
-        let strangle: Strangle = Strangle::new(6.0, 4.0, 1.0, 1.0).unwrap();
+        let strangle: Strangle = Strangle::new(6.0, 4.0, 1.0).unwrap();
         assert!((strangle.payoff(&s) - Array1::from_vec(vec![1.0, 0.0, 0.0, 0.0, 1.0])).sum().abs() < TEST_ACCURACY);
     }
 
@@ -1259,7 +1371,7 @@ mod tests {
     fn unit_test_strip() -> () {
         use crate::financial_instruments::Strip;
         let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
-        let strip: Strip = Strip { k: 5.0, cost_c: 1.0, cost_p: 1.0 };
+        let strip: Strip = Strip { k: 5.0, cost: 1.0 };
         assert!((strip.payoff(&s) - Array1::from_vec(vec![4.0, 2.0, 0.0, 1.0, 2.0])).sum().abs() < TEST_ACCURACY);
     }
 
@@ -1267,7 +1379,161 @@ mod tests {
     fn unit_test_strap() -> () {
         use crate::financial_instruments::Strap;
         let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
-        let strap: Strap = Strap { k: 5.0, cost_c: 1.0, cost_p: 1.0 };
+        let strap: Strap = Strap { k: 5.0, cost: 1.0 };
         assert!((strap.payoff(&s) - Array1::from_vec(vec![2.0, 1.0, 0.0, 2.0, 4.0])).sum().abs() < TEST_ACCURACY);
+    }
+
+    #[cfg(feature = "plotly")]
+    #[test]
+    fn unit_test_long_call_plot() -> () {
+        use crate::financial_instruments::{LongCall, plot_payoff, plot_profit};
+        let payoff_obj: LongCall = LongCall { k: 50.0, cost: 1.0 };
+        let payoff_plot: Plot = plot_payoff(&payoff_obj, 30.0, 70.0, 41);
+        payoff_plot.show();
+        let profit_plot: Plot = plot_profit(&payoff_obj, 30.0, 70.0, 41);
+        profit_plot.show();
+    }
+
+    #[cfg(feature = "plotly")]
+    #[test]
+    fn unit_test_short_call_plot() -> () {
+        use crate::financial_instruments::{ShortCall, plot_payoff, plot_profit};
+        let payoff_obj: ShortCall = ShortCall { k: 50.0, cost: 1.0 };
+        let payoff_plot: Plot = plot_payoff(&payoff_obj, 30.0, 70.0, 41);
+        payoff_plot.show();
+        let profit_plot: Plot = plot_profit(&payoff_obj, 30.0, 70.0, 41);
+        profit_plot.show();
+    }
+
+    #[cfg(feature = "plotly")]
+    #[test]
+    fn unit_test_long_put_plot() -> () {
+        use crate::financial_instruments::{LongPut, plot_payoff, plot_profit};
+        let payoff_obj: LongPut = LongPut { k: 50.0, cost: 1.0 };
+        let payoff_plot: Plot = plot_payoff(&payoff_obj, 30.0, 70.0, 41);
+        payoff_plot.show();
+        let profit_plot: Plot = plot_profit(&payoff_obj, 30.0, 70.0, 41);
+        profit_plot.show();
+    }
+
+    #[cfg(feature = "plotly")]
+    #[test]
+    fn unit_test_short_put_plot() -> () {
+        use crate::financial_instruments::{ShortPut, plot_payoff, plot_profit};
+        let payoff_obj: ShortPut = ShortPut { k: 50.0, cost: 1.0 };
+        let payoff_plot: Plot = plot_payoff(&payoff_obj, 30.0, 70.0, 41);
+        payoff_plot.show();
+        let profit_plot: Plot = plot_profit(&payoff_obj, 30.0, 70.0, 41);
+        profit_plot.show();
+    }
+
+    #[cfg(feature = "plotly")]
+    #[test]
+    fn unit_test_bull_collar_plot() -> () {
+        use crate::financial_instruments::{BullCollar, plot_payoff, plot_profit};
+        let payoff_obj: BullCollar = BullCollar::new(4.0, 6.0, 1.0, 5.0).unwrap();
+        let payoff_plot: Plot = plot_payoff(&payoff_obj, 0.0, 10.0, 21);
+        payoff_plot.show();
+        let profit_plot: Plot = plot_profit(&payoff_obj, 0.0, 10.0, 21);
+        profit_plot.show();
+    }
+
+    #[cfg(feature = "plotly")]
+    #[test]
+    fn unit_test_bear_collar_plot() -> () {
+        use crate::financial_instruments::{BearCollar, plot_payoff, plot_profit};
+        let payoff_obj: BearCollar = BearCollar::new(4.0, 6.0, 1.0, 5.0).unwrap();
+        let payoff_plot: Plot = plot_payoff(&payoff_obj, 0.0, 10.0, 21);
+        payoff_plot.show();
+        let profit_plot: Plot = plot_profit(&payoff_obj, 0.0, 10.0, 21);
+        profit_plot.show();
+    }
+
+    #[cfg(feature = "plotly")]
+    #[test]
+    fn unit_test_bull_spread_plot() -> () {
+        use crate::financial_instruments::{BullSpread, plot_payoff, plot_profit};
+        let payoff_obj: BullSpread = BullSpread::new(4.0, 6.0, 1.0).unwrap();
+        let payoff_plot: Plot = plot_payoff(&payoff_obj, 0.0, 10.0, 21);
+        payoff_plot.show();
+        let profit_plot: Plot = plot_profit(&payoff_obj, 0.0, 10.0, 21);
+        profit_plot.show();
+    }
+
+    #[cfg(feature = "plotly")]
+    #[test]
+    fn unit_test_bear_spread_plot() -> () {
+        use crate::financial_instruments::{BearSpread, plot_payoff, plot_profit};
+        let payoff_obj: BearSpread = BearSpread::new(6.0, 4.0, 1.0).unwrap();
+        let payoff_plot: Plot = plot_payoff(&payoff_obj, 0.0, 10.0, 21);
+        payoff_plot.show();
+        let profit_plot: Plot = plot_profit(&payoff_obj, 0.0, 10.0, 21);
+        profit_plot.show();
+    }
+
+    #[cfg(feature = "plotly")]
+    #[test]
+    fn unit_test_long_butterfly_plot() -> () {
+        use crate::financial_instruments::{LongButterfly, plot_payoff, plot_profit};
+        let payoff_obj: LongButterfly = LongButterfly::new(4.0, 6.0, 5.0, 1.0).unwrap();
+        let payoff_plot: Plot = plot_payoff(&payoff_obj, 0.0, 10.0, 21);
+        payoff_plot.show();
+        let profit_plot: Plot = plot_profit(&payoff_obj, 0.0, 10.0, 21);
+        profit_plot.show();
+    }
+
+    #[cfg(feature = "plotly")]
+    #[test]
+    fn unit_test_box_spread_plot() -> () {
+        use crate::financial_instruments::{BoxSpread, plot_payoff, plot_profit};
+        let payoff_obj: BoxSpread = BoxSpread::new(4.0, 6.0, 1.0).unwrap();
+        let payoff_plot: Plot = plot_payoff(&payoff_obj, 0.0, 10.0, 21);
+        payoff_plot.show();
+        let profit_plot: Plot = plot_profit(&payoff_obj, 0.0, 10.0, 21);
+        profit_plot.show();
+    }
+
+    #[cfg(feature = "plotly")]
+    #[test]
+    fn unit_test_straddle_plot() -> () {
+        use crate::financial_instruments::{Straddle, plot_payoff, plot_profit};
+        let payoff_obj: Straddle = Straddle { k: 5.0, cost: 1.0 };
+        let payoff_plot: Plot = plot_payoff(&payoff_obj, 0.0, 10.0, 21);
+        payoff_plot.show();
+        let profit_plot: Plot = plot_profit(&payoff_obj, 0.0, 10.0, 21);
+        profit_plot.show();
+    }
+
+    #[cfg(feature = "plotly")]
+    #[test]
+    fn unit_test_strangle_plot() -> () {
+        use crate::financial_instruments::{Strangle, plot_payoff, plot_profit};
+        let payoff_obj: Strangle = Strangle::new(6.0, 4.0, 1.0).unwrap();
+        let payoff_plot: Plot = plot_payoff(&payoff_obj, 0.0, 10.0, 21);
+        payoff_plot.show();
+        let profit_plot: Plot = plot_profit(&payoff_obj, 0.0, 10.0, 21);
+        profit_plot.show();
+    }
+
+    #[cfg(feature = "plotly")]
+    #[test]
+    fn unit_test_strip_plot() -> () {
+        use crate::financial_instruments::{Strip, plot_payoff, plot_profit};
+        let payoff_obj: Strip = Strip { k: 5.0, cost: 1.0 };
+        let payoff_plot: Plot = plot_payoff(&payoff_obj, 0.0, 10.0, 21);
+        payoff_plot.show();
+        let profit_plot: Plot = plot_profit(&payoff_obj, 0.0, 10.0, 21);
+        profit_plot.show();
+    }
+
+    #[cfg(feature = "plotly")]
+    #[test]
+    fn unit_test_strap_plot() -> () {
+        use crate::financial_instruments::{Strap, plot_payoff, plot_profit};
+        let payoff_obj: Strap = Strap { k: 5.0, cost: 1.0 };
+        let payoff_plot: Plot = plot_payoff(&payoff_obj, 0.0, 10.0, 21);
+        payoff_plot.show();
+        let profit_plot: Plot = plot_profit(&payoff_obj, 0.0, 10.0, 21);
+        profit_plot.show();
     }
 }

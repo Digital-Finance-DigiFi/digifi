@@ -1,5 +1,5 @@
 // Re-Exports
-pub use self::loss_functions::{mae, mse};
+pub use self::loss_functions::{LossFunction, MAE, MSE, StraddleLoss};
 pub use self::maths_utils::{FunctionEvalMethod, factorial, rising_factorial, erf, erfinv, derivative, definite_integral};
 pub use self::numerical_engines::nelder_mead;
 #[cfg(feature = "sample_data")]

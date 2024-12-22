@@ -1,11 +1,14 @@
 use std::io::Error;
 use ndarray::Array1;
+#[cfg(feature = "plotly")]
+use plotly::{Plot, Surface, Layout, layout::{Axis, LayoutScene}, common::Title};
 use crate::{lattice_models::LatticeModel, statistics::ProbabilityDistribution, utilities::{data_error, input_error, time_value_utils::{Compounding, CompoundingType}}};
 use crate::financial_instruments::{FinancialInstrument, FinancialInstrumentId, Payoff};
 use crate::portfolio_applications::{AssetHistData, PortfolioInstrument};
 use crate::statistics::{covariance, continuous_distributions::NormalDistribution};
 use crate::stochastic_processes::{StochasticProcess, standard_stochastic_models::BrownianBridge};
 use crate::lattice_models::{binomial_models::BrownianMotionBinomialModel, trinomial_models::BrownianMotionTrinomialModel};
+// TODO: Add implied volatility calculator, volatility smile and surface plots
 
 
 /// # Description
@@ -342,7 +345,7 @@ impl PortfolioInstrument for Contract {
 /// let asset_historical_data: AssetHistData = AssetHistData::new(Array1::from_vec(vec![0.4, 0.5]),
 ///                                                               Array1::from_vec(vec![0.0, 0.0]),
 ///                                                               Array1::from_vec(vec![0.0, 1.0])).unwrap();
-/// let payoff = Box::new(LongCall { k: 100.0, cost: 1.5 });
+/// let payoff: Box<LongCall> = Box::new(LongCall { k: 100.0, cost: 1.5 });
 /// let option_pricing_method: OptionPricingMethod = OptionPricingMethod::BlackScholes { type_: BlackScholesType::Call };
 /// let option: OptionContract = OptionContract::new(99.0, 100.0, 0.02, 0.0, 3.0, 0.2, OptionType::European,
 ///                                                  payoff, 1.5, option_pricing_method, financial_instrument_id, asset_historical_data, None).unwrap();
@@ -922,6 +925,64 @@ impl PortfolioInstrument for OptionContract {
 }
 
 
+#[cfg(feature = "plotly")]
+/// # Description
+/// Plots the present value/option premium surface (i.e., underlying asset price vs time-to-maturity vs option premium).
+///
+/// # Input
+/// - `surface`: Present value surface for the option
+///
+/// # Output
+/// - Plot of the present value/option premium surface
+///
+/// # Examples
+///
+/// ```rust
+/// use digifi::utilities::time_value_utils::CompoundingType;
+/// use digifi::financial_instruments::{FinancialInstrument, FinancialInstrumentId, FinancialInstrumentType, AssetClass, LongCall};
+/// use digifi::financial_instruments::derivatives::{OptionType, OptionPricingMethod, OptionContract, PresentValueSurface};
+/// use digifi::portfolio_applications::AssetHistData;
+///
+/// #[cfg(feature = "plotly")]
+/// #[test]
+/// fn plot_option_premium_surface() -> () {
+///     use plotly::Plot;
+///     use digifi::plots::plot_present_value_surface;
+///
+///     // Option definition
+///     let financial_instrument_id: FinancialInstrumentId = FinancialInstrumentId {instrument_type: FinancialInstrumentType::DerivativeInstrument,
+///                                                                                 asset_class: AssetClass::EquityBasedInstrument,
+///                                                                                 identifier: String::from("32198407128904") };
+///     let asset_historical_data: AssetHistData = AssetHistData::new(Array1::from_vec(vec![0.4, 0.5]),
+///                                                                   Array1::from_vec(vec![0.0, 0.0]),
+///                                                                   Array1::from_vec(vec![0.0, 1.0])).unwrap();
+///     let payoff: Box<LongCall> = Box::new(LongCall { k: 100.0, cost: 1.5 });
+///     let option_pricing_method: OptionPricingMethod = OptionPricingMethod::Binomial { n_steps: 50 };
+///     let mut option: OptionContract = OptionContract::new(99.0, 100.0, 0.02, 0.0, 3.0, 0.2, OptionType::European,
+///                                                      payoff, 1.5, option_pricing_method, financial_instrument_id, asset_historical_data, None).unwrap();
+///
+///     // Plot
+///     let surface: PresentValueSurface = option.present_value_surface(70.0, 130.0, 61, 30).unwrap();
+///     let plot: Plot = plot_present_value_surface(&surface);
+///     plot.show();
+/// }
+/// ```
+pub fn plot_present_value_surface(surface: &PresentValueSurface) -> Plot {
+    let x: Vec<f64> = surface.price_array.to_vec();
+    let y: Vec<f64> = surface.times_to_maturity.to_vec();
+    let z: Vec<Vec<f64>> = surface.pv_matrix.iter().map(|a| a.to_vec() ).collect();
+    let mut plot: Plot = Plot::new();
+    plot.add_trace(Surface::new(z).x(x).y(y).name("Option Premium Surface"));
+    let x_axis: Axis = Axis::new().title(Title::from("Underlying Asset Price"));
+    let y_axis: Axis = Axis::new().title(Title::from("Time to Maturity"));
+    let z_axis: Axis = Axis::new().title(Title::from("Option Premium"));
+    let layout_scene: LayoutScene = LayoutScene::new().x_axis(x_axis).y_axis(y_axis).z_axis(z_axis);
+    let layout: Layout = Layout::new().scene(layout_scene).title("<b>Option Premium Surface</b>");
+    plot.set_layout(layout);
+    plot
+}
+
+
 #[cfg(test)]
 mod tests {
     use ndarray::Array1;
@@ -958,7 +1019,7 @@ mod tests {
         let asset_historical_data: AssetHistData = AssetHistData::new(Array1::from_vec(vec![0.4, 0.5]),
                                                                       Array1::from_vec(vec![0.0, 0.0]),
                                                                       Array1::from_vec(vec![0.0, 1.0])).unwrap();
-        let payoff = Box::new(LongCall { k: 100.0, cost: 1.5 });
+        let payoff: Box<LongCall> = Box::new(LongCall { k: 100.0, cost: 1.5 });
         let option_pricing_method: OptionPricingMethod = OptionPricingMethod::BlackScholes { type_: BlackScholesType::Call };
         let option: OptionContract = OptionContract::new(99.0, 100.0, 0.02, 0.0, 3.0, 0.2, OptionType::European,
                                                          payoff, 1.5, option_pricing_method, financial_instrument_id, asset_historical_data, None).unwrap();
@@ -971,5 +1032,27 @@ mod tests {
         let component_2: f64 = 100.0 * (-0.02 * 3.0_f64).exp() * normal_dist.cdf(&Array1::from_vec(vec![d_2])).unwrap()[0];
         let pv: f64 = component_1 - component_2;
         assert!((option.present_value().unwrap() - pv).abs() < TEST_ACCURACY);
+    }
+
+    #[cfg(feature = "plotly")]
+    #[test]
+    fn unit_test_option_plot() -> () {
+        use plotly::Plot;
+        use crate::financial_instruments::derivatives::{plot_present_value_surface, PresentValueSurface};
+        // Option definition
+        let financial_instrument_id: FinancialInstrumentId = FinancialInstrumentId {instrument_type: FinancialInstrumentType::DerivativeInstrument,
+                                                                                    asset_class: AssetClass::EquityBasedInstrument,
+                                                                                    identifier: String::from("32198407128904") };
+        let asset_historical_data: AssetHistData = AssetHistData::new(Array1::from_vec(vec![0.4, 0.5]),
+                                                                      Array1::from_vec(vec![0.0, 0.0]),
+                                                                      Array1::from_vec(vec![0.0, 1.0])).unwrap();
+        let payoff: Box<LongCall> = Box::new(LongCall { k: 100.0, cost: 1.5 });
+        let option_pricing_method: OptionPricingMethod = OptionPricingMethod::Binomial { n_steps: 50 };
+        let mut option: OptionContract = OptionContract::new(99.0, 100.0, 0.02, 0.0, 3.0, 0.2, OptionType::European,
+                                                         payoff, 1.5, option_pricing_method, financial_instrument_id, asset_historical_data, None).unwrap();
+        // Plot
+        let surface: PresentValueSurface = option.present_value_surface(70.0, 130.0, 61, 30).unwrap();
+        let plot: Plot = plot_present_value_surface(&surface);
+        plot.show();
     }
 }

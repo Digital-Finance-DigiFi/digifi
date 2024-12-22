@@ -1,6 +1,6 @@
 use std::io::Error;
 use ndarray::{Array1, arr1};
-use crate::utilities::{ParameterType, Time, compare_array_len, input_error, data_error, loss_functions::mse, numerical_engines::nelder_mead};
+use crate::utilities::{ParameterType, Time, compare_array_len, input_error, data_error, loss_functions::{LossFunction, MSE}, numerical_engines::nelder_mead};
 
 
 #[derive(Clone)]
@@ -189,7 +189,7 @@ pub fn internal_rate_of_return(initial_cashflow: f64, cashflow: &Array1<f64>, ti
             let discount_term: Compounding = Compounding::new(rate[0], &compounding_type);
             present_value += cashflow[i] * discount_term.compounding_term(time_array[i]);
         }
-        mse(&arr1(&[present_value]), &arr1(&[initial_cashflow])).unwrap()
+        MSE.loss_array(&arr1(&[present_value]), &arr1(&[initial_cashflow])).unwrap()
     };
     let rate: Array1<f64> = nelder_mead(pv_closure, vec![0.0], Some(1_000), Some(1_000), None, None, None)?;
     Ok(rate[0])

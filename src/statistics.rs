@@ -372,6 +372,88 @@ pub fn adjusted_r_square(real_values: &Array1<f64>, predicted_values: &Array1<f6
 
 
 /// # Description
+/// General form of the min-max normalization where the array is normalized to the interval `\[a,b\]`.
+///
+/// # Input
+/// - `x`: An array to normalize
+/// - `a`: Lower bound for the normalized array
+/// - `b`: Upper bound for the normalized array
+///
+/// # Output
+/// - Normalized array `x`
+///
+/// # LaTeX Formula
+/// - x_{norm} = a + \\frac{(x-min(x))(b-a)}{max(x)-min(x)}
+///
+/// # Links
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Feature_scaling#Rescaling_(min-max_normalization)>
+/// - Original Source: N/A
+///
+/// # Examples
+///
+/// ```rust
+/// use ndarray::Array1;
+/// use digifi::statistics::min_max_scaling;
+///
+/// let x: Array1<f64> = Array1::from_vec(vec![-10.0, -4.0, 5.0]);
+///
+/// let x_norm: Array1<f64> = min_max_scaling(x, 0.0, 1.0);
+///
+/// assert_eq!(x_norm, Array1::from_vec(vec![0.0, 0.4, 1.0]));
+/// ```
+pub fn min_max_scaling(x: Array1<f64>, a: f64, b: f64) -> Array1<f64> {
+    let first_value: f64 = x[0];
+    let (min, max): (f64, f64) = x.iter().fold((first_value, first_value), |(min, max), curr| {
+        if *curr < min { (*curr, max) } else if max < *curr { (min, *curr) } else { (min, max) }
+    } );
+    if min == max {
+        // Default array to prevent NaN values
+        Array1::from_vec(vec![1.0; x.len()])
+    } else {
+        a + ((x - min) * (b - a)) / (max - min)
+    }
+}
+
+
+/// # Description
+/// General form of the unit vector normalization using the p-norm.
+///
+/// # Input
+/// - `x`: An array to normalize
+/// - `p`: Order of the p-nrom
+///
+/// # Output
+/// - Normalized array `x`
+///
+/// # LaTeX Formula
+/// - x_{norm} = (\\frac{x_{1}}{(\\lvert x_{1}\\rvert^{p} + ... + \\lvert x_{n}\\rvert^{p})^{\\frac{1}{p}}}, ..., \\frac{x_{n}}{(\\lvert x_{1}\\rvert^{p} + ... + \\lvert x_{n}\\rvert^{p})^{\\frac{1}{p}}})
+///
+/// # Links
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Feature_scaling#Unit_vector_normalization>
+/// - Original Source: N/A
+///
+/// # Examples
+///
+/// ```rust
+/// use digifi::utilities::TEST_ACCURACY;
+/// use ndarray::Array1;
+/// use digifi::statistics::unit_vector_normalization;
+///
+/// let x: Array1<f64> = Array1::from_vec(vec![-15.0, 3.0, 5.0]);
+///
+/// let x_norm: Array1<f64> = unit_vector_normalization(x, 2);
+///
+/// assert!(((&x_norm * &x_norm).sum() - 1.0).abs() < TEST_ACCURACY)
+/// ```
+pub fn unit_vector_normalization(x: Array1<f64>, p: usize) -> Array1<f64> {
+    let p_: i32 = p as i32;
+    let norm: f64 = x.iter().fold(0.0, |prev, curr| { prev + curr.abs().powi(p_) } ).powf(1.0 / p_ as f64);
+    x / norm
+
+}
+
+
+/// # Description
 /// Gamma function is the most common extension of the factorial function to complex numbers.
 ///
 /// # Input
@@ -755,7 +837,7 @@ mod tests {
 
     #[test]
     fn unit_test_linear_regression() -> () {
-        use ndarray::{Array1, Array2, array};
+        use ndarray::Array2;
         use crate::statistics::linear_regression;
         let y: Array1<f64> = array![1.0, 2.0, 3.0];
         let x: Array2<f64> = array![[1.0, 3.0, 1.0], [4.0, 4.0, 1.0], [6.0, 5.0, 1.0]];
@@ -763,6 +845,22 @@ mod tests {
         // The results were found using LinearRegression from sklearn
         let results: Array1<f64> = Array1::from(vec![-2.49556592e-16, 1.0, -2.0]);
         assert!((&params - &results).sum().abs() < TEST_ACCURACY);
+    }
+
+    #[test]
+    fn unit_test_min_max_scaling() -> () {
+        use crate::statistics::min_max_scaling;
+        let x: Array1<f64> = Array1::from_vec(vec![-10.0, -4.0, 5.0]);
+        let x_norm: Array1<f64> = min_max_scaling(x, 0.0, 1.0);
+        assert_eq!(x_norm, Array1::from_vec(vec![0.0, 0.4, 1.0]));
+    }
+
+    #[test]
+    fn unit_test_unit_vector_normalization() -> () {
+        use crate::statistics::unit_vector_normalization;
+        let x: Array1<f64> = Array1::from_vec(vec![-15.0, 3.0, 5.0]);
+        let x_norm: Array1<f64> = unit_vector_normalization(x, 2);
+        assert!(((&x_norm * &x_norm).sum() - 1.0).abs() < TEST_ACCURACY)
     }
 
     #[test]

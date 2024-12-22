@@ -1,7 +1,6 @@
 use std::io::Error;
 use ndarray::Array1;
 use crate::utilities::{input_error, data_error};
-use crate::statistics::n_choose_r;
 use crate::lattice_models::LatticeModel;
 use crate::financial_instruments::Payoff;
 
@@ -102,7 +101,7 @@ pub fn binomial_tree_nodes(s_0: f64, u: f64, d: f64, n_steps: usize) -> Result<V
 /// use digifi::lattice_models::binomial_model;
 /// use digifi::financial_instruments::Straddle;
 ///
-/// let straddle: Straddle = Straddle { k: 11.0, cost_c: 0.0, cost_p: 0.0 };
+/// let straddle: Straddle = Straddle { k: 11.0, cost: 0.0 };
 /// let predicted_value: f64 = binomial_model(&straddle, 10.0, 1.2, 0.9, 0.5, 2, Some(vec![false, false])).unwrap();
 ///
 /// let analytic_solution: f64 = 0.5 * (0.5*3.4 + 0.5*0.2) + 0.5 * (0.5*0.2 + 0.5*2.9);
@@ -234,14 +233,23 @@ impl LatticeModel for BrownianMotionBinomialModel {
     /// # Output
     /// - The present value of an instrument with the European exercise style
     fn european(&self) -> Result<f64, Error> {
-        let p: f64 = (((self.r-self.q) * self.dt).exp() - self.d) / (self.u - self.d);
-        let mut value: f64  = 0.0;
+        let p_u: f64 = ((-self.q*self.dt).exp() - (-self.r*self.dt).exp()*self.d) / (self.u - self.d);
+        let p_d: f64 = (-self.r*self.dt).exp() - p_u;
+        let mut binomial_tree: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
+        let mut layer: Vec<f64> = Vec::<f64>::new();
         for i in 0..(self.n_steps as i32 + 1) {
-            let node_probability: f64 = (n_choose_r(self.n_steps as u128, i as u128)? as f64) * p.powi(i) * (1.0-p).powi(self.n_steps as i32 - i);
-            let final_price: f64 = self.s_0 * self.u.powi(i) * self.d.powi(self.n_steps as i32 - i);
-            value += self.payoff_object.payoff(&Array1::from_vec(vec![final_price]))[0] * node_probability;
+            layer.push(self.payoff_object.payoff(&Array1::from_vec(vec![self.s_0 * self.u.powi(i) * self.d.powi(self.n_steps as i32 - i)]))[0]);
         }
-        Ok(value * (-self.r * self.time_to_maturity).exp())
+        binomial_tree.push(Array1::from_vec(layer));
+        for j in (0..self.n_steps).rev() {
+            let mut layer: Vec<f64> = Vec::<f64>::new();
+            for i in 0..(j + 1) {
+                let value: f64 = p_u*binomial_tree[binomial_tree.len()-1][i+1] + p_d*binomial_tree[binomial_tree.len()-1][i];
+                layer.push(value);
+            }
+            binomial_tree.push(Array1::from_vec(layer));
+        }
+        Ok(binomial_tree[binomial_tree.len()-1][0] * (-self.r * self.time_to_maturity).exp())
     }
 
     /// # Description
@@ -293,7 +301,7 @@ impl LatticeModel for BrownianMotionBinomialModel {
             }
             binomial_tree.push(Array1::from_vec(layer));
         }
-        Ok(binomial_tree[binomial_tree.len()-1][0])
+        Ok(binomial_tree[binomial_tree.len()-1][0] * (-self.r * self.time_to_maturity).exp())
     }
 }
 
@@ -326,7 +334,7 @@ mod tests {
     fn unit_test_binomial_model_2() -> () {
         use crate::lattice_models::binomial_models::binomial_model;
         use crate::financial_instruments::Straddle;
-        let straddle: Straddle = Straddle { k: 11.0, cost_c: 0.0, cost_p: 0.0 };
+        let straddle: Straddle = Straddle { k: 11.0, cost: 0.0 };
         let predicted_value: f64 = binomial_model(&straddle, 10.0, 1.2, 0.9, 0.5, 2, Some(vec![false, false])).unwrap();
         let analytic_solution: f64 = 0.5 * (0.5*3.4 + 0.5*0.2) + 0.5 * (0.5*0.2 + 0.5*2.9);
         assert!((predicted_value - analytic_solution).abs() < TEST_ACCURACY);

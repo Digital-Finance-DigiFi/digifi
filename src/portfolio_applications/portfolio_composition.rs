@@ -1,6 +1,9 @@
 use std::{collections::HashMap, io::Error};
-use ndarray::{Array1, Array2, Axis};
+use ndarray::{Array1, Array2, Axis, arr1};
+#[cfg(feature = "plotly")]
+use plotly::{Plot, Trace, Scatter, Layout, layout::Axis as PlotAxis, common::{Mode, Marker, MarkerSymbol, HoverInfo, color::NamedColor}};
 use crate::utilities::{data_error, input_error};
+use crate::utilities::loss_functions::{LossFunction, StraddleLoss};
 use crate::utilities::numerical_engines::nelder_mead;
 use crate::statistics::covariance;
 use crate::portfolio_applications::{ReturnsMethod, returns_average, AssetHistData, PortfolioInstrument, prices_to_returns};
@@ -42,6 +45,39 @@ pub struct PortfolioOptimizationResult {
     pub std: f64,
 }
 
+impl PortfolioOptimizationResult {
+
+    /// # Description
+    /// Returns a list of asset names as a `String`.
+    pub fn assets_names_string(&self) -> String {
+        let mut asset_names: String = String::from("[");
+        let n_assets: usize = self.assets_names.len();
+        for i in 0..n_assets {
+            if i == n_assets {
+                asset_names += &self.assets_names[i];
+            } else {
+                asset_names += &(self.assets_names[i].clone() + ", ");
+            }
+        }
+        asset_names + "]"
+    }
+
+    /// # Description
+    /// Returns a list of weights as a `String`.
+    pub fn weights_string(&self) -> String {
+        let mut weights: String = String::from("[");
+        let n_assets: usize = self.weights.len();
+        for i in 0..n_assets {
+            if i == n_assets {
+                weights += &format!("{:.2}", self.weights[i]);
+            } else {
+                weights += &(format!("{:.2}", self.weights[i]) + ", ");
+            }
+        }
+        weights + "]"
+    }
+}
+
 
 /// # Description
 /// Efficient frontier of the market for a given performance metric.
@@ -52,6 +88,24 @@ pub struct EfficientFrontier {
     pub frontier: Vec<PortfolioOptimizationResult>,
     /// Portfolio with minimum standard deviation of returns
     pub min_std: PortfolioOptimizationResult,
+}
+
+impl EfficientFrontier {
+
+    /// # Description
+    /// Returns a tuple of standard deviations and expected returns of the portfolios that sit on the efficient frontier.
+    ///
+    /// # Output
+    /// - Tuple of standard deviations and expected returns (i.e., (`standard_deviations`, `expected_returns`))
+    pub fn frontier_line(&self) -> (Array1<f64>, Array1<f64>) {
+        let mut stds: Vec<f64> = Vec::<f64>::new();
+        let mut expected_returns: Vec<f64> = Vec::<f64>::new();
+        for point in &self.frontier {
+            stds.push(point.std);
+            expected_returns.push(point.expected_return);
+        }
+        (Array1::from(stds), Array1::from(expected_returns))
+    }
 }
 
 
@@ -518,9 +572,8 @@ impl Portfolio {
         let initial_guess: Vec<f64> = self.uniform_weights();
         let f = |v: &[f64]| {
             // Weights constraint
-            let mut weights: Vec<f64> = v.to_vec();
-            let cumsum: f64 = weights.iter().sum::<f64>() - weights[0];
-            weights[0] = 1.0 - cumsum;
+            let weights: Array1<f64> = arr1(v);
+            let weights: Vec<f64> = (&weights / weights.sum()).to_vec();
             self.change_weights(weights).unwrap();
             // Portfolio optimization
             let mean_returns: f64 = self.mean_return().unwrap();
@@ -549,9 +602,8 @@ impl Portfolio {
         let initial_guess: Vec<f64> = self.uniform_weights();
         let f = |v: &[f64]| {
             // Weights constraint
-            let mut weights: Vec<f64> = v.to_vec();
-            let cumsum: f64 = weights.iter().sum::<f64>() - weights[0];
-            weights[0] = 1.0 - cumsum;
+            let weights: Array1<f64> = arr1(v);
+            let weights: Vec<f64> = (&weights / weights.sum()).to_vec();
             self.change_weights(weights).unwrap();
             // Portfolio optimization
             self.standard_deviation().unwrap()
@@ -579,18 +631,17 @@ impl Portfolio {
         let initial_guess: Vec<f64> = self.uniform_weights();
         let f = |v: &[f64]| {
             // Weights constraint
-            let mut weights: Vec<f64> = v.to_vec();
-            let cumsum: f64 = weights.iter().sum::<f64>() - weights[0];
-            weights[0] = 1.0 - cumsum;
+            let weights: Array1<f64> = arr1(v);
+            let weights: Vec<f64> = (&weights / weights.sum()).to_vec();
             self.change_weights(weights).unwrap();
             // Portfolio optimization
             let mean_returns: f64 = self.mean_return().unwrap();
             let std_returns: f64 = self.standard_deviation().unwrap();
             let score: f64 = self.performance_metric.objective_function(mean_returns, std_returns);
-            // Combined loss of the objective function and target return constraint
-            score + (mean_returns - target_return).powi(2)
+            // Combined loss of the objective function and target return constraint (Optimized via straddle payoff function)
+            score + StraddleLoss.loss(mean_returns, target_return)
         };
-        let mut weights: Vec<f64> = nelder_mead(f, initial_guess, max_iterations, max_fun_calls, Some(true), None, None)?.to_vec();
+        let mut weights: Vec<f64> = nelder_mead(f, initial_guess, max_iterations, max_fun_calls, Some(false), None, None)?.to_vec();
         Portfolio::validate_and_clean_weights(&mut weights, self.rounding_error_tol)?;
         self.change_weights(weights)?;
         let performance: f64 = self.performance()?;
@@ -619,6 +670,88 @@ impl Portfolio {
         } 
         Ok(EfficientFrontier { max_performance, frontier, min_std })
     }
+}
+
+
+#[cfg(feature = "plotly")]
+/// # Description
+/// Plots the efficient frontier.
+///
+/// # Input
+/// - `frontier`: Efficient frontier data to plot
+///
+/// # Output
+/// - Efficient frontier plot
+///
+/// # Examples
+///
+/// ```rust
+/// use std::collections::HashMap;
+/// use ndarray::Array1;
+/// use digifi::portfolio_applications::{AssetHistData, SharpeRatio, Asset, EfficientFrontier, Portfolio};
+///
+/// #[cfg(all(feature = "plotly", feature = "sample_data"))]
+/// fn test_candlestick_chart() -> () {
+///     use plotly::Plot;
+///     use digifi::utilities::sample_data::SampleData;
+///     use digifi::plots::plot_efficient_frontier;
+///
+///     // Portfolio parameters
+///     let sample_data: SampleData = SampleData::Portfolio;
+///     let (time, data) = sample_data.load_sample_data();
+///     let weight: f64 = 1.0 / data.len() as f64;
+///     let dummy_array: Array1<f64> = Array1::from_vec(vec![0.0; time.len()]);
+///     let mut assets: HashMap<String, Asset> = HashMap::<String, Asset>::new();
+///     for (k, v) in data.into_iter() {
+///         let hist_data: AssetHistData = AssetHistData::new(v, dummy_array.clone(), dummy_array.clone()).unwrap();
+///         assets.insert(k, Asset { hist_data, weight, });
+///     }
+///     let performance_metric: Box<SharpeRatio> = Box::new(SharpeRatio { rf: 0.02 });
+///
+///     // Portfolio definition and optimization
+///     let mut portfolio: Portfolio = Portfolio::new(assets, None, None, None, performance_metric).unwrap();
+///     let frontier: EfficientFrontier = portfolio.efficient_frontier(30, Some(1_000), Some(10_000)).unwrap();
+///
+///     // Efficient frontier plot
+///     let plot: Plot = plot_efficient_frontier(frontier);
+///     plot.show();
+/// }
+/// ```
+pub fn plot_efficient_frontier(frontier: EfficientFrontier) -> Plot {
+    let mut plot: Plot = Plot::new();
+    // Minimum volatility portfolio
+    let min_vol_marker: Marker = Marker::new().symbol(MarkerSymbol::Diamond).color(NamedColor::Red).size(14);
+    let min_vol_hover: String = format!("Standard Deviation: {:.2}<br>Expected Return: {:.2}<br>Performance Score: {:.2}<br>Asset Names: {}<br>Weights: {}",
+                                         frontier.min_std.std, frontier.min_std.expected_return, frontier.min_std.performance_score,
+                                         frontier.min_std.assets_names_string(), frontier.min_std.weights_string());
+    let min_vol: Box<Scatter<f64, f64>> = Scatter::new(vec![100.0 * frontier.min_std.std], vec![100.0 * frontier.min_std.expected_return])
+        .name("Minimum Volatility Portfolio").mode(Mode::Markers).marker(min_vol_marker).hover_info(HoverInfo::Text).hover_text(min_vol_hover);
+    // Maximum performance portfolio
+    let max_per_marker: Marker = Marker::new().symbol(MarkerSymbol::Star).color(NamedColor::Green).size(14);
+    let max_per_hover: String = format!("Standard Deviation: {:.2}<br>Expected Return: {:.2}<br>Performance Score: {:.2}<br>Asset Names: {}<br>Weights: {}",
+                                         frontier.max_performance.std, frontier.max_performance.expected_return, frontier.max_performance.performance_score,
+                                         frontier.max_performance.assets_names_string(), frontier.max_performance.weights_string());
+    let max_per: Box<Scatter<f64, f64>> = Scatter::new(vec![100.0 * frontier.max_performance.std], vec![100.0 * frontier.max_performance.expected_return])
+        .name("Maximum Performance Portfolio").mode(Mode::Markers).marker(max_per_marker).hover_info(HoverInfo::Text).hover_text(max_per_hover);
+    // Efficient frontier
+    let eff_marker: Marker = Marker::new().symbol(MarkerSymbol::Circle).color(NamedColor::Black).size(7);
+    let mut eff_traces: Vec<Box<dyn Trace>> = Vec::<Box<dyn Trace>>::new();
+    for eff in frontier.frontier {
+        let hover_text: String = format!("Standard Deviation: {:.2}<br>Expected Return: {:.2}<br>Performance Score: {:.2}<br>Asset Names: {}<br>Weights: {}",
+                                         eff.std, eff.expected_return, eff.performance_score, eff.assets_names_string(), eff.weights_string());
+        eff_traces.push(Scatter::new(vec![100.0 * eff.std], vec![100.0 * eff.expected_return]).mode(Mode::Markers).marker(eff_marker.clone())
+                        .hover_info(HoverInfo::Text).hover_text(hover_text));
+    }
+    // Select trace order
+    plot.add_traces(eff_traces);
+    plot.add_trace(min_vol);
+    plot.add_trace(max_per);
+    // Layout
+    let x_axis: PlotAxis = PlotAxis::new().title("Standard Deviation");
+    let y_axis: PlotAxis = PlotAxis::new().title("Expected Return (%)");
+    let layout: Layout = Layout::new().title("<b>Efficient Frontier</b>").x_axis(x_axis).y_axis(y_axis);
+    plot.set_layout(layout);
+    plot
 }
 
 
@@ -692,5 +825,29 @@ mod tests {
             assert!(point.performance_score <= frontier.max_performance.performance_score);
             assert!(frontier.min_std.std <= point.std)
         }
+    }
+
+    #[cfg(feature = "plotly")]
+    #[test]
+    fn unit_test_plot_efficient_frontier() -> () {
+        use plotly::Plot;
+        use crate::portfolio_applications::portfolio_composition::plot_efficient_frontier;
+        // Portfolio parameters
+        let sample_data: SampleData = SampleData::Portfolio;
+        let (time, data) = sample_data.load_sample_data();
+        let weight: f64 = 1.0 / data.len() as f64;
+        let dummy_array: Array1<f64> = Array1::from_vec(vec![0.0; time.len()]);
+        let mut assets: HashMap<String, Asset> = HashMap::<String, Asset>::new();
+        for (k, v) in data.into_iter() {
+            let hist_data: AssetHistData = AssetHistData::new(v, dummy_array.clone(), dummy_array.clone()).unwrap();
+            assets.insert(k, Asset { hist_data, weight, });
+        }
+        let performance_metric: Box<SharpeRatio> = Box::new(SharpeRatio { rf: 0.02 });
+        // Portfolio definition and optimization
+        let mut portfolio: Portfolio = Portfolio::new(assets, None, None, None, performance_metric).unwrap();
+        let frontier: EfficientFrontier = portfolio.efficient_frontier(30, Some(1_000), Some(10_000)).unwrap();
+        // Efficient frontier plot
+        let plot: Plot = plot_efficient_frontier(frontier);
+        plot.show();
     }
 }

@@ -27,7 +27,7 @@
 //! The following optional features are provided by `digifi` (Note: none of these features are the enabled by default):
 //!
 //! - `sample_data`: Provides some sample data to test CAPM and portfolio optimization algorithms.
-//! - `plotly` (**Coming Soon**): Plotting support.
+//! - `plotly`: Plotting support, including plots for technical indicators, efficient frontier,  and stochastic process simulations.
 //!
 //! # Errors
 //!
@@ -64,6 +64,5 @@ pub mod technical_indicators;
 pub mod utilities;
 
 // Plotly feature
-// TODO: Add to package description
-// #[cfg(feature = "plotly")]
-// pub mod plots;
+#[cfg(feature = "plotly")]
+pub mod plots;

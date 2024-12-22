@@ -1,5 +1,5 @@
 use std::io::Error;
-use ndarray::Array1;
+use ndarray::{Array1, Axis};
 use crate::random_generators::{RandomGenerator, generate_seed};
 
 
@@ -74,14 +74,15 @@ impl RandomGenerator<LinearCongruentialGenerator> for LinearCongruentialGenerato
     /// # Output
     /// - An array pseudo-random numbers following Uniform distribution
     fn generate(&self) -> Result<Array1<f64>, Error> {
-        let mut u: Array1<f64> = Array1::from_vec(vec![0.0; self.sample_size]);
+        let mut u: Array1<f64> = Array1::from_vec(vec![0.0; self.sample_size + 1]);
         u[0] = self.seed as f64;
         let a: f64 = self.a as f64;
         let b: f64 = self.b as f64;
         let m: f64 = self.m as f64;
-        for i in 1..self.sample_size {
+        for i in 1..(self.sample_size + 1) {
             u[i] = (a * u[i-1] + b) % m;
         }
+        u.remove_index(Axis(0), 0);
         Ok(u / m)
     }
 }
@@ -172,17 +173,18 @@ impl RandomGenerator<FibonacciGenerator> for FibonacciGenerator {
     /// # Output
     /// - An array pseudo-random numberss following Uniform distribution
     fn generate(&self) -> Result<Array1<f64>, Error> {
-        let mut u: Array1<f64> = Array1::from_vec(vec![0.0; self.sample_size]);
+        let mut u: Array1<f64> = Array1::from_vec(vec![0.0; self.sample_size + 1]);
         u[0] = self.seed as f64;
         let a: f64 = self.a as f64;
         let b: f64 = self.b as f64;
         let m: f64 = self.m as f64;
-        for i in 1..self.sample_size {
+        for i in 1..(self.sample_size + 1) {
             u[i] = (a * u[i-1] + b) % m;
         }
-        for i in (self.nu + 1)..self.sample_size {
+        for i in (self.nu + 1)..(self.sample_size + 1) {
             u[i] = (u[i-self.nu] + u[i-self.mu]) % m
         }
+        u.remove_index(Axis(0), 0);
         Ok(u / m)
     }
 }

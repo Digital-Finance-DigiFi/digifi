@@ -151,7 +151,7 @@ pub fn ziggurat(x_guess: &Array1<f64>, sample_size: usize, max_iterations: usize
         let mut i: usize = 0;
         while (z[j]==1.0) && (i < max_iterations) {
             // Generates a random index and ensures that it is in the range [1, x_guess.len()-1]
-            let rand_index: usize = (((x_guess.len() - 2) as f64) * LinearCongruentialGenerator::new_shuffle(1)?.generate()?[0]).ceil() as usize + 1;
+            let rand_index: usize = (((x_guess.len() - 2) as f64) * LinearCongruentialGenerator::new_shuffle(1)?.generate()?[0]).ceil() as usize;
             let x: f64 = u_1[rand_index] * x_guess[rand_index];
             if x.abs() < x_guess[rand_index+1] {
                 z[j] = x;

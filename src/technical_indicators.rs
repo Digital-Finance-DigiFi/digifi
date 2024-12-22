@@ -1,5 +1,7 @@
 use std::{vec, io::Error};
 use ndarray::{Array1, s};
+#[cfg(feature = "plotly")]
+use plotly::{Plot, Trace, Scatter, Bar, Layout, common::{Line, color::NamedColor}, layout::Axis};
 use crate::utilities::{compare_array_len, input_error, data_error, other_error};
 
 
@@ -406,6 +408,349 @@ pub fn obv(close_price: &Array1<f64>, volume: &Array1<f64>) -> Result<Array1<f64
 }
 
 
+#[cfg(feature = "plotly")]
+/// # Description
+/// Plots moving average.
+///
+/// # Input
+/// - `ma`: Moving average readings (e.g., SMA, EMA)
+/// - `times`: Vector of times
+/// - `plot`: Plot (e.g., candlesticj chart) to which the moving average will be added as a trace (if `None`, then the new plot will be created)
+///
+/// # Output
+/// - Moving average plot
+///
+/// # Examples
+///
+/// ```rust
+/// use ndarray::Array1;
+/// use digifi::technical_indicators::sma;
+///
+/// #[cfg(feature = "plotly")]
+/// fn test_plot_moving_average() -> () {
+///     use plotly::Plot;
+///     use digifi::plots::plot_moving_average;
+///
+///     // Data
+///     let times: Vec<&str> = vec!["2024-01-02", "2024-01-03", "2024-01-04", "2024-01-05", "2024-01-08", "2024-01-09", "2024-01-10", "2024-01-11", "2024-01-12",
+///         "2024-01-16"];
+///     let times: Vec<String> = times.into_iter().map(|v| String::from(v) ).collect();
+///     let price_array: Array1<f64> = Array1::from_vec(vec![149.92999267578125, 148.47000122070312, 144.57000732421875, 145.24000549316406, 149.10000610351562,
+///         151.3699951171875, 153.72999572753906, 155.17999267578125, 154.6199951171875, 153.16000366210938]);
+///
+///     // SMA
+///     let sma_: Array1<f64> = sma(&price_array, 3).unwrap();
+///
+///     // Moving average plot
+///     let plot: Plot = plot_moving_average(&sma_, &times, None);
+///     plot.show();
+/// }
+/// ```
+pub fn plot_moving_average(ma: &Array1<f64>, times: &Vec<String>, plot: Option<Plot>) -> Plot {
+    let ma_trace: Box<dyn Trace> = Scatter::new(times.clone(), ma.to_vec()).name("Moving Average");
+    let mut plot: Plot = match plot {
+        Some(p) => { p },
+        None => {
+            let mut plot: Plot = Plot::new();
+            let x_axis: Axis = Axis::new().title("Time");
+            let y_axis: Axis = Axis::new().title("Price");
+            let layout: Layout = Layout::new().title("<b>Moving Average</b>").x_axis(x_axis).y_axis(y_axis);
+            plot.set_layout(layout);
+            plot
+        },
+    };
+    plot.add_trace(ma_trace);
+    plot
+}
+
+
+#[cfg(feature = "plotly")]
+/// # Description
+/// Plots MACD.
+///
+/// # Input
+/// - `macd`: MACD information (i.e., MACD, signal line and MACD histogram)
+/// - `times`: Vector of times
+///
+/// # Output
+/// - MACD plot
+///
+/// # Examples
+///
+/// ```rust
+/// use ndarray::Array1;
+/// use digifi::technical_indicators::{MACD, macd};
+///
+/// #[cfg(feature = "plotly")]
+/// fn test_plot_macd() -> () {
+///     use plotly::Plot;
+///     use digifi::plots::plot_macd;
+///
+///     // Data
+///     let times: Vec<&str> = vec!["2024-01-02", "2024-01-03", "2024-01-04", "2024-01-05", "2024-01-08", "2024-01-09", "2024-01-10", "2024-01-11", "2024-01-12",
+///         "2024-01-16"];
+///     let times: Vec<String> = times.into_iter().map(|v| String::from(v) ).collect();
+///     let price_array: Array1<f64> = Array1::from_vec(vec![149.92999267578125, 148.47000122070312, 144.57000732421875, 145.24000549316406, 149.10000610351562,
+///         151.3699951171875, 153.72999572753906, 155.17999267578125, 154.6199951171875, 153.16000366210938]);
+///
+///     // MACD
+///     let macd_: MACD = macd(&price_array, 3, 4, 2, 2).unwrap();
+///
+///     // MACD plot
+///     let plot: Plot = plot_macd(&macd_, &times);
+///     plot.show();
+/// }
+/// ```
+pub fn plot_macd(macd: &MACD, times: &Vec<String>) -> Plot {
+    let mut plot: Plot = Plot::new();
+    // MACD
+    let macd_line: Line = Line::new().color(NamedColor::Blue);
+    plot.add_trace(Scatter::new(times.clone(), macd.macd.to_vec()).name("MACD").line(macd_line));
+    // Signal line
+    let signal_line: Line = Line::new().color(NamedColor::Red);
+    plot.add_trace(Scatter::new(times.clone(), macd.signal_line.to_vec()).name("MACD Signal Line").line(signal_line));
+    // MACD histogram
+    plot.add_trace(Bar::new(times.clone(), macd.macd_hist.to_vec()).name("MACD Histogram"));
+    // Layout
+    let x_axis: Axis = Axis::new().title("Time");
+    let y_axis: Axis = Axis::new().title("MACD");
+    let layout: Layout = Layout::new().title("<b>MACD</b>").x_axis(x_axis).y_axis(y_axis);
+    plot.set_layout(layout);
+    plot
+}
+
+
+#[cfg(feature = "plotly")]
+/// # Description
+/// Plots Bollinger bands.
+///
+/// # Input
+/// - `bb`: Bollinger bands information (e.g., SMA, upper band, lower band)
+/// - `times`: Vector of times
+/// - `plot`: Plot (e.g., candlesticj chart) to which the Bollinger bands will be added as a trace (if `None`, then the new plot will be created)
+///
+/// # Output
+/// - Bollinger bands plot
+///
+/// # Examples
+///
+/// ```rust
+/// use ndarray::Array1;
+/// use digifi::technical_indicators::{BollingerBands, bollinger_bands};
+///
+/// #[cfg(feature = "plotly")]
+/// fn test_plot_bollinger_bands() -> () {
+///     use plotly::Plot;
+///     use digifi::plots::plot_bollinger_bands;
+///
+///     // Data
+///     let times: Vec<&str> = vec!["2024-01-02", "2024-01-03", "2024-01-04", "2024-01-05", "2024-01-08", "2024-01-09", "2024-01-10", "2024-01-11", "2024-01-12",
+///         "2024-01-16"];
+///     let times: Vec<String> = times.into_iter().map(|v| String::from(v) ).collect();
+///     let price_array: Array1<f64> = Array1::from_vec(vec![149.92999267578125, 148.47000122070312, 144.57000732421875, 145.24000549316406, 149.10000610351562,
+///         151.3699951171875, 153.72999572753906, 155.17999267578125, 154.6199951171875, 153.16000366210938]);
+///
+///     // Bollinger bands
+///     let bb: BollingerBands = bollinger_bands(&price_array, 3, 2).unwrap();
+///
+///     // Bollinger bands plot
+///     let plot: Plot = plot_bollinger_bands(&bb, &times, None);
+///     plot.show();
+/// }
+/// ```
+pub fn plot_bollinger_bands(bb: &BollingerBands, times: &Vec<String>, plot: Option<Plot>) -> Plot {
+    let ma_trace: Box<dyn Trace> = Scatter::new(times.clone(), bb.sma.to_vec()).name("Simple Moving Average");
+    let upper_band: Box<dyn Trace> = Scatter::new(times.clone(), bb.upper_band.to_vec()).name("Upper Band");
+    let lower_band: Box<dyn Trace> = Scatter::new(times.clone(), bb.lower_band.to_vec()).name("Lower Band");
+    let mut plot: Plot = match plot {
+        Some(p) => { p },
+        None => {
+            let mut plot: Plot = Plot::new();
+            let x_axis: Axis = Axis::new().title("Time");
+            let y_axis: Axis = Axis::new().title("Price");
+            let layout: Layout = Layout::new().title("<b>Bollinger Bands</b>").x_axis(x_axis).y_axis(y_axis);
+            plot.set_layout(layout);
+            plot
+        },
+    };
+    plot.add_trace(ma_trace);
+    plot.add_trace(upper_band);
+    plot.add_trace(lower_band);
+    plot
+}
+
+
+#[cfg(feature = "plotly")]
+/// # Description
+/// Plots RSI.
+///
+/// # Input
+/// - `rsi`: RSI information (i.e., RSI, oversold and overbought thresholds)
+/// - `times`: Vector of times
+///
+/// # Output
+/// - RSI plot
+///
+/// # Examples
+///
+/// ```rust
+/// use ndarray::Array1;
+/// use digifi::technical_indicators::{RSI, rsi};
+///
+/// #[cfg(feature = "plotly")]
+/// fn test_plot_rsi() -> () {
+///     use plotly::Plot;
+///     use digifi::plots::plot_rsi;
+///
+///     // Data
+///     let times: Vec<&str> = vec!["2024-01-02", "2024-01-03", "2024-01-04", "2024-01-05", "2024-01-08", "2024-01-09", "2024-01-10", "2024-01-11", "2024-01-12",
+///         "2024-01-16"];
+///     let times: Vec<String> = times.into_iter().map(|v| String::from(v) ).collect();
+///     let price_array: Array1<f64> = Array1::from_vec(vec![149.92999267578125, 148.47000122070312, 144.57000732421875, 145.24000549316406, 149.10000610351562,
+///         151.3699951171875, 153.72999572753906, 155.17999267578125, 154.6199951171875, 153.16000366210938]);
+///
+///     // RSI
+///     let rsi_: RSI = rsi(&price_array, 3, 30.0, 70.0).unwrap();
+///
+///     // RSI plot
+///     let plot: Plot = plot_rsi(&rsi_, &times);
+///     plot.show();
+/// }
+/// ```
+pub fn plot_rsi(rsi: &RSI, times: &Vec<String>) -> Plot {
+    let mut plot: Plot = Plot::new();
+    // RSI
+    let rsi_line: Line = Line::new().color(NamedColor::Blue);
+    plot.add_trace(Scatter::new(times.clone(), rsi.rsi.to_vec()).name("RSI").line(rsi_line));
+    // Oversold
+    let oversold_line: Line = Line::new().color(NamedColor::Green);
+    plot.add_trace(Scatter::new(times.clone(), rsi.oversold.to_vec()).name("Oversold Threshold").line(oversold_line));
+    // Overbought
+    let overbought_line: Line = Line::new().color(NamedColor::Red);
+    plot.add_trace(Scatter::new(times.clone(), rsi.overbought.to_vec()).name("Overbought Threshold").line(overbought_line));
+    // Layout
+    let x_axis: Axis = Axis::new().title("Time");
+    let y_axis: Axis = Axis::new().title("RSI");
+    let layout: Layout = Layout::new().title("<b>RSI</b>").x_axis(x_axis).y_axis(y_axis);
+    plot.set_layout(layout);
+    plot
+}
+
+
+#[cfg(feature = "plotly")]
+/// # Description
+/// Plots ADX.
+///
+/// # Input
+/// - `adx`: ADX information (i.e., ADX, -DI, +DI and benchmark threshold)
+/// - `times`: Vector of times
+///
+/// # Output
+/// - ADX plot
+///
+/// # Examples
+///
+/// ```rust
+/// use ndarray::Array1;
+/// use digifi::technical_indicators::{ADX, adx};
+///
+/// #[cfg(feature = "plotly")]
+/// fn test_plot_adx() -> () {
+///     use plotly::Plot;
+///     use digifi::plots::plot_adx;
+///
+///     // Data
+///     let times: Vec<&str> = vec!["2024-01-02", "2024-01-03", "2024-01-04", "2024-01-05", "2024-01-08", "2024-01-09", "2024-01-10", "2024-01-11", "2024-01-12",
+///         "2024-01-16"];
+///     let times: Vec<String> = times.into_iter().map(|v| String::from(v) ).collect();
+///     let close_price: Array1<f64> = Array1::from_vec(vec![149.92999267578125, 148.47000122070312, 144.57000732421875, 145.24000549316406, 149.10000610351562,
+///         151.3699951171875, 153.72999572753906, 155.17999267578125, 154.6199951171875, 153.16000366210938]);
+///     let high_price: Array1<f64> = Array1::from_vec(vec![152.3800048828125, 151.0500030517578, 147.3800048828125, 146.58999633789062, 149.39999389648438,
+///         151.7100067138672, 154.4199981689453, 157.1699981689453, 156.1999969482422, 154.99000549316406]);
+///     let low_price: Array1<f64> = Array1::from_vec(vec![148.38999938964844, 148.3300018310547, 144.0500030517578, 144.52999877929688, 146.14999389648438,
+///         148.2100067138672, 151.8800048828125, 153.1199951171875, 154.00999450683594, 152.14999389648438]);
+///
+///     // ADX
+///     let adx_: ADX = adx(&high_price, &low_price, &close_price, 2, 25.0).unwrap();
+///
+///     // ADX plot
+///     let plot: Plot = plot_adx(&adx_, &times);
+///     plot.show();
+/// }
+/// ```
+pub fn plot_adx(adx: &ADX, times: &Vec<String>) -> Plot {
+    let mut plot: Plot = Plot::new();
+    // ADX
+    let adx_line: Line = Line::new().color(NamedColor::Blue);
+    plot.add_trace(Scatter::new(times.clone(), adx.adx.to_vec()).name("ADX").line(adx_line));
+    // -DI
+    let mdi_line: Line = Line::new().color(NamedColor::Red);
+    plot.add_trace(Scatter::new(times.clone(), adx.mdi.to_vec()).name("-DI").line(mdi_line));
+    // +DI
+    let pdi_line: Line = Line::new().color(NamedColor::Green);
+    plot.add_trace(Scatter::new(times.clone(), adx.pdi.to_vec()).name("+DI").line(pdi_line));
+    // Benchmark
+    let benchmark_line: Line = Line::new().color(NamedColor::Black);
+    plot.add_trace(Scatter::new(times.clone(), adx.benchmark.to_vec()).name("Benchmark").line(benchmark_line));
+    // Layout
+    let x_axis: Axis = Axis::new().title("Time");
+    let y_axis: Axis = Axis::new().title("ADX");
+    let layout: Layout = Layout::new().title("<b>ADX</b>").x_axis(x_axis).y_axis(y_axis);
+    plot.set_layout(layout);
+    plot
+}
+
+
+#[cfg(feature = "plotly")]
+/// # Description
+/// Plots OBV.
+///
+/// # Input
+/// - `obv`: An array of OBV readings
+/// - `times`: Vector of times
+///
+/// # Output
+/// - OBV plot
+///
+/// # Examples
+///
+/// ```rust
+/// use ndarray::Array1;
+/// use digifi::technical_indicators::obv;
+///
+/// #[cfg(feature = "plotly")]
+/// fn test_plot_obv() -> () {
+///     use plotly::Plot;
+///     use digifi::plots::plot_obv;
+///
+///     // Data
+///     let times: Vec<&str> = vec!["2024-01-02", "2024-01-03", "2024-01-04", "2024-01-05", "2024-01-08", "2024-01-09", "2024-01-10", "2024-01-11", "2024-01-12",
+///         "2024-01-16"];
+///     let times: Vec<String> = times.into_iter().map(|v| String::from(v) ).collect();
+///     let close_price: Array1<f64> = Array1::from_vec(vec![149.92999267578125, 148.47000122070312, 144.57000732421875, 145.24000549316406, 149.10000610351562,
+///         151.3699951171875, 153.72999572753906, 155.17999267578125, 154.6199951171875, 153.16000366210938]);
+///     let volume: Array1<f64> = Array1::from_vec(vec![47339400.0, 49425500.0, 56039800.0, 45124800.0, 46757100.0, 43812600.0, 44421800.0, 49072700.0,
+///         40460300.0, 41384600.0]);
+///
+///     // OBV
+///     let obv_: Array1<f64> = obv(&close_price, &volume).unwrap();
+///
+///     // OBV plot
+///     let plot: Plot = plot_obv(&obv_, &times);
+///     plot.show();
+/// }
+/// ```
+pub fn plot_obv(obv: &Array1<f64>, times: &Vec<String>) -> Plot {
+    let mut plot: Plot = Plot::new();
+    plot.add_trace(Scatter::new(times.clone(), obv.to_vec()).name("OBV"));
+    let x_axis: Axis = Axis::new().title("Time");
+    let y_axis: Axis = Axis::new().title("OBV");
+    let layout: Layout = Layout::new().title("<b>OBV</b>").x_axis(x_axis).y_axis(y_axis);
+    plot.set_layout(layout);
+    plot
+}
+
+
 #[cfg(test)]
 mod tests {
     use ndarray::{Array1, s};
@@ -487,5 +832,119 @@ mod tests {
         let volume: Array1<f64> = Array1::from_vec(vec![1000.0, 1200.0, 1100.0, 1250.0, 1260.0, 1110.0]);
         let obv: Array1<f64> = obv(&close_price, &volume).unwrap();
         assert!((obv - Array1::from_vec(vec![0.0, 1200.0, 2300.0, 3550.0, 2290.0, 3400.0])).sum().abs() < TEST_ACCURACY);
+    }
+
+    #[cfg(feature = "plotly")]
+    #[test]
+    fn unit_test_plot_moving_average() -> () {
+        use plotly::Plot;
+        use crate::technical_indicators::{sma, plot_moving_average};
+        // Data
+        let times: Vec<&str> = vec!["2024-01-02", "2024-01-03", "2024-01-04", "2024-01-05", "2024-01-08", "2024-01-09", "2024-01-10", "2024-01-11", "2024-01-12",
+            "2024-01-16"];
+        let times: Vec<String> = times.into_iter().map(|v| String::from(v) ).collect();
+        let price_array: Array1<f64> = Array1::from_vec(vec![149.92999267578125, 148.47000122070312, 144.57000732421875, 145.24000549316406, 149.10000610351562,
+            151.3699951171875, 153.72999572753906, 155.17999267578125, 154.6199951171875, 153.16000366210938]);
+        // SMA
+        let sma: Array1<f64> = sma(&price_array, 3).unwrap();
+        // Moving average plot
+        let plot: Plot = plot_moving_average(&sma, &times, None);
+        plot.show();
+    }
+
+    #[cfg(feature = "plotly")]
+    #[test]
+    fn unit_test_plot_macd() -> () {
+        use plotly::Plot;
+        use crate::technical_indicators::{MACD, macd, plot_macd};
+        // Data
+        let times: Vec<&str> = vec!["2024-01-02", "2024-01-03", "2024-01-04", "2024-01-05", "2024-01-08", "2024-01-09", "2024-01-10", "2024-01-11", "2024-01-12",
+            "2024-01-16"];
+        let times: Vec<String> = times.into_iter().map(|v| String::from(v) ).collect();
+        let price_array: Array1<f64> = Array1::from_vec(vec![149.92999267578125, 148.47000122070312, 144.57000732421875, 145.24000549316406, 149.10000610351562,
+            151.3699951171875, 153.72999572753906, 155.17999267578125, 154.6199951171875, 153.16000366210938]);
+        // MACD
+        let macd: MACD = macd(&price_array, 3, 4, 2, 2).unwrap();
+        // Moving average plot
+        let plot: Plot = plot_macd(&macd, &times);
+        plot.show();
+    }
+
+    #[cfg(feature = "plotly")]
+    #[test]
+    fn unit_test_plot_bollinger_bands() -> () {
+        use plotly::Plot;
+        use crate::technical_indicators::{BollingerBands, bollinger_bands, plot_bollinger_bands};
+        // Data
+        let times: Vec<&str> = vec!["2024-01-02", "2024-01-03", "2024-01-04", "2024-01-05", "2024-01-08", "2024-01-09", "2024-01-10", "2024-01-11", "2024-01-12",
+            "2024-01-16"];
+        let times: Vec<String> = times.into_iter().map(|v| String::from(v) ).collect();
+        let price_array: Array1<f64> = Array1::from_vec(vec![149.92999267578125, 148.47000122070312, 144.57000732421875, 145.24000549316406, 149.10000610351562,
+            151.3699951171875, 153.72999572753906, 155.17999267578125, 154.6199951171875, 153.16000366210938]);
+        // Bollinger bands
+        let bb: BollingerBands = bollinger_bands(&price_array, 3, 2).unwrap();
+        // Moving average plot
+        let plot: Plot = plot_bollinger_bands(&bb, &times, None);
+        plot.show();
+    }
+
+    #[cfg(feature = "plotly")]
+    #[test]
+    fn unit_test_plot_rsi() -> () {
+        use plotly::Plot;
+        use crate::technical_indicators::{RSI, rsi, plot_rsi};
+        // Data
+        let times: Vec<&str> = vec!["2024-01-02", "2024-01-03", "2024-01-04", "2024-01-05", "2024-01-08", "2024-01-09", "2024-01-10", "2024-01-11", "2024-01-12",
+            "2024-01-16"];
+        let times: Vec<String> = times.into_iter().map(|v| String::from(v) ).collect();
+        let price_array: Array1<f64> = Array1::from_vec(vec![149.92999267578125, 148.47000122070312, 144.57000732421875, 145.24000549316406, 149.10000610351562,
+            151.3699951171875, 153.72999572753906, 155.17999267578125, 154.6199951171875, 153.16000366210938]);
+        // RSI
+        let rsi_: RSI = rsi(&price_array, 3, 30.0, 70.0).unwrap();
+        // Moving average plot
+        let plot: Plot = plot_rsi(&rsi_, &times);
+        plot.show();
+    }
+
+    #[cfg(feature = "plotly")]
+    #[test]
+    fn unit_test_plot_adx() -> () {
+        use plotly::Plot;
+        use crate::technical_indicators::{ADX, adx, plot_adx};
+        // Data
+        let times: Vec<&str> = vec!["2024-01-02", "2024-01-03", "2024-01-04", "2024-01-05", "2024-01-08", "2024-01-09", "2024-01-10", "2024-01-11", "2024-01-12",
+            "2024-01-16"];
+        let times: Vec<String> = times.into_iter().map(|v| String::from(v) ).collect();
+        let close_price: Array1<f64> = Array1::from_vec(vec![149.92999267578125, 148.47000122070312, 144.57000732421875, 145.24000549316406, 149.10000610351562,
+            151.3699951171875, 153.72999572753906, 155.17999267578125, 154.6199951171875, 153.16000366210938]);
+        let high_price: Array1<f64> = Array1::from_vec(vec![152.3800048828125, 151.0500030517578, 147.3800048828125, 146.58999633789062, 149.39999389648438,
+            151.7100067138672, 154.4199981689453, 157.1699981689453, 156.1999969482422, 154.99000549316406]);
+        let low_price: Array1<f64> = Array1::from_vec(vec![148.38999938964844, 148.3300018310547, 144.0500030517578, 144.52999877929688, 146.14999389648438,
+            148.2100067138672, 151.8800048828125, 153.1199951171875, 154.00999450683594, 152.14999389648438]);
+        // ADX
+        let adx_: ADX = adx(&high_price, &low_price, &close_price, 2, 25.0).unwrap();
+        // Moving average plot
+        let plot: Plot = plot_adx(&adx_, &times);
+        plot.show();
+    }
+
+    #[cfg(feature = "plotly")]
+    #[test]
+    fn unit_test_plot_obv() -> () {
+        use plotly::Plot;
+        use crate::technical_indicators::{obv, plot_obv};
+        // Data
+        let times: Vec<&str> = vec!["2024-01-02", "2024-01-03", "2024-01-04", "2024-01-05", "2024-01-08", "2024-01-09", "2024-01-10", "2024-01-11", "2024-01-12",
+            "2024-01-16"];
+        let times: Vec<String> = times.into_iter().map(|v| String::from(v) ).collect();
+        let close_price: Array1<f64> = Array1::from_vec(vec![149.92999267578125, 148.47000122070312, 144.57000732421875, 145.24000549316406, 149.10000610351562,
+            151.3699951171875, 153.72999572753906, 155.17999267578125, 154.6199951171875, 153.16000366210938]);
+        let volume: Array1<f64> = Array1::from_vec(vec![47339400.0, 49425500.0, 56039800.0, 45124800.0, 46757100.0, 43812600.0, 44421800.0, 49072700.0,
+            40460300.0, 41384600.0]);
+        // OBV
+        let obv_: Array1<f64> = obv(&close_price, &volume).unwrap();
+        // Moving average plot
+        let plot: Plot = plot_obv(&obv_, &times);
+        plot.show();
     }
 }

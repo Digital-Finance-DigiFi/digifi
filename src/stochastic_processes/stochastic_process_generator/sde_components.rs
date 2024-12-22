@@ -145,16 +145,16 @@ impl SDEComponent {
         }
         match &self {
             SDEComponent::Linear { a } => {
-                Ok(*a * Array1::from_vec(vec![1.0; n_paths]))
+                Ok(Array1::from_vec(vec![*a; n_paths]))
             },
             SDEComponent::QuadraticTime { a, b } => {
-                Ok((2.0*a + b) * Array1::from_vec(vec![1.0; n_paths]))
+                Ok(Array1::from_vec(vec![2.0*a + b; n_paths]))
             },
             SDEComponent::PowerStochastic { a, power } => {
                 Ok(*a * stochastic_values.map(|v| v.powf(*power) ))
             },
             SDEComponent::ConvergenceToValue { final_time, a, b } => {
-                Ok((b - a) / (final_time - t) * Array1::from_vec(vec![1.0; n_paths]))
+                Ok(Array1::from_vec(vec![(b - a) / (final_time - t); n_paths]))
             },
             SDEComponent::RegressionToTrend { scale, trend } => {
                 Ok(*scale * (*trend - stochastic_values))

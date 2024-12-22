@@ -107,7 +107,7 @@ pub fn trinomial_tree_nodes(s_0: f64, u: f64, d: f64, n_steps: usize) -> Result<
 /// use digifi::lattice_models::trinomial_model;
 /// use digifi::financial_instruments::Straddle;
 ///
-/// let straddle: Straddle = Straddle { k: 11.0, cost_c: 0.0, cost_p: 0.0 };
+/// let straddle: Straddle = Straddle { k: 11.0, cost: 0.0 };
 /// let fair_value: f64 = trinomial_model(&straddle, 10.0, 1.2, 0.9, 0.25, 0.25, 2, Some(vec![false, false])).unwrap();
 /// // Sideways movement factor 
 /// let s: f64 = 1.0392304845;
@@ -306,7 +306,7 @@ mod tests {
     fn unit_test_trinomial_model_2() -> () {
         use crate::lattice_models::trinomial_models::trinomial_model;
         use crate::financial_instruments::Straddle;
-        let straddle: Straddle = Straddle { k: 11.0, cost_c: 0.0, cost_p: 0.0 };
+        let straddle: Straddle = Straddle { k: 11.0, cost: 0.0 };
         let predicted_value: f64 = trinomial_model(&straddle, 10.0, 1.2, 0.9, 0.25, 0.25, 2, Some(vec![false, false])).unwrap();
         // Sideways movement factor 
         let s: f64 = 1.0392304845;

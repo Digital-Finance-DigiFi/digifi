@@ -1,6 +1,6 @@
 [package]
 name = "digifi"
-version = "2.0.0"
+version = "2.1.0"
 edition = "2021"
 description = "General purpose financial library and framework for financial modelling, portfolio optimization, and asset pricing."
 license = "MIT OR Apache-2.0"
@@ -17,9 +17,9 @@ exclude = ["cargo_commands.md"]
 ndarray = "0.15.6" # MIT or Apache 2.0
 nalgebra = "0.33.0" # Apache 2.0
 # Optional dependencies
-# plotly = { version = "0.11.0", optional = true, features = ["plotly_ndarray"] } # MIT
+plotly = { version = "0.11.0", optional = true, features = ["plotly_ndarray"] } # MIT
 
 [features]
-# default = ["sample_data"]
+# default = ["sample_data", "plotly"]
 sample_data = []
-# plotly = ["dep:plotly"]
+plotly = ["dep:plotly"]
