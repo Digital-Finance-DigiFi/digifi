@@ -29,7 +29,7 @@ The following optional features are provided by `digifi` (Note: none of these fe
 
 - `sample_data`: Provides some sample data to test CAPM and portfolio optimization algorithms.
 - `serde`: Provides serialization/deserialization for certain structs.
-- `plotly` (**Coming Soon**): Plotting support.
+- `plotly`: Plotting support.
 
 # Errors
 

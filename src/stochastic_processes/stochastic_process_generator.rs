@@ -9,6 +9,7 @@ pub mod sde_components;
 
 use std::io::Error;
 use ndarray::Array1;
+use crate::stochastic_processes::StochasticProcess;
 
 
 fn transpose(v: Vec<Array1<f64>>) -> Vec<Array1<f64>> {
@@ -41,6 +42,7 @@ fn transpose(v: Vec<Array1<f64>>) -> Vec<Array1<f64>> {
 /// ```rust
 /// use ndarray::Array1;
 /// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::stochastic_processes::StochasticProcess;
 /// use digifi::stochastic_processes::stochastic_process_generator::{SDEComponent, Noise, Jump, SDE};
 ///
 /// // Parameter definition
@@ -75,6 +77,7 @@ fn transpose(v: Vec<Array1<f64>>) -> Vec<Array1<f64>> {
 /// ```rust
 /// use ndarray::Array1;
 /// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::stochastic_processes::StochasticProcess;
 /// use digifi::stochastic_processes::stochastic_process_generator::{SDEComponent, Noise, Jump, SDE};
 ///
 /// // Parameter definition
@@ -106,11 +109,11 @@ fn transpose(v: Vec<Array1<f64>>) -> Vec<Array1<f64>> {
 /// ```
 pub struct SDE {
     /// Final time step
-    _t_f: f64,
+    t_f: f64,
     /// Starting point for the process
     s_0: f64,
     /// Number of steps a process makes after the starting point
-    _n_steps: usize,
+    n_steps: usize,
     /// Number of paths to return
     n_paths: usize,
     /// Type of function \\mu(S_{t}, t) to be used when constructing the drift
@@ -150,7 +153,21 @@ impl SDE {
         // Definition of SDE parameters
         let dt: f64 = t_f / (n_steps as f64);
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
-        Ok(SDE { _t_f: t_f, s_0, _n_steps: n_steps, n_paths, drift_component, diffusion_component, noise, jump, dt, t, })
+        Ok(SDE { t_f, s_0, n_steps, n_paths, drift_component, diffusion_component, noise, jump, dt, t, })
+    }
+}
+
+impl StochasticProcess for SDE {
+    fn update_n_paths(&mut self, n_paths: usize) -> () {
+        self.n_paths = n_paths;
+    }
+
+    fn get_n_steps(&self) -> usize {
+        self.n_steps
+    }
+
+    fn get_t_f(&self) -> f64 {
+        self.t_f
     }
 
     /// # Description
@@ -158,7 +175,7 @@ impl SDE {
     ///
     /// # Output
     /// - An array of random paths
-    pub fn get_paths(&self) -> Result<Vec<Array1<f64>>, Error> {
+    fn get_paths(&self) -> Result<Vec<Array1<f64>>, Error> {
         let mut time_steps: Vec<Array1<f64>> = vec![Array1::from_vec(vec![self.s_0; self.n_paths])];
         for i in 1..self.t.len() {
             let mut time_slice: Array1<f64> = self.drift_component.get_component_values(self.n_paths, &time_steps[time_steps.len() - 1], self.t[i], self.dt)? * self.dt
@@ -190,6 +207,7 @@ impl SDE {
 /// ```rust
 /// use ndarray::Array1;
 /// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::stochastic_processes::StochasticProcess;
 /// use digifi::stochastic_processes::stochastic_process_generator::{StochasticDriftType, TrendStationary, StationaryError, StochasticDrift};
 ///
 /// // Parameters definition
@@ -220,9 +238,9 @@ impl SDE {
 /// ```
 pub struct StochasticDrift {
     /// Final time step
-    _t_f: f64,
+    t_f: f64,
     /// Number of steps a process makes after the starting point
-    _n_steps: usize,
+    n_steps: usize,
     /// Number of paths to return
     n_paths: usize,
     /// Type of stochastic drift
@@ -256,7 +274,21 @@ impl StochasticDrift {
         // Definition of SDE parameters
         let dt: f64 = t_f / (n_steps as f64);
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
-        Ok(StochasticDrift { _t_f: t_f, _n_steps: n_steps, n_paths, stochastic_drift_type, error, dt, t, })
+        Ok(StochasticDrift { t_f, n_steps, n_paths, stochastic_drift_type, error, dt, t, })
+    }
+}
+
+impl StochasticProcess for StochasticDrift {
+    fn update_n_paths(&mut self, n_paths: usize) -> () {
+        self.n_paths = n_paths;
+    }
+
+    fn get_n_steps(&self) -> usize {
+        self.n_steps
+    }
+
+    fn get_t_f(&self) -> f64 {
+        self.t_f
     }
 
     /// # Description
@@ -264,7 +296,7 @@ impl StochasticDrift {
     ///
     /// # Output
     /// - An array of random paths
-    pub fn get_paths(&self) -> Result<Vec<Array1<f64>>, Error> {
+    fn get_paths(&self) -> Result<Vec<Array1<f64>>, Error> {
         let mut time_steps: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
         match &self.stochastic_drift_type {
             StochasticDriftType::TrendStationary { trend, s_0 } => {
@@ -308,6 +340,7 @@ impl StochasticDrift {
 mod tests {
     use ndarray::Array1;
     use crate::utilities::TEST_ACCURACY;
+    use crate::stochastic_processes::StochasticProcess;
     use crate::stochastic_processes::stochastic_process_generator::sde_components::{SDEComponent, Noise, Jump};
     use crate::stochastic_processes::stochastic_process_generator::stochastic_drift_components::{StochasticDriftType, TrendStationary, StationaryError};
     use crate::stochastic_processes::stochastic_process_generator::{SDE, StochasticDrift};

@@ -88,6 +88,18 @@ impl ArithmeticBrownianMotion {
     }
 
     /// # Description
+    /// Calculates the expected path of the Arithmetic Brownian Motion.
+    /// 
+    /// # Output
+    /// - An array of expected values of the stock price at each time step
+    /// 
+    /// # LaTeX Formula
+    /// - E\[S_t\] = \\mu t + S_{0}
+    pub fn get_expectations(&self) -> Array1<f64> {
+        self.mu * &self.t + self.s_0
+    }
+
+    /// # Description
     /// Calculates the variance of the Arithmetic Brownian Motion at each time step.
     /// 
     /// # Output
@@ -137,18 +149,6 @@ impl StochasticProcess for ArithmeticBrownianMotion {
 
     fn get_t_f(&self) -> f64 {
         self.t_f
-    }
-
-    /// # Description
-    /// Calculates the expected path of the Arithmetic Brownian Motion.
-    /// 
-    /// # Output
-    /// - An array of expected values of the stock price at each time step
-    /// 
-    /// # LaTeX Formula
-    /// - E\[S_t\] = \\mu t + S_{0}
-    fn get_expectations(&self) -> Array1<f64> {
-        self.mu * &self.t + self.s_0
     }
 
     /// # Description
@@ -243,6 +243,18 @@ impl GeometricBrownianMotion {
     }
 
     /// # Description
+    /// Calculates the expected path of the Geometric Brownian Motion. This represents the mean trajectory of the stock price over time.
+    /// 
+    /// # Output
+    /// - An array of expected values of the stock price at each time step, representing the mean trajectory
+    /// 
+    /// # LaTeX Formula:
+    /// - E\[S_t\] = S_{0} e^{\\mu t}
+    pub fn get_expectations(&self) -> Array1<f64> {
+        self.s_0 * (self.mu * &self.t).map(|i| i.exp() )
+    }
+
+    /// # Description
     /// Computes the variance of the stock price at each time step under the Geometric Brownian Motion model.
     /// This provides an indication of the variability or risk associated with the stock price.
     /// 
@@ -268,18 +280,6 @@ impl StochasticProcess for GeometricBrownianMotion {
 
     fn get_t_f(&self) -> f64 {
         self.t_f
-    }
-
-    /// # Description
-    /// Calculates the expected path of the Geometric Brownian Motion. This represents the mean trajectory of the stock price over time.
-    /// 
-    /// # Output
-    /// - An array of expected values of the stock price at each time step, representing the mean trajectory
-    /// 
-    /// # LaTeX Formula:
-    /// - E\[S_t\] = S_{0} e^{\\mu t}
-    fn get_expectations(&self) -> Array1<f64> {
-        self.s_0 * (self.mu * &self.t).map(|i| i.exp() )
     }
 
     /// # Description
@@ -383,6 +383,18 @@ impl OrnsteinUhlenbeckProcess {
     }
 
     /// # Description
+    /// Calculates the expected path of the Ornstein-Uhlenbeck Process, showing the mean-reverting nature of the process over time.
+    /// 
+    /// # Output
+    /// - An array (np.ndarray) of expected values of the process at each time step
+    /// 
+    /// # LaTeX Formula
+    /// - E\[S_t\] = \\mu + (S_{0} - \\mu) e^{-\\alpha t}
+    pub fn get_expectations(&self) -> Array1<f64> {
+        self.mu + (self.s_0 * self.mu) * (-self.alpha * &self.t).map(|i| i.exp() )
+    }
+
+    /// # Description
     /// Computes the variance of the Ornstein-Uhlenbeck Process at each time step, providing insights into the variability around the mean.
     /// 
     /// # Output
@@ -406,18 +418,6 @@ impl StochasticProcess for OrnsteinUhlenbeckProcess {
 
     fn get_t_f(&self) -> f64 {
         self.t_f
-    }
-
-    /// # Description
-    /// Calculates the expected path of the Ornstein-Uhlenbeck Process, showing the mean-reverting nature of the process over time.
-    /// 
-    /// # Output
-    /// - An array (np.ndarray) of expected values of the process at each time step
-    /// 
-    /// # LaTeX Formula
-    /// - E\[S_t\] = \\mu + (S_{0} - \\mu) e^{-\\alpha t}
-    fn get_expectations(&self) -> Array1<f64> {
-        self.mu + (self.s_0 * self.mu) * (-self.alpha * &self.t).map(|i| i.exp() )
     }
 
     /// # Description
@@ -531,6 +531,18 @@ impl BrownianBridge {
     }
 
     /// # Description
+    /// Calculates the expected path of the Brownian Bridge. It represents the expected value of the process at each time step, starting at 'alpha' and trending towards 'beta'.
+    /// 
+    /// # Output
+    /// - An array of expected values of the process at each time step
+    /// 
+    /// # LaTeX Formula
+    /// - E[S_{t}] = \\alpha + (\\beta - \\alpha) \\frac{t}{T}
+    pub fn get_expectations(&self) -> Array1<f64> {
+        self.alpha + (self.beta - self.alpha) / self.t_f * &self.t
+    }
+
+    /// # Description
     /// Computes the variance of the Brownian Bridge at each time step.
     /// This illustrates how the variability of the process decreases as it approaches the endpoint 'beta' at time T.
     /// 
@@ -555,18 +567,6 @@ impl StochasticProcess for BrownianBridge {
 
     fn get_t_f(&self) -> f64 {
         self.t_f
-    }
-
-    /// # Description
-    /// Calculates the expected path of the Brownian Bridge. It represents the expected value of the process at each time step, starting at 'alpha' and trending towards 'beta'.
-    /// 
-    /// # Output
-    /// - An array of expected values of the process at each time step
-    /// 
-    /// # LaTeX Formula
-    /// - E[S_{t}] = \\alpha + (\\beta - \\alpha) \\frac{t}{T}
-    fn get_expectations(&self) -> Array1<f64> {
-        self.alpha + (self.beta - self.alpha) / self.t_f * &self.t
     }
 
     /// # Description
@@ -672,6 +672,18 @@ impl FellerSquareRootProcess {
     }
 
     /// # Description
+    /// Calculates the expected path of the Feller Square-Root Process, showing the mean-reverting nature over time towards the long-term mean \\mu.
+    /// 
+    /// # Output
+    /// - An array of expected values of the process at each time step
+    /// 
+    /// # LaTeX Formula
+    /// - E[S_{t}] = \\mu + (S_{0} - \\mu) e^{-\\alpha t}
+    pub fn get_expectations(&self) -> Array1<f64> {
+        self.mu + (self.s_0 - self.mu) * (-self.alpha * &self.t).map(|i| i.exp() )
+    }
+
+    /// # Description
     /// Computes the variance of the Feller Square-Root Process at each time step, providing insights into the variability around the mean.
     /// 
     /// # Output
@@ -694,18 +706,6 @@ impl StochasticProcess for FellerSquareRootProcess {
 
     fn get_t_f(&self) -> f64 {
         self.t_f
-    }
-
-    /// # Description
-    /// Calculates the expected path of the Feller Square-Root Process, showing the mean-reverting nature over time towards the long-term mean \\mu.
-    /// 
-    /// # Output
-    /// - An array of expected values of the process at each time step
-    /// 
-    /// # LaTeX Formula
-    /// - E[S_{t}] = \\mu + (S_{0} - \\mu) e^{-\\alpha t}
-    fn get_expectations(&self) -> Array1<f64> {
-        self.mu + (self.s_0 - self.mu) * (-self.alpha * &self.t).map(|i| i.exp() )
     }
 
     /// # Description

@@ -47,18 +47,18 @@ use crate::stochastic_processes::StochasticProcess;
 ///
 /// assert!((predicted_value - theoretical_value).abs() < 1_000_000.0*TEST_ACCURACY);
 /// ```
-pub fn monte_carlo_simulation(stochastic_process: &dyn StochasticProcess, payoff_object: &dyn Payoff, r: f64, exercise_time_steps: Option<Vec<bool>>) -> Result<f64, Error> {
+pub fn monte_carlo_simulation(stochastic_process: &dyn StochasticProcess, payoff_object: &dyn Payoff, r: f64, exercise_time_steps: &Option<Vec<bool>>) -> Result<f64, Error> {
     // Data validation
     let n_steps: usize = stochastic_process.get_n_steps();
     let dt: f64 = stochastic_process.get_t_f() / (n_steps as f64);
-    let exercise_time_steps: Vec<bool> = match exercise_time_steps {
+    let exercise_time_steps: &Vec<bool> = match exercise_time_steps {
         Some(exercise_time_steps_vec) => {
             if exercise_time_steps_vec.len() != n_steps {
                 return Err(data_error(format!("Monte-Carlo Simulation: The argument exercise time steps should be of length {} as defined by the stochastic process.", n_steps)));
             }
             exercise_time_steps_vec
         },
-        None => vec![true; n_steps],
+        None => &vec![true; n_steps],
     };
     // Stochastic model
     let stochastic_paths: Vec<Array1<f64>> = stochastic_process.get_paths()?;
@@ -97,7 +97,7 @@ mod tests {
         let gbm: GeometricBrownianMotion = GeometricBrownianMotion::new(rf, 0.2, n_paths, n_steps, 1.0, 10.0);
         let long_call: LongCall = LongCall { k: 11.0, cost: 0.0 };
         // Predicted value (Monte-Carlo simulation)
-        let predicted_value: f64 = monte_carlo_simulation(&gbm, &long_call, rf, Some(vec![false; n_steps])).unwrap();
+        let predicted_value: f64 = monte_carlo_simulation(&gbm, &long_call, rf, &Some(vec![false; n_steps])).unwrap();
         // Theoretical value (Black-Scholes formula)
         let theoretical_value: f64 = black_scholes_formula(10.0, 11.0, 0.2, 1.0, 0.02, 0.0, &BlackScholesType::Call).unwrap();
         assert!((predicted_value - theoretical_value).abs() < 10_000_000.0*TEST_ACCURACY);

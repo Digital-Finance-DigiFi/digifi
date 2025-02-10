@@ -84,6 +84,18 @@ impl ConstantElasticityOfVariance {
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
         Ok(ConstantElasticityOfVariance { mu, sigma, gamma, n_paths, n_steps, t_f, s_0, dt, t })
     }
+
+    /// # Description
+    /// Calculates the expected path of the CEV process.
+    ///
+    /// # Output
+    /// - An array of expected values of the stock price at each time step
+    ///
+    /// # LaTeX Formula
+    /// - E[S_{t}] = S_{0} e^{\\mu t}
+    pub fn get_expectations(&self) -> Array1<f64> {
+        self.s_0 * (self.mu * &self.t).map(|v| { v.exp() } )
+    }
 }
 
 impl StochasticProcess for ConstantElasticityOfVariance {
@@ -97,18 +109,6 @@ impl StochasticProcess for ConstantElasticityOfVariance {
 
     fn get_t_f(&self) -> f64 {
         self.t_f
-    }
-
-    /// # Description
-    /// Calculates the expected path of the CEV process.
-    ///
-    /// # Output
-    /// - An array of expected values of the stock price at each time step
-    ///
-    /// # LaTeX Formula
-    /// - E[S_{t}] = S_{0} e^{\\mu t}
-    fn get_expectations(&self) -> Array1<f64> {
-        self.s_0 * (self.mu * &self.t).map(|v| { v.exp() } )
     }
 
     /// # Description
@@ -217,6 +217,18 @@ impl HestonStochasticVolatility {
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
         HestonStochasticVolatility { mu, k, theta, epsilon, rho, n_paths, n_steps, t_f, s_0, v_0, dt, t }
     }
+
+    /// # Description
+    /// Calculates the expected path of the Heston Stochastic Volatility process.
+    ///
+    /// # Output
+    /// - An array of expected values of the stock price at each time step
+    ///
+    /// # LaTeX Formula
+    /// - E[S_{t}] = S_{0} + (\\mu - \\frac{1}{2}\\theta) t + \\frac{\\theta - v_{0}}{2k} (1 - e^{-kt})
+    pub fn get_expectations(&self) -> Array1<f64> {
+        self.s_0 + (self.mu - 0.5 * self.theta)*&self.t + (self.theta - self.v_0)*(1.0 - (-self.k * &self.t).map(|v| { v.exp() } ))/(2.0 * self.k)
+    }
 }
 
 impl StochasticProcess for HestonStochasticVolatility {
@@ -230,18 +242,6 @@ impl StochasticProcess for HestonStochasticVolatility {
 
     fn get_t_f(&self) -> f64 {
         self.t_f
-    }
-
-    /// # Description
-    /// Calculates the expected path of the Heston Stochastic Volatility process.
-    ///
-    /// # Output
-    /// - An array of expected values of the stock price at each time step
-    ///
-    /// # LaTeX Formula
-    /// - E[S_{t}] = S_{0} + (\\mu - \\frac{1}{2}\\theta) t + \\frac{\\theta - v_{0}}{2k} (1 - e^{-kt})
-    fn get_expectations(&self) -> Array1<f64> {
-        self.s_0 + (self.mu - 0.5 * self.theta)*&self.t + (self.theta - self.v_0)*(1.0 - (-self.k * &self.t).map(|v| { v.exp() } ))/(2.0 * self.k)
     }
 
     /// # Description
@@ -343,6 +343,18 @@ impl VarianceGammaProcess {
     }
 
     /// # Description
+    /// Calculates the expected path of the Variance Gamma process.
+    ///
+    /// # Output
+    /// - An array of expected values of the stock price at each time step
+    ///
+    /// # LaTeX Formula
+    /// - E[S_{t}] = S_{0} + \\mu t
+    pub fn get_expectations(&self) -> Array1<f64> {
+        self.s_0 + self.mu * &self.t
+    }
+
+    /// # Description
     /// Calculates the variance of the Variance Gamma process.
     ///
     /// # Output
@@ -366,18 +378,6 @@ impl StochasticProcess for VarianceGammaProcess {
 
     fn get_t_f(&self) -> f64 {
         self.t_f
-    }
-
-    /// # Description
-    /// Calculates the expected path of the Variance Gamma process.
-    ///
-    /// # Output
-    /// - An array of expected values of the stock price at each time step
-    ///
-    /// # LaTeX Formula
-    /// - E[S_{t}] = S_{0} + \\mu t
-    fn get_expectations(&self) -> Array1<f64> {
-        self.s_0 + self.mu * &self.t
     }
 
     /// # Description

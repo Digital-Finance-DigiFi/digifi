@@ -90,6 +90,18 @@ impl MertonJumpDiffusionProcess {
     }
 
     /// # Description
+    /// Calculates the expected path of the Merton Jump-Diffusion process.
+    /// 
+    /// # Output
+    /// - An array of expected values of the stock price at each time step
+    /// 
+    /// # LaTeX Formula
+    /// - E\[S_t\] = S_{0} + t(\\mu_{s} + \\lambda_{j}\\mu_{j})
+    pub fn get_expectations(&self) -> Array1<f64> {
+        self.s_0 + &self.t*(self.mu_s + self.lambda_j*self.mu_j)
+    }
+
+    /// # Description
     /// Calculates the variance of the Merton Jump-Diffusion process at each time step.
     /// 
     /// # Output
@@ -113,18 +125,6 @@ impl StochasticProcess for MertonJumpDiffusionProcess {
 
     fn get_t_f(&self) -> f64 {
         self.t_f
-    }
-
-    /// # Description
-    /// Calculates the expected path of the Merton Jump-Diffusion process.
-    /// 
-    /// # Output
-    /// - An array of expected values of the stock price at each time step
-    /// 
-    /// # LaTeX Formula
-    /// - E\[S_t\] = S_{0} + t(\\mu_{s} + \\lambda_{j}\\mu_{j})
-    fn get_expectations(&self) -> Array1<f64> {
-        self.s_0 + &self.t*(self.mu_s + self.lambda_j*self.mu_j)
     }
 
     /// # Description
@@ -248,6 +248,18 @@ impl KouJumpDiffusionProcess {
     }
 
     /// # Description
+    /// Calculates the expected path of the Kou Jump-Diffusion process
+    /// 
+    /// # Output
+    /// - An array of expected values of the stock price at each time step
+    /// 
+    /// # LaTeX Formula
+    /// - E\[S_t\] = S_{0} + t(\\mu + \\lambda_{n}(\\frac{p}{\\eta_{1}} - \\frac{1-p}{\\eta_{2}}))
+    pub fn get_expectations(&self) -> Array1<f64> {
+        self.s_0 + &self.t*(self.mu + self.lambda_n*(self.p/self.eta_1 - (1.0-self.p)/self.eta_2))
+    }
+
+    /// # Description
     /// Calculates the variance of the Kou Jump-Diffusion process.
     /// 
     /// # Output
@@ -271,18 +283,6 @@ impl StochasticProcess for KouJumpDiffusionProcess {
 
     fn get_t_f(&self) -> f64 {
         self.t_f
-    }
-
-    /// # Description
-    /// Calculates the expected path of the Kou Jump-Diffusion process
-    /// 
-    /// # Output
-    /// - An array of expected values of the stock price at each time step
-    /// 
-    /// # LaTeX Formula
-    /// - E\[S_t\] = S_{0} + t(\\mu + \\lambda_{n}(\\frac{p}{\\eta_{1}} - \\frac{1-p}{\\eta_{2}}))
-    fn get_expectations(&self) -> Array1<f64> {
-        self.s_0 + &self.t*(self.mu + self.lambda_n*(self.p/self.eta_1 - (1.0-self.p)/self.eta_2))
     }
 
     /// # Description
