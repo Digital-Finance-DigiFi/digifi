@@ -31,6 +31,30 @@ pub fn dol(quantity_of_goods: f64, price_per_unit: f64, variable_cost_per_unit: 
 
 
 /// # Description
+/// Monetary value of earnings per outstanding share of common stock for a company during a defined period of time.
+/// 
+/// EPS = (Net Income - Preferred Dividends) / Number of Common Shares Outstanding
+/// 
+/// # Input
+/// - `net_income`: Net income
+/// - `preferred_dividends`: Total dividends paid to the holders of the preferred stock
+/// - `n_common_shares_outstanding`: Number of common shares outstanding
+/// 
+/// # Output
+/// - Earnings per share (EPS)
+/// 
+/// # LaTeX Formula
+/// - EPS = \\frac{(I-D_{pref})}{N_{common}}
+/// 
+/// # Links
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Earnings_per_share>
+/// - Original Source: N/A
+pub fn earnings_per_share(net_income: f64, preferred_dividends: f64, n_common_shares_outstanding: usize) -> f64 {
+    (net_income - preferred_dividends) / n_common_shares_outstanding as f64
+}
+
+
+/// # Description
 /// The ratio of market price to earnings.
 /// 
 /// Price-to-Earnings Ratio = Share Price / Earnings per Share
@@ -71,8 +95,12 @@ pub fn pe_ratio(share_price: f64, eps: f64) -> f64 {
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/P/B_ratio>
 /// - Original Source: N/A
-pub fn pb_ratio(market_cap: f64, book_value: f64) -> f64 {
-    market_cap / book_value
+pub fn pb_ratio(market_cap: f64, book_value: f64) -> Option<f64> {
+    if book_value == 0.0 {
+        None
+    } else {
+        Some(market_cap / book_value)
+    }
 }
 
 
@@ -96,6 +124,89 @@ pub fn pb_ratio(market_cap: f64, book_value: f64) -> f64 {
 /// - Original Source: N/A
 pub fn dividend_yield(share_price: f64, dividend: f64) -> f64 {
     100.0 * dividend / share_price
+}
+
+
+/// # Description
+/// Enterprise value is the sum of a company's market capitalization and any debts, minus cash or cash equivalents on hand.
+/// 
+/// EV = Maarket Cap - Total Debt + Cash & Cash Equivalents
+/// 
+/// # Input
+/// - `market_cap`: Market capitalization of the company
+/// - `total_debt`: Total debt of the company
+/// - `cash`: Cash and cash equivalents (May not include marketable securities)
+/// 
+/// # Output
+/// - Enterprise value (EV)
+/// 
+/// # LaTeX Formula
+/// - EV = \\textit{Market Capitalization}+\\textit{Total Debt}-\\textit{Cash and Cash Equivalents}
+/// 
+/// # Links
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Enterprise_value>
+/// - Original Source: N/A
+pub fn enterprise_value(market_cap: f64, total_debt: f64, cash: f64) -> f64 {
+    market_cap + total_debt - cash
+}
+
+/// # Description
+/// Measure of the value of a stock that compares a company's enterprise value to its revenue.
+/// EV/R is one of several fundamental indicators that investors use to determine whether a stock is priced fairly.
+/// The EV/R multiple is also often used to determine a company's valuation in the case of a potential acquisition.
+/// It’s also called the enterprise value-to-sales multiple.
+/// 
+/// # Input
+/// - `market_cap`: Market capitalization of the company
+/// - `total_debt`: Total debt of the company
+/// - `cash`: Cash and cash equivalents (May not include marketable securities)
+/// - `revenue`: Revenue of the company
+/// 
+/// # Output
+/// - EV/Revenue multiple
+/// 
+/// # LaTeX Formula
+/// - \\frac{EV}{R} = \\frac{\\textit{Market Capitalization}+\\textit{Total Debt}-\\textit{Cash and Cash Equivalents}}{\\textit{Revenue}}
+/// 
+/// # Links
+/// - Wikipedia: N/A
+/// - Original Source: N/A
+pub fn ev_to_revenue(market_cap: f64, total_debt: f64, cash: f64, revenue: f64) -> Option<f64> {
+    if revenue == 0.0 {
+        None
+    } else {
+        Some(enterprise_value(market_cap, total_debt, cash) / revenue)
+    }
+}
+
+
+/// # Description
+/// Valuation multiple used to determine the fair market value of a company.
+/// By contrast to the more widely available P/E ratio (price-earnings ratio) it includes debt as part of the value of the
+/// company in the numerator and excludes costs such as the need to replace depreciating plant, interest on debt,
+/// and taxes owed from the earnings or denominator.
+/// 
+/// # Input
+/// - `market_cap`: Market capitalization of the company
+/// - `total_debt`: Total debt of the company
+/// - `cash`: Cash and cash equivalents (May not include marketable securities)
+/// - `ebitda`: EBITDA of the company
+/// 
+/// # Output
+/// - EV/EBITDA multiple
+/// 
+/// # LaTeX Formula
+/// - \\frac{EV}{EBITDA} = \\frac{\\textit{Market Capitalization}+\\textit{Total Debt}-\\textit{Cash and Cash Equivalents}}{\\textit{EBITDA}}
+/// 
+/// # Links
+/// - Wikipedia: <https://en.wikipedia.org/wiki/EV/Ebitda>
+/// - Original Source: N/A
+pub fn ev_to_ebitda(market_cap: f64, total_debt: f64, cash: f64, ebitda: f64) -> Option<f64> {
+    if ebitda == 0.0 {
+        None
+    } else {
+        Some(enterprise_value(market_cap, total_debt, cash) / ebitda)
+    }
 }
 
 
@@ -141,31 +252,12 @@ pub fn book_value(assets: f64, liabilities: f64) -> f64 {
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Cost_of_equity>
 /// - Original Source: N/A
-pub fn cost_of_equity_capital(share_price: f64, expected_dividend: f64, expected_share_price: f64) -> f64 {
-    (expected_dividend + expected_share_price - share_price) / share_price
-}
-
-
-/// # Description
-/// Measure of profitability of the company in relation to its equity.
-/// 
-/// ROE = Total Earnings / Book Value
-/// 
-/// # Input
-/// - `total_earnings`: Total earnings of the company
-/// - `book_value`: Value of the assets minus liabilities
-/// 
-/// # Output
-/// - Return on equity (ROE)
-/// 
-/// # LaTeX Formula
-/// - ROE  =\\frac{\\textit{Total Earnings}}{\\textit{Book Value}}
-/// 
-/// # Links
-/// - Wikipedia: <https://en.wikipedia.org/wiki/Return_on_equity>
-/// - Original Source: N/A
-pub fn roe(total_earning: f64, book_value: f64) -> f64 {
-    total_earning / book_value
+pub fn cost_of_equity_capital(share_price: f64, expected_dividend: f64, expected_share_price: f64) -> Option<f64> {
+    if share_price == 0.0 {
+        None
+    } else {
+        Some((expected_dividend + expected_share_price - share_price) / share_price)
+    }
 }
 
 
@@ -187,8 +279,12 @@ pub fn roe(total_earning: f64, book_value: f64) -> f64 {
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Dividend_payout_ratio>
 /// - Original Source: N/A
-pub fn payout_ratio(dividend_per_share: f64, earnings_per_share: f64) -> f64 {
-    dividend_per_share / earnings_per_share
+pub fn payout_ratio(dividend_per_share: f64, earnings_per_share: f64) -> Option<f64> {
+    if earnings_per_share == 0.0 {
+        None
+    } else {
+        Some(dividend_per_share / earnings_per_share)
+    }
 }
 
 
@@ -206,8 +302,16 @@ pub fn payout_ratio(dividend_per_share: f64, earnings_per_share: f64) -> f64 {
 /// 
 /// # LaTeX Formula
 /// - \\textit{Plowback Ratio} = 1 - \\frac{D_{t}}{EPS_{t}}
-pub fn plowback_ratio(dividend_per_share: f64, earnings_per_share: f64) -> f64 {
-    1.0 - dividend_per_share / earnings_per_share
+/// 
+/// # Links
+/// - Wikipedia: N/A
+/// - Original Source: N/A
+pub fn plowback_ratio(dividend_per_share: f64, earnings_per_share: f64) -> Option<f64> {
+    if earnings_per_share == 0.0 {
+        None
+    } else {
+        Some(1.0 - dividend_per_share / earnings_per_share)
+    }
 }
 
 
@@ -234,8 +338,12 @@ pub fn plowback_ratio(dividend_per_share: f64, earnings_per_share: f64) -> f64 {
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Altman_Z-score>
 /// - Origina Source: <https://doi.org/10.1002/9781118266236.ch19>
-pub fn altman_z_score(ebit: f64, total_assets: f64, sales: f64, equity: f64, total_liabilities: f64, retained_earnings: f64, working_capital: f64) -> f64 {
-    3.3*ebit/total_assets + sales/total_assets + 0.6*equity/total_liabilities + 1.4*retained_earnings/total_assets + 1.2*working_capital/total_assets
+pub fn altman_z_score(ebit: f64, total_assets: f64, sales: f64, equity: f64, total_liabilities: f64, retained_earnings: f64, working_capital: f64) -> Option<f64> {
+    if total_assets == 0.0 || total_liabilities == 0.0 {
+        None
+    } else {
+        Some(3.3*ebit/total_assets + sales/total_assets + 0.6*equity/total_liabilities + 1.4*retained_earnings/total_assets + 1.2*working_capital/total_assets)
+    }
 }
 
 
@@ -260,8 +368,13 @@ pub fn altman_z_score(ebit: f64, total_assets: f64, sales: f64, equity: f64, tot
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Weighted_average_cost_of_capital>
 /// - Original Source: N/A
-pub fn weighted_average_cost_of_capital(equity: f64, debt: f64, return_on_equity: f64, return_on_debt: f64, corporate_tax: f64) -> f64 {
-    return_on_debt*(1.0-corporate_tax)*debt/(debt+equity) + return_on_equity*equity/(debt+equity)
+pub fn weighted_average_cost_of_capital(equity: f64, debt: f64, return_on_equity: f64, return_on_debt: f64, corporate_tax: f64) -> Option<f64> {
+    let capital_structure: f64 = debt + equity;
+    if capital_structure == 0.0 {
+        None
+    } else {
+        Some(return_on_debt*(1.0-corporate_tax)*debt/capital_structure + return_on_equity*equity/capital_structure)
+    }
 }
 
 
@@ -286,8 +399,122 @@ pub fn weighted_average_cost_of_capital(equity: f64, debt: f64, return_on_equity
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Return_on_equity>
 /// - Original Source: N/A
-pub fn expected_return_on_equity(equity: f64, debt: f64, return_on_assets: f64, return_on_debt: f64, corporate_tax: f64) -> f64 {
-    return_on_assets + (return_on_assets - return_on_debt*(1.0-corporate_tax)) * (debt/equity)
+pub fn expected_return_on_equity(equity: f64, debt: f64, return_on_assets: f64, return_on_debt: f64, corporate_tax: f64) -> Option<f64> {
+    if equity == 0.0 {
+        None
+    } else {
+        Some(return_on_assets + (return_on_assets - return_on_debt*(1.0-corporate_tax)) * (debt/equity))
+    }
+}
+
+
+// # Description
+/// Measure of a company's financial performance. It is calculated by dividing net income by shareholders' equity.
+/// Because shareholders' equity is equal to a company’s assets minus its debt, ROE is a way of showing a company's
+/// return on net assets.
+/// 
+/// ROE = Net Income / Shareholder's Equity
+/// 
+/// # Input
+/// - `net_income`: Net income of the company
+/// - `equity`: Average shareholder's equity
+/// 
+/// # Output
+/// - Return on equity (ROE)
+/// 
+/// LaTeX Formula
+/// - ROE = \\frac{\\textit{Net Income}}{Equity}
+/// 
+/// # Links
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Return_on_equity>
+/// - Original SOurce: N/A
+pub fn return_on_equity(net_income: f64, equity: f64) -> Option<f64> {
+    if equity == 0.0 {
+        None
+    } else {
+        Some(net_income / equity)
+    }
+}
+
+
+/// # Description
+/// Financial ratio that indicates how profitable a company is relative to its total assets.
+/// It can used to determine how efficiently a company uses its resources to generate a profit.
+/// 
+/// ROA = Net Income / Total Assets
+/// 
+/// # Input
+/// - `net_income`: Net income of the company
+/// - `total_assets`: Average total assets
+/// 
+/// # Output
+/// - Return on assets (ROA)
+/// 
+/// # LaTeX Formula
+/// - ROA = \\frac{\\textit{Net Income}}{\\textit{Total Assets}}
+/// 
+/// # Links
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Return_on_assets>
+/// - Original Source: N/A
+pub fn return_on_assets(net_income: f64, total_assets: f64) -> Option<f64> {
+    if total_assets == 0.0 {
+        None
+    } else {
+        Some(net_income / total_assets)
+    }
+}
+
+
+/// # Description
+/// Performance measure used to evaluate the efficiency or profitability of an investment or compare the efficiency
+/// of a number of different investments. ROI tries to directly measure the amount of return on a particular investment,
+/// relative to the investment’s cost.
+/// 
+/// ROI = (Gain from Investment - Cost of Investment) / Cost of Investment
+/// 
+/// # Input
+/// - `gain_from_investment`: Gain from investment (e.g., revenue)
+/// - `cost_of_investment`: Cost of investment (e.g., cost of goods sold)
+/// 
+/// # Output
+/// - Return on investment (ROI)
+/// 
+/// # LaTeX Formula
+/// - ROI = \\frac{Gain - Cost}{Cost}
+/// 
+/// # Links
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Return_on_investment>
+/// - Original Source: N/A
+pub fn return_on_investment(gain_from_investment: f64, cost_of_investment: f64) -> Option<f64> {
+    if cost_of_investment == 0.0 {
+        None
+    } else {
+        Some((gain_from_investment - cost_of_investment) / cost_of_investment)
+    }
+}
+
+
+/// # Description
+/// Ratio indicating the relative proportion of shareholders' equity and debt used to finance the company's assets.
+/// 
+/// D/E = Debt / Equity
+/// 
+/// # Input
+/// - `debt`: Debt portion of the corporate structure
+/// - `equity`: Equity portion of the corporate structure
+/// 
+/// # Output
+/// Debt-to-Equity ratio
+/// 
+/// # Links
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Debt-to-equity_ratio>
+/// - Original Source: N/A
+pub fn debt_to_equity(debt: f64, equity: f64) -> Option<f64> {
+    if equity == 0.0 {
+        None
+    } else {
+        Some(debt / equity)
+    }
 }
 
 
@@ -307,8 +534,13 @@ pub fn expected_return_on_equity(equity: f64, debt: f64, return_on_assets: f64, 
 /// 
 /// # LaTeX Formula
 /// - \\beta_{A} = [\\beta_{D}\\frac{D}{E+D}] + [\\beta_{E}\\frac{E}{E+D}]
-pub fn unlevered_beta(equity: f64, debt: f64, beta_equity: f64, beta_debt: f64) -> f64 {
-    beta_debt*debt/(debt+equity) + beta_equity*equity/(debt+equity)
+pub fn unlevered_beta(equity: f64, debt: f64, beta_equity: f64, beta_debt: f64) -> Option<f64> {
+    let capital_structure: f64 = debt + equity;
+    if capital_structure == 0.0 {
+        None
+    } else {
+        Some(beta_debt*debt/capital_structure + beta_equity*equity/capital_structure)
+    }
 }
 
 
@@ -328,8 +560,12 @@ pub fn unlevered_beta(equity: f64, debt: f64, beta_equity: f64, beta_debt: f64) 
 /// 
 /// # LaTeX Formula
 /// - \\beta_{E} = \\beta_{A} + (\\beta_{A} - \\beta_{D})\\frac{D}{E}
-pub fn levered_beta(equity: f64, debt: f64, beta_assets: f64, beta_debt: f64) -> f64 {
-    beta_assets + (beta_assets - beta_debt)*debt/equity
+pub fn levered_beta(equity: f64, debt: f64, beta_assets: f64, beta_debt: f64) -> Option<f64> {
+    if equity == 0.0 {
+        None
+    } else {
+        Some(beta_assets + (beta_assets - beta_debt)*debt/equity)
+    }
 }
 
 
@@ -352,6 +588,11 @@ pub fn levered_beta(equity: f64, debt: f64, beta_assets: f64, beta_debt: f64) ->
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Tax_benefits_of_debt>
 /// - Original Source: N/A
-pub fn relative_tax_advantage_of_debt(corporate_tax: f64, personal_tax: f64, effective_personal_tax: f64) -> f64 {
-    (1.0-personal_tax) / ((1.0-effective_personal_tax) * (1.0-corporate_tax))
+pub fn relative_tax_advantage_of_debt(corporate_tax: f64, personal_tax: f64, effective_personal_tax: f64) -> Option<f64> {
+    let denominator: f64 = (1.0-effective_personal_tax) * (1.0-corporate_tax);
+    if denominator == 0.0 {
+        None
+    } else {
+        Some((1.0-personal_tax) / denominator)
+    }
 }

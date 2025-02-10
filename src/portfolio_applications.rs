@@ -14,6 +14,8 @@ pub mod portfolio_composition;
 
 use std::io::Error;
 use ndarray::{Array1, s, concatenate, Axis};
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
 use crate::utilities::{compare_array_len, data_error, other_error};
 use crate::statistics::covariance;
 
@@ -29,6 +31,7 @@ pub enum ReturnsMethod {
 
 
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Struct with data to be used inside the InstumentsPortfolio.
 pub struct AssetHistData {

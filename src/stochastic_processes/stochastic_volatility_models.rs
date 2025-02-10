@@ -1,5 +1,7 @@
 use std::io::Error;
 use ndarray::Array1;
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
 use crate::utilities::input_error;
 use crate::random_generators::RandomGenerator;
 use crate::stochastic_processes::StochasticProcess;
@@ -7,6 +9,7 @@ use crate::random_generators::{standard_normal_generators::StandardNormalInverse
 use crate::statistics::continuous_distributions::GammaDistribution;
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Model used to reproduce the volatility smile effect.
 /// 
@@ -50,9 +53,9 @@ pub struct ConstantElasticityOfVariance {
     /// Number of paths to generate
     n_paths: usize,
     /// Number of steps
-    _n_steps: usize,
+    n_steps: usize,
     /// Final time step
-    _t_f: f64,
+    t_f: f64,
     /// Initial value of the stochastic process
     s_0: f64,
     /// Time difference between two consequtive time steps
@@ -79,13 +82,21 @@ impl ConstantElasticityOfVariance {
         }
         let dt: f64 = t_f / (n_steps as f64);
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
-        Ok(ConstantElasticityOfVariance { mu, sigma, gamma, n_paths, _n_steps: n_steps, _t_f: t_f, s_0, dt, t })
+        Ok(ConstantElasticityOfVariance { mu, sigma, gamma, n_paths, n_steps, t_f, s_0, dt, t })
     }
 }
 
 impl StochasticProcess for ConstantElasticityOfVariance {
     fn update_n_paths(&mut self, n_paths: usize) -> () {
         self.n_paths = n_paths;
+    }
+
+    fn get_n_steps(&self) -> usize {
+        self.n_steps
+    }
+
+    fn get_t_f(&self) -> f64 {
+        self.t_f
     }
 
     /// # Description
@@ -123,6 +134,7 @@ impl StochasticProcess for ConstantElasticityOfVariance {
 }
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Model describes the evolution of stock price and its volatility.
 /// 
@@ -172,9 +184,9 @@ pub struct HestonStochasticVolatility {
     /// Number of paths to generate
     n_paths: usize,
     /// Number of steps
-    _n_steps: usize,
+    n_steps: usize,
     /// Final time step
-    _t_f: f64,
+    t_f: f64,
     /// Initial value of the stochastic process
     s_0: f64,
     /// Initial value of the volatility process
@@ -203,13 +215,21 @@ impl HestonStochasticVolatility {
     pub fn new(mu: f64, k: f64, theta: f64, epsilon: f64, rho: f64, n_paths: usize, n_steps: usize, t_f: f64, s_0: f64, v_0: f64) -> Self {
         let dt: f64 = t_f / (n_steps as f64);
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
-        HestonStochasticVolatility { mu, k, theta, epsilon, rho, n_paths, _n_steps: n_steps, _t_f: t_f, s_0, v_0, dt, t }
+        HestonStochasticVolatility { mu, k, theta, epsilon, rho, n_paths, n_steps, t_f, s_0, v_0, dt, t }
     }
 }
 
 impl StochasticProcess for HestonStochasticVolatility {
     fn update_n_paths(&mut self, n_paths: usize) -> () {
         self.n_paths = n_paths;
+    }
+
+    fn get_n_steps(&self) -> usize {
+        self.n_steps
+    }
+
+    fn get_t_f(&self) -> f64 {
+        self.t_f
     }
 
     /// # Description
@@ -257,6 +277,7 @@ impl StochasticProcess for HestonStochasticVolatility {
 }
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Model used in option pricing.
 /// 
@@ -293,9 +314,9 @@ pub struct VarianceGammaProcess {
     /// Number of paths to generate
     n_paths: usize,
     /// Number of steps
-    _n_steps: usize,
+    n_steps: usize,
     /// Final time step
-    _t_f: f64,
+    t_f: f64,
     /// Initial value of the stochastic process
     s_0: f64,
     /// Time difference between two consequtive time steps
@@ -318,7 +339,7 @@ impl VarianceGammaProcess {
     pub fn new(mu: f64, sigma: f64, kappa: f64, n_paths: usize, n_steps: usize, t_f: f64, s_0: f64) -> Self {
         let dt: f64 = t_f / (n_steps as f64);
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
-        VarianceGammaProcess { mu, sigma, kappa, n_paths, _n_steps: n_steps, _t_f: t_f, s_0, dt, t }
+        VarianceGammaProcess { mu, sigma, kappa, n_paths, n_steps, t_f, s_0, dt, t }
     }
 
     /// # Description
@@ -337,6 +358,14 @@ impl VarianceGammaProcess {
 impl StochasticProcess for VarianceGammaProcess {
     fn update_n_paths(&mut self, n_paths: usize) -> () {
         self.n_paths = n_paths;
+    }
+
+    fn get_n_steps(&self) -> usize {
+        self.n_steps
+    }
+
+    fn get_t_f(&self) -> f64 {
+        self.t_f
     }
 
     /// # Description

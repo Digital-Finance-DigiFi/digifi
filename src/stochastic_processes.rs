@@ -30,6 +30,14 @@ pub trait StochasticProcess {
     fn update_n_paths(&mut self, n_paths: usize) -> ();
 
     /// # Description
+    /// Returns the number of time steps in the stochastic process.
+    fn get_n_steps(&self) -> usize;
+
+    /// # Description
+    /// Returns the final time step.
+    fn get_t_f(&self) -> f64;
+
+    /// # Description
     /// Expected path, E\[S\], of the stochastic process.
     fn get_expectations(&self) -> Array1<f64>;
 

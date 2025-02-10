@@ -4,6 +4,8 @@ pub use self::maths_utils::{FunctionEvalMethod, factorial, rising_factorial, erf
 pub use self::numerical_engines::nelder_mead;
 #[cfg(feature = "sample_data")]
 pub use self::sample_data::SampleData;
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
 pub use self::time_value_utils::{
     CompoundingType, present_value, net_present_value, future_value, internal_rate_of_return, real_interest_rate,
     ptp_compounding_transformation, ptc_compounding_transformation, ctp_compounding_transformation, Compounding, forward_rate, Cashflow, Perpetuity, Annuity,
@@ -35,6 +37,7 @@ pub enum ParameterType {
 }
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Struct for generating time array.
 ///

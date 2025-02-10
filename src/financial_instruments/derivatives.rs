@@ -1,12 +1,14 @@
 use std::io::Error;
 use ndarray::Array1;
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
 #[cfg(feature = "plotly")]
 use plotly::{Plot, Surface, Layout, layout::{Axis, LayoutScene}, common::Title};
 use crate::{lattice_models::LatticeModel, statistics::ProbabilityDistribution, utilities::{data_error, input_error, time_value_utils::{Compounding, CompoundingType}}};
 use crate::financial_instruments::{FinancialInstrument, FinancialInstrumentId, Payoff};
-use crate::portfolio_applications::{AssetHistData, PortfolioInstrument};
+use crate::portfolio_applications::{returns_average, ReturnsMethod, AssetHistData, PortfolioInstrument};
 use crate::statistics::{covariance, continuous_distributions::NormalDistribution};
-use crate::stochastic_processes::{StochasticProcess, standard_stochastic_models::BrownianBridge};
+use crate::stochastic_processes::{StochasticProcess, standard_stochastic_models::GeometricBrownianMotion};
 use crate::lattice_models::{binomial_models::BrownianMotionBinomialModel, trinomial_models::BrownianMotionTrinomialModel};
 // TODO: Add implied volatility calculator, volatility smile and surface plots
 
@@ -57,8 +59,9 @@ pub enum OptionPricingMethod {
 }
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
-/// Surface (i.e., underlying asset price vs option value vs time-to-maturity) of the option price as it approaches maturity.
+/// Surface (i.e., underlying asset price vs option value vs time to maturity) of the option price as it approaches maturity.
 pub struct PresentValueSurface {
     /// Array of times to maturity
     pub times_to_maturity: Array1<f64>,
@@ -66,6 +69,55 @@ pub struct PresentValueSurface {
     pub price_array: Array1<f64>,
     /// Matrix of present values of the option
     pub pv_matrix: Vec<Array1<f64>>,
+}
+
+
+/// # Description
+/// Black-Scholes formula implementation for pricing European options.
+/// 
+/// # Input
+/// - `s`: Underlying asset price
+/// - `k`: Option strike price
+/// - `sigma`: Standard deviation of underlying asset price
+/// - `time_to_maturity`: Time to maturity of the option contract
+/// - `r`: Discount rate (e.g., risk-free rate)
+/// - `q`: Predicatable yield of the underlying asset (e.g., dividend yield)
+/// - `type_`: Type of option contract (i.e., call or put option)
+/// 
+/// # Output
+/// - European option premium (i.e., option price)
+/// 
+/// # Links
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Black%E2%80%93Scholes_model>
+/// - Original Source: <https://www.cs.princeton.edu/courses/archive/fall09/cos323/papers/black_scholes73.pdf>
+/// 
+/// # Examples
+/// 
+/// ```rust
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::financial_instruments::{BlackScholesType, black_scholes_formula};
+/// 
+/// let value: f64 = black_scholes_formula(10.0, 11.0, 0.2, 1.0, 0.02, 0.0, &BlackScholesType::Call).unwrap();
+/// 
+/// assert!((value - 0.49438669572304805).abs() < TEST_ACCURACY);
+/// ```
+pub fn black_scholes_formula(s: f64, k: f64, sigma: f64, time_to_maturity: f64, r: f64, q: f64, type_: &BlackScholesType) -> Result<f64, Error> {
+    let normal_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0)?;
+    let d_1_numerator: f64 = (s/k).ln() + time_to_maturity  * (r - q + 0.5*sigma.powi(2));
+    let d_1: f64 = d_1_numerator / (sigma * time_to_maturity.sqrt());
+    let d_2: f64 = d_1 - sigma * time_to_maturity.sqrt();
+    match type_ {
+        BlackScholesType::Call => {
+            let component_1: f64 = s * (-q * time_to_maturity).exp() * normal_dist.cdf(&Array1::from_vec(vec![d_1]))?[0];
+            let component_2: f64 = k * (-r * time_to_maturity).exp() * normal_dist.cdf(&Array1::from_vec(vec![d_2]))?[0];
+            Ok(component_1 - component_2)
+        },
+        BlackScholesType::Put => {
+            let component_1: f64 = s * (-q * time_to_maturity).exp() * normal_dist.cdf(&Array1::from_vec(vec![-d_1]))?[0];
+            let component_2: f64 = k * (-r * time_to_maturity).exp() * normal_dist.cdf(&Array1::from_vec(vec![d_2]))?[0];
+            Ok(component_2 - component_1)
+        },
+    }
 }
 
 
@@ -105,13 +157,13 @@ pub struct Contract {
     /// Type of contract
     _contract_type: ContractType,
     /// Current market price of the contract
-    contract_price: f64,
+    current_contract_price: f64,
     /// Agreed delivery price
     delivery_price: f64,
     /// Discount rate used to discount the future cashflow payments
     discount_rate: f64,
     /// Time to maturity of the contract
-    maturity: f64,
+    time_to_maturity: f64,
     /// Current spot price of the underlying asset
     spot_price: f64,
     /// Compounding type used to discount cashflows
@@ -130,10 +182,10 @@ impl Contract {
     /// Creates a new `Contract` instance.
     ///
     /// - `contract_type`: Type of contract
-    /// - `contract_price`: Current market price of the contract
+    /// - `current_contract_price`: Current market price of the contract
     /// - `delivery_price`: Agreed delivery price
     /// - `discount_rate`: Discount rate used to discount the future cashflow payments
-    /// - `maturity`: Time to maturity of the contract
+    /// - `time_to_maturity`: Time to maturity of the contract
     /// - `spot_price`: Current spot price of the underlying asset
     /// - `compounding_type`: Compounding type used to discount cashflows
     /// - `financial_instrument_id`: Parameters for defining regulatory categorization of an instrument
@@ -141,12 +193,12 @@ impl Contract {
     /// - `stochastic_model`: Stochastic model to use for price paths generation
     ///
     /// # Errors
-    /// - Returns an error if maturity is negative.
-    pub fn new(_contract_type: ContractType, contract_price: f64, delivery_price: f64, discount_rate: f64, maturity: f64, spot_price: f64,
+    /// - Returns an error if time to maturity is negative.
+    pub fn new(_contract_type: ContractType, current_contract_price: f64, delivery_price: f64, discount_rate: f64, time_to_maturity: f64, spot_price: f64,
                compounding_type: CompoundingType, financial_instrument_id: FinancialInstrumentId, asset_historical_data: AssetHistData,
                stochastic_model: Option<Box<dyn StochasticProcess>>) -> Result<Self, Error> {
-        if maturity < 0.0 {
-            return Err(input_error("Contract: The argument maturity must be non-negative."));
+        if time_to_maturity < 0.0 {
+            return Err(input_error("Contract: The argument time to maturity must be non-negative."));
         }
         let stochastic_model: Box<dyn StochasticProcess> = match stochastic_model {
             Some(v) => v,
@@ -154,12 +206,13 @@ impl Contract {
                 // Default stochastic model for the case when the user doesn't provide one
                 let end_index: usize = asset_historical_data.time_array.len() - 1;
                 let prices: Array1<f64> = asset_historical_data.get_price(end_index, None)?;
+                let mu: f64 = returns_average(&prices, &ReturnsMethod::EstimatedFromTotalReturn, 252)?;
                 let sigma: f64 = covariance(&prices, &prices, 0)?;
-                Box::new(BrownianBridge::new(contract_price, contract_price, sigma, 1, asset_historical_data.time_array.len() - 1, maturity))
+                Box::new(GeometricBrownianMotion::new(mu, sigma, 1, asset_historical_data.time_array.len() - 1, time_to_maturity, current_contract_price))
             }
         };
         Ok(Contract {
-            _contract_type, contract_price, delivery_price, discount_rate, maturity, spot_price, compounding_type, financial_instrument_id,
+            _contract_type, current_contract_price, delivery_price, discount_rate, time_to_maturity, spot_price, compounding_type, financial_instrument_id,
             asset_historical_data, stochastic_model,
         })
     }
@@ -174,18 +227,18 @@ impl Contract {
     }
 
     /// # Description
-    /// Updates the maturity of the contract.
+    /// Updates the time to maturity of the contract.
     ///
     /// # Input
-    /// -`new_maturity`: New maturity of the contract
+    /// -`new_time_to_maturity`: New time to maturity maturity of the contract
     ///
     /// # Errors
-    /// - Returns an error if the maturity is negative.
-    pub fn update_maturity(&mut self, new_maturity: f64) -> Result<(), Error> {
-        if new_maturity < 0.0 {
-            return Err(input_error("Contract: The argument maturity must be non-negative."));
+    /// - Returns an error if the new time to maturity is negative.
+    pub fn update_time_to_maturity(&mut self, new_time_to_maturity: f64) -> Result<(), Error> {
+        if new_time_to_maturity < 0.0 {
+            return Err(input_error("Contract: The argument new time to maturity must be non-negative."));
         }
-        self.maturity = new_maturity;
+        self.time_to_maturity = new_time_to_maturity;
         Ok(())
     }
 
@@ -209,7 +262,7 @@ impl Contract {
 
     pub fn forward_price(&self) -> Result<f64, Error> {
         let discount_term: Compounding = Compounding::new(self.discount_rate, &self.compounding_type);
-        Ok(self.spot_price / discount_term.compounding_term(self.maturity))
+        Ok(self.spot_price / discount_term.compounding_term(self.time_to_maturity))
     }
 }
 
@@ -226,7 +279,7 @@ impl FinancialInstrument for Contract {
     fn present_value(&self) -> Result<f64, Box<dyn std::error::Error>> {
         let discount_term: Compounding = Compounding::new(self.discount_rate, &self.compounding_type);
         let forward_price: f64 = self.forward_price()?;
-        Ok((forward_price - self.delivery_price) * discount_term.compounding_term(self.maturity))
+        Ok((forward_price - self.delivery_price) * discount_term.compounding_term(self.time_to_maturity))
     }
 
     /// # Description
@@ -235,17 +288,17 @@ impl FinancialInstrument for Contract {
     /// # Output
     /// - Present value of the contract minus the initial price it took to purchase the contract
     fn net_present_value(&self) -> Result<f64, Box<dyn std::error::Error>> {
-        Ok(-self.contract_price + self.present_value()?)
+        Ok(-self.current_contract_price + self.present_value()?)
     }
 
     /// # Description
     /// Future value of the contract.
     ///
     /// # Output
-    /// - Future value of the contract at it maturity (Computed from the present value of the contract)
+    /// - Future value of the contract at its maturity (Computed from the present value of the contract)
     fn future_value(&self) -> Result<f64, Box<dyn std::error::Error>> {
         let discount_term: Compounding = Compounding::new(self.discount_rate, &self.compounding_type);
-        Ok(self.present_value()? / discount_term.compounding_term(self.maturity))
+        Ok(self.present_value()? / discount_term.compounding_term(self.time_to_maturity))
     }
 
     /// # Description
@@ -431,8 +484,12 @@ impl OptionContract {
         let stochastic_model: Box<dyn StochasticProcess> = match stochastic_model {
             Some(v) => v,
             None => {
-                // Default stochastic model for the case when the user doesn't provide one
-                Box::new(BrownianBridge::new(initial_option_price, 0.0, sigma, 1, asset_historical_data.time_array.len() - 1, time_to_maturity))
+                // Default stochastic model for the case when the user doesn't provide one// Default stochastic model for the case when the user doesn't provide one
+                let end_index: usize = asset_historical_data.time_array.len() - 1;
+                let prices: Array1<f64> = asset_historical_data.get_price(end_index, None)?;
+                let mu: f64 = returns_average(&prices, &ReturnsMethod::EstimatedFromTotalReturn, 252)?;
+                let sigma_: f64 = covariance(&prices, &prices, 0)?;
+                Box::new(GeometricBrownianMotion::new(mu, sigma_, 1, asset_historical_data.time_array.len() - 1, time_to_maturity, initial_option_price))
             }
         };
         Ok(OptionContract {
@@ -636,7 +693,7 @@ impl OptionContract {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Greeks_(finance)#Formulae_for_European_option_Greeks>
     /// - Original Source: N/A
-    pub fn european_option_delta(&self, black_scholes_type: BlackScholesType) -> Result<f64, Error> {
+    pub fn european_option_delta(&self, black_scholes_type: &BlackScholesType) -> Result<f64, Error> {
         let (d_1, _) = self.european_option_black_scholes_params()?;
         let normal_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0)?;
         match black_scholes_type {
@@ -677,7 +734,7 @@ impl OptionContract {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Greeks_(finance)#Formulae_for_European_option_Greeks>
     /// - Original Source: N/A
-    pub fn european_option_theta(&self, black_scholes_type: BlackScholesType) -> Result<f64, Error> {
+    pub fn european_option_theta(&self, black_scholes_type: &BlackScholesType) -> Result<f64, Error> {
         let (d_1, d_2) = self.european_option_black_scholes_params()?;
         let normal_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0)?;
         match black_scholes_type {
@@ -707,7 +764,7 @@ impl OptionContract {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Greeks_(finance)#Formulae_for_European_option_Greeks>
     /// - Original Source: N/A
-    pub fn european_option_rho(&self, black_scholes_type: BlackScholesType) -> Result<f64, Error> {
+    pub fn european_option_rho(&self, black_scholes_type: &BlackScholesType) -> Result<f64, Error> {
         let (_, d_2) = self.european_option_black_scholes_params()?;
         let normal_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0)?;
         match black_scholes_type {
@@ -731,7 +788,7 @@ impl OptionContract {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Greeks_(finance)#Formulae_for_European_option_Greeks>
     /// - Original Source: N/A
-    pub fn european_option_epsilon(&self, black_scholes_type: BlackScholesType) -> Result<f64, Error> {
+    pub fn european_option_epsilon(&self, black_scholes_type: &BlackScholesType) -> Result<f64, Error> {
         let (d_1, _) = self.european_option_black_scholes_params()?;
         let normal_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0)?;
         match black_scholes_type {
@@ -991,6 +1048,13 @@ mod tests {
     use crate::financial_instruments::derivatives::{ContractType, Contract, OptionType, OptionPricingMethod, BlackScholesType, OptionContract};
     use crate::portfolio_applications::AssetHistData;
     use crate::statistics::{ProbabilityDistribution, continuous_distributions::NormalDistribution};
+
+    #[test]
+    fn unit_test_black_scholes_formula() -> () {
+        use crate::financial_instruments::derivatives::{BlackScholesType, black_scholes_formula};
+        let value: f64 = black_scholes_formula(10.0, 11.0, 0.2, 1.0, 0.02, 0.0, &BlackScholesType::Call).unwrap();
+        assert!((value - 0.49438669572304805).abs() < TEST_ACCURACY);
+    }
 
     #[test]
     fn unit_test_contract() -> () {

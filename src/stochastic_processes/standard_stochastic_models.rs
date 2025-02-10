@@ -1,11 +1,14 @@
 use std::io::Error;
 use ndarray::{Array1, Axis};
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
 use crate::utilities::input_error;
 use crate::random_generators::RandomGenerator;
 use crate::stochastic_processes::StochasticProcess;
 use crate::random_generators::standard_normal_generators::StandardNormalInverseTransform;
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Different methods of simulating the Feller Square-Root Process.
 pub enum FSRSimulationMethod {
@@ -14,6 +17,7 @@ pub enum FSRSimulationMethod {
 }
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Arithmetic Brownian motion.
 /// 
@@ -55,9 +59,9 @@ pub struct ArithmeticBrownianMotion {
     /// Number of paths to generate
     n_paths: usize,
     /// Number of steps
-    _n_steps: usize,
+    n_steps: usize,
     /// Final time step
-    _t_f: f64,
+    t_f: f64,
     /// Initial value of the stochastic process
     s_0: f64,
     /// Time difference between two consequtive time steps
@@ -80,7 +84,7 @@ impl ArithmeticBrownianMotion {
     pub fn new(mu: f64, sigma: f64, n_paths: usize, n_steps: usize, t_f: f64, s_0: f64) -> Self {
         let dt: f64 = t_f / (n_steps as f64);
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
-        ArithmeticBrownianMotion { mu, sigma, n_paths, _n_steps: n_steps, _t_f: t_f, s_0, dt, t }
+        ArithmeticBrownianMotion { mu, sigma, n_paths, n_steps, t_f, s_0, dt, t }
     }
 
     /// # Description
@@ -127,6 +131,14 @@ impl StochasticProcess for ArithmeticBrownianMotion {
         self.n_paths = n_paths;
     }
 
+    fn get_n_steps(&self) -> usize {
+        self.n_steps
+    }
+
+    fn get_t_f(&self) -> f64 {
+        self.t_f
+    }
+
     /// # Description
     /// Calculates the expected path of the Arithmetic Brownian Motion.
     /// 
@@ -161,6 +173,7 @@ impl StochasticProcess for ArithmeticBrownianMotion {
 }
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Model describing the evolution of stock prices.
 /// 
@@ -201,9 +214,9 @@ pub struct GeometricBrownianMotion {
     /// Number of paths to generate
     n_paths: usize,
     /// Number of steps
-    _n_steps: usize,
+    n_steps: usize,
     /// Final time step
-    _t_f: f64,
+    t_f: f64,
     /// Initial value of the stochastic process
     s_0: f64,
     /// Time difference between two consequtive time steps
@@ -226,7 +239,7 @@ impl GeometricBrownianMotion {
     pub fn new(mu: f64, sigma: f64, n_paths: usize, n_steps: usize, t_f: f64, s_0: f64) -> Self {
         let dt: f64 = t_f / (n_steps as f64);
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
-        GeometricBrownianMotion { mu, sigma, n_paths, _n_steps: n_steps, _t_f: t_f, s_0, dt, t }
+        GeometricBrownianMotion { mu, sigma, n_paths, n_steps, t_f, s_0, dt, t }
     }
 
     /// # Description
@@ -247,6 +260,14 @@ impl GeometricBrownianMotion {
 impl StochasticProcess for GeometricBrownianMotion {
     fn update_n_paths(&mut self, n_paths: usize) -> () {
         self.n_paths = n_paths;
+    }
+
+    fn get_n_steps(&self) -> usize {
+        self.n_steps
+    }
+
+    fn get_t_f(&self) -> f64 {
+        self.t_f
     }
 
     /// # Description
@@ -285,6 +306,7 @@ impl StochasticProcess for GeometricBrownianMotion {
 }
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Model describes the evolution of interest rates.
 /// 
@@ -328,9 +350,9 @@ pub struct OrnsteinUhlenbeckProcess {
     /// Number of paths to generate
     n_paths: usize,
     /// Number of steps
-    _n_steps: usize,
+    n_steps: usize,
     /// Final time step
-    _t_f: f64,
+    t_f: f64,
     /// Initial value of the stochastic process
     s_0: f64,
     /// Time difference between two consequtive time steps
@@ -357,7 +379,7 @@ impl OrnsteinUhlenbeckProcess {
     pub fn new(mu: f64, sigma: f64, alpha: f64, n_paths: usize, n_steps: usize, t_f: f64, s_0: f64, analytic_em: bool) -> Self {
         let dt: f64 = t_f / (n_steps as f64);
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
-        OrnsteinUhlenbeckProcess { mu, sigma, alpha, n_paths, _n_steps: n_steps, _t_f: t_f, s_0, dt, t, analytic_em }
+        OrnsteinUhlenbeckProcess { mu, sigma, alpha, n_paths, n_steps, t_f, s_0, dt, t, analytic_em }
     }
 
     /// # Description
@@ -376,6 +398,14 @@ impl OrnsteinUhlenbeckProcess {
 impl StochasticProcess for OrnsteinUhlenbeckProcess {
     fn update_n_paths(&mut self, n_paths: usize) -> () {
         self.n_paths = n_paths
+    }
+
+    fn get_n_steps(&self) -> usize {
+        self.n_steps
+    }
+
+    fn get_t_f(&self) -> f64 {
+        self.t_f
     }
 
     /// # Description
@@ -429,6 +459,7 @@ impl StochasticProcess for OrnsteinUhlenbeckProcess {
 }
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Model can support useful variance reduction techniques for pricing derivative contracts using Monte-Carlo simulation, 
 /// such as sampling. Also used in scenario generation.
@@ -472,7 +503,7 @@ pub struct BrownianBridge {
     /// Number of paths to generate
     n_paths: usize,
     /// Number of steps
-    _n_steps: usize,
+    n_steps: usize,
     /// Final time step
     t_f: f64,
     /// Initial value of the stochastic process
@@ -496,7 +527,7 @@ impl BrownianBridge {
     pub fn new(alpha: f64, beta: f64, sigma: f64, n_paths: usize, n_steps: usize, t_f: f64) -> Self {
         let dt: f64 = t_f / (n_steps as f64);
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
-        BrownianBridge { alpha, beta, sigma, n_paths, _n_steps: n_steps, t_f, dt, t }
+        BrownianBridge { alpha, beta, sigma, n_paths, n_steps, t_f, dt, t }
     }
 
     /// # Description
@@ -516,6 +547,14 @@ impl BrownianBridge {
 impl StochasticProcess for BrownianBridge {
     fn update_n_paths(&mut self, n_paths: usize) -> () {
         self.n_paths = n_paths
+    }
+
+    fn get_n_steps(&self) -> usize {
+        self.n_steps
+    }
+
+    fn get_t_f(&self) -> f64 {
+        self.t_f
     }
 
     /// # Description
@@ -556,6 +595,7 @@ impl StochasticProcess for BrownianBridge {
 }
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Model describes the evolution of interest rates.
 /// 
@@ -599,9 +639,9 @@ pub struct FellerSquareRootProcess {
     /// Number of paths to generate
     n_paths: usize,
     /// Number of steps
-    _n_steps: usize,
+    n_steps: usize,
     /// Final time step
-    _t_f: f64,
+    t_f: f64,
     /// Initial value of the stochastic process
     s_0: f64,
     /// Time difference between two consequtive time steps
@@ -628,7 +668,7 @@ impl FellerSquareRootProcess {
     pub fn new(mu: f64, sigma: f64, alpha: f64, n_paths: usize, n_steps: usize, t_f: f64, s_0: f64, method: FSRSimulationMethod) -> Self {
         let dt: f64 = t_f / (n_steps as f64);
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
-        FellerSquareRootProcess { mu, sigma, alpha, n_paths, _n_steps: n_steps, _t_f: t_f, s_0, dt, t, method }
+        FellerSquareRootProcess { mu, sigma, alpha, n_paths, n_steps, t_f, s_0, dt, t, method }
     }
 
     /// # Description
@@ -646,6 +686,14 @@ impl FellerSquareRootProcess {
 impl StochasticProcess for FellerSquareRootProcess {
     fn update_n_paths(&mut self, n_paths: usize) -> () {
         self.n_paths = n_paths
+    }
+
+    fn get_n_steps(&self) -> usize {
+        self.n_steps
+    }
+
+    fn get_t_f(&self) -> f64 {
+        self.t_f
     }
 
     /// # Description

@@ -1,7 +1,10 @@
 use std::io::Error;
 use ndarray::{Array1, Array2};
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
 use crate::utilities::{compare_array_len, data_error, time_value_utils::{Compounding, CompoundingType, Perpetuity}};
 use crate::financial_instruments::{FinancialInstrument, FinancialInstrumentId};
+use crate::corporate_finance;
 use crate::portfolio_applications::{returns_average, ReturnsMethod, AssetHistData, PortfolioInstrument};
 use crate::statistics::{covariance, linear_regression};
 use crate::stochastic_processes::{StochasticProcess, standard_stochastic_models::GeometricBrownianMotion};
@@ -23,6 +26,7 @@ pub enum StockValuationType {
 }
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Parameters for valuation by comparables.
 pub struct ValuationByComparablesParams {
@@ -211,7 +215,11 @@ impl Stock {
     /// - `initial_price`: Initial price at which the stock is purchased
     /// - `compounding_type`: Compounding type used to discount cashflows
     /// - `dividend_growth_rate`: Growth rate of the dividend payouts
-    /// - `dividend_compounding_frequency`: Compounding frequency of the dividend payouts
+    /// - `stock_valuation_type`: Type of valuation to use to compute the present value  of the stock (i.e., to compute stock price or market cap)
+    /// - `pe`: PE ratio of the stock (Required for valuation by comparables)
+    /// - `pb` PB ratio of the stock (Required for valuation by comparables)
+    /// - `ev_to_ebitda`: EV/EBITDA ratio of the stock (Required for valuation by comparables)
+    /// - `t_f`: Maturity of investment (Used to compute the future value of the stock price or market cap)
     /// - `financial_instrument_id`: Parameters for defining regulatory categorization of an instrument
     /// - `asset_historical_data`: Time series asset data
     /// - `stochastic_model`: Stochastic model to use for price paths generation
@@ -242,6 +250,171 @@ impl Stock {
             QuoteValues::Total => prices_per_share * self.n_shares_outstanding,
         }
     }
+    
+    /// Description
+    /// Returns current price per share.
+    pub fn share_price(&self) -> f64 {
+        self.price_per_share
+    }
+
+    /// # Description
+    /// Monetary value of earnings per outstanding share of common stock for a company during a defined period of time.
+    /// 
+    /// EPS = (Net Income - Preferred Dividends) / Number of Common Shares Outstanding
+    /// 
+    /// # Input
+    /// - `net_income`: Net income
+    /// - `preferred_dividends`: Total dividends paid to the holders of the preferred stock
+    /// - `n_common_shares_outstanding`: Number of common shares outstanding
+    /// - `in_place`: Update the earnings per share of the stuct instance with the result
+    /// 
+    /// # Output
+    /// - Earnings per share (EPS)
+    /// 
+    /// # LaTeX Formula
+    /// - EPS = \\frac{(I-D_{pref})}{N_{common}}
+    /// 
+    /// # Links
+    /// - Wikipedia: <https://en.wikipedia.org/wiki/Earnings_per_share>
+    /// - Original Source: N/A
+    pub fn trailing_eps(&mut self, net_income: f64, preferred_dividends: f64, n_common_shares_outstanding: usize, in_place: bool) -> f64 {
+        let trailing_eps: f64 = corporate_finance::earnings_per_share(net_income, preferred_dividends, n_common_shares_outstanding);
+        if in_place {
+            self.earnings_per_share = trailing_eps;
+        }
+        trailing_eps
+    }
+
+    /// # Description
+    /// The ratio of market price to earnings.
+    /// 
+    /// Price-to-Earnings Ratio = Share Price / Earnings per Share
+    /// 
+    /// # Input
+    /// - `share_price`: Share price of the company
+    /// - `eps`: Earnings per share of the company
+    /// - `in_place`: Update the P/E of the stuct instance with the result
+    /// 
+    /// # Output
+    /// - P/E ratio
+    /// 
+    /// # LaTeX Formula
+    /// - PE = \\frac{P}{EPS}
+    /// 
+    /// # Links
+    /// - Wikipedia: <https://en.wikipedia.org/wiki/Price%E2%80%93earnings_ratio>
+    /// - Original Source: N/A
+    pub fn trailing_pe(&mut self, in_place: bool) -> f64 {
+        let trailing_pe: f64 = corporate_finance::pe_ratio(self.price_per_share, self.earnings_per_share);
+        if in_place {
+            self.pe = Some(trailing_pe);
+        }
+        trailing_pe
+    }
+
+    /// # Deescription
+    /// The ratio of market price to book value.
+    /// 
+    /// Price-to-Book Ratio = Market Capitalization / Book Value
+    /// 
+    /// # Input
+    /// - `market_cap`: Market capitalization of the company
+    /// - `book_value`: Value of the assets minus liabilities
+    /// 
+    /// # Output
+    /// - PB ratio
+    /// 
+    /// # LaTeX Formula
+    /// - PB = \\frac{Market Capitalization}{Book Value}
+    /// 
+    /// # Links
+    /// - Wikipedia: <https://en.wikipedia.org/wiki/P/B_ratio>
+    /// - Original Source: N/A
+    pub fn pb(&mut self, market_cap: f64, assets: f64, liabilities: f64, in_place: bool) -> Option<f64> {
+        let book_value: f64 = corporate_finance::book_value(assets, liabilities);
+        let pb: Option<f64> = corporate_finance::pb_ratio(market_cap, book_value);
+        if in_place {
+            self.pb = pb;
+        }
+        pb
+    }
+
+    /// # Description
+    /// Enterprise value is the sum of a company's market capitalization and any debts, minus cash or cash equivalents on hand.
+    /// 
+    /// EV = Maarket Cap - Total Debt + Cash & Cash Equivalents
+    /// 
+    /// # Input
+    /// - `market_cap`: Market capitalization of the company
+    /// - `total_debt`: Total debt of the company
+    /// - `cash`: Cash and cash equivalents (May not include marketable securities)
+    /// 
+    /// # Output
+    /// - Enterprise value (EV)
+    /// 
+    /// # LaTeX Formula
+    /// - EV = \\textit{Market Capitalization}+\\textit{Total Debt}-\\textit{Cash and Cash Equivalents}
+    /// 
+    /// # Links
+    /// - Wikipedia: <https://en.wikipedia.org/wiki/Enterprise_value>
+    /// - Original Source: N/A
+    pub fn enterprise_value(&self, market_cap: f64, total_debt: f64, cash: f64) -> f64 {
+        corporate_finance::enterprise_value(market_cap, total_debt, cash)
+    }
+
+    /// # Description
+    /// Measure of the value of a stock that compares a company's enterprise value to its revenue.
+    /// EV/R is one of several fundamental indicators that investors use to determine whether a stock is priced fairly.
+    /// The EV/R multiple is also often used to determine a company's valuation in the case of a potential acquisition.
+    /// It’s also called the enterprise value-to-sales multiple.
+    /// 
+    /// # Input
+    /// - `market_cap`: Market capitalization of the company
+    /// - `total_debt`: Total debt of the company
+    /// - `cash`: Cash and cash equivalents (May not include marketable securities)
+    /// - `revenue`: Revenue of the company
+    /// 
+    /// # Output
+    /// - EV/Revenue multiple
+    /// 
+    /// # LaTeX Formula
+    /// - \\frac{EV}{R} = \\frac{\\textit{Market Capitalization}+\\textit{Total Debt}-\\textit{Cash and Cash Equivalents}}{\\textit{Revenue}}
+    /// 
+    /// # Links
+    /// - Wikipedia: N/A
+    /// - Original Source: N/A
+    pub fn ev_to_revenue(&self, market_cap: f64, total_debt: f64, cash: f64, revenue: f64) -> Option<f64> {
+        corporate_finance::ev_to_revenue(market_cap, total_debt, cash, revenue)
+    }
+
+    /// # Description
+    /// Valuation multiple used to determine the fair market value of a company.
+    /// By contrast to the more widely available P/E ratio (price-earnings ratio) it includes debt as part of the value of the
+    /// company in the numerator and excludes costs such as the need to replace depreciating plant, interest on debt,
+    /// and taxes owed from the earnings or denominator.
+    /// 
+    /// # Input
+    /// - `market_cap`: Market capitalization of the company
+    /// - `total_debt`: Total debt of the company
+    /// - `cash`: Cash and cash equivalents (May not include marketable securities)
+    /// - `ebitda`: EBITDA of the company
+    /// 
+    /// # Output
+    /// - EV/EBITDA multiple
+    /// 
+    /// # LaTeX Formula
+    /// - \\frac{EV}{EBITDA} = \\frac{\\textit{Market Capitalization}+\\textit{Total Debt}-\\textit{Cash and Cash Equivalents}}{\\textit{EBITDA}}
+    /// 
+    /// # Links
+    /// - Wikipedia: <https://en.wikipedia.org/wiki/EV/Ebitda>
+    /// - Original Source: N/A
+    pub fn ev_to_ebitda(&mut self, market_cap: f64, total_debt: f64, cash: f64, ebitda: f64, in_place: bool) -> Option<f64> {
+        let ev_to_ebitda: Option<f64> = corporate_finance::ev_to_ebitda(market_cap, total_debt, cash, ebitda);
+        if in_place {
+            self.ev_to_ebitda = ev_to_ebitda;
+        }
+        ev_to_ebitda
+    }
 
     /// # Description
     /// Computes the cost of equity capital (Market capitalization rate).
@@ -268,6 +441,100 @@ impl Stock {
             None => self.dividend_per_share,
         };
         expected_dividend / self.price_per_share + self.dividend_growth_rate
+    }
+
+    /// # Description
+    /// Measure of a company's financial performance. It is calculated by dividing net income by shareholders' equity.
+    /// Because shareholders' equity is equal to a company’s assets minus its debt, ROE is a way of showing a company's
+    /// return on net assets.
+    /// 
+    /// ROE = Net Income / Shareholder's Equity
+    /// 
+    /// # Input
+    /// - `net_income`: Net income of the company
+    /// - `equity`: Average shareholder's equity
+    /// 
+    /// # Output
+    /// - Return on equity (ROE)
+    /// 
+    /// LaTeX Formula
+    /// - ROE = \\frac{\\textit{Net Income}}{Equity}
+    /// 
+    /// # Links
+    /// - Wikipedia: <https://en.wikipedia.org/wiki/Return_on_equity>
+    /// - Original SOurce: N/A
+    pub fn return_on_equity(&self, net_income: f64, equity: f64) -> Option<f64> {
+        corporate_finance::return_on_equity(net_income, equity)
+    }
+
+    /// # Description
+    /// Financial ratio that indicates how profitable a company is relative to its total assets.
+    /// It can used to determine how efficiently a company uses its resources to generate a profit.
+    /// 
+    /// ROA = Net Income / Total Assets
+    /// 
+    /// # Input
+    /// - `net_income`: Net income of the company
+    /// - `total_assets`: Average total assets
+    /// 
+    /// # Output
+    /// - Return on assets (ROA)
+    /// 
+    /// # LaTeX Formula
+    /// - ROA = \\frac{\\textit{Net Income}}{\\textit{Total Assets}}
+    /// 
+    /// # Links
+    /// - Wikipedia: <https://en.wikipedia.org/wiki/Return_on_assets>
+    /// - Original Source: N/A
+    pub fn return_on_assets(&self, net_income: f64, total_assets: f64) -> Option<f64> {
+        corporate_finance::return_on_assets(net_income, total_assets)
+    }
+
+    /// # Description
+    /// Performance measure used to evaluate the efficiency or profitability of an investment or compare the efficiency
+    /// of a number of different investments. ROI tries to directly measure the amount of return on a particular investment,
+    /// relative to the investment’s cost.
+    /// 
+    /// ROI = (Revenue - Cost of Goods Sold) / Cost of Goods Sold
+    /// 
+    /// # Input
+    /// - `revenue`: Revenue of the company
+    /// - `cost_of_goods_sold`: Cost of goods sold
+    /// 
+    /// # Output
+    /// - Return on investment (ROI)
+    /// 
+    /// # LaTeX Formula
+    /// - ROI = \\frac{Revenue - \\textit{Cost of Goods Sold}}{\\textit{Cost of Goods Sold}}
+    /// 
+    /// # Links
+    /// - Wikipedia: <https://en.wikipedia.org/wiki/Return_on_investment>
+    /// - Original Source: N/A
+    pub fn return_on_investment(&self, revenue: f64, cost_of_goods_sold: f64) -> Option<f64> {
+        corporate_finance::return_on_investment(revenue, cost_of_goods_sold)
+    }
+
+    /// # Description
+    /// Ratio indicating the relative proportion of shareholders' equity and debt used to finance the company's assets.
+    /// 
+    /// D/E = Debt / Equity
+    /// 
+    /// # Input
+    /// - `debt`: Debt portion of the corporate structure
+    /// - `equity`: Equity portion of the corporate structure
+    /// 
+    /// # Output
+    /// Debt-to-Equity ratio
+    /// 
+    /// # Links
+    /// - Wikipedia: <https://en.wikipedia.org/wiki/Debt-to-equity_ratio>
+    /// - Original Source: N/A
+    pub fn debt_to_equity(&self, debt: f64, equity: f64) -> Option<f64> {
+        if equity == 0.0 {
+            None
+        } else {
+            Some(debt / equity)
+        }
     }
 
     /// # Discription
@@ -388,6 +655,50 @@ impl Stock {
     }
 
     /// # Description
+    /// Ratio of dividends to earnings per share.
+    /// 
+    /// Payout Ratio = Dividend per Share / Earnings per Share
+    /// 
+    /// # Input
+    /// - `dividend_per_share`: Dividend per share paid out closest to the latest earnings
+    /// - `earnings_per_share`: Earnings per share
+    /// 
+    /// # Output
+    /// - Payout ratio
+    /// 
+    /// # LaTeX Formula
+    /// - \\textit{Payout Ratio} = \\frac{D_{t}}{EPS_{t}}
+    /// 
+    /// # Links
+    /// - Wikipedia: <https://en.wikipedia.org/wiki/Dividend_payout_ratio>
+    /// - Original Source: N/A
+    pub fn payout_ratio(&self) -> Option<f64> {
+        corporate_finance::payout_ratio(self.dividend_per_share, self.earnings_per_share)
+    }
+
+    /// # Description
+    /// One minus payout ratio.
+    /// 
+    /// Plowback Ratio = 1 - (Dividend per Share / Earnings per Share)
+    /// 
+    /// # Input
+    /// - `dividend_per_share`: Dividend per share paid out closest to the latest earnings
+    /// - `earnings_per_share`: Earnings per share
+    /// 
+    /// # Output
+    /// - Plowback ratio
+    /// 
+    /// # LaTeX Formula
+    /// - \\textit{Plowback Ratio} = 1 - \\frac{D_{t}}{EPS_{t}}
+    /// 
+    /// # Links
+    /// - Wikipedia: N/A
+    /// - Original Source: N/A
+    pub fn plowback_ratio(&self) -> Option<f64> {
+        corporate_finance::plowback_ratio(self.dividend_per_share, self.earnings_per_share)
+    }
+
+    /// # Description
     /// Computes dividend growth rate.
     ///
     /// Dividend Growth Rate = Plowback Ratio * ROE
@@ -395,7 +706,7 @@ impl Stock {
     /// # Input
     /// - `plowback_ratio`: Plowback ratio of the stock
     /// - `roe`: Return on equity (ROE) of the stock
-    /// - `in_place`: Update the dividend growth rate of the class instance with the result
+    /// - `in_place`: Update the dividend growth rate of the struct instance with the result
     ///
     /// # Output
     /// - Dividend growth rate

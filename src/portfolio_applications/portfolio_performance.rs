@@ -1,4 +1,8 @@
-pub trait PortfolioPerformanceMetric {
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
+
+
+pub trait PortfolioPerformanceMetric: {
     /// # Description
     /// Measures the performance of the portfolio based on portfolio data.
     ///
@@ -17,6 +21,7 @@ pub trait PortfolioPerformanceMetric {
 }
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Measure of the performance of a portfolio compared to risk-free rate and adjusted for risk.
 ///
@@ -52,6 +57,7 @@ impl PortfolioPerformanceMetric for SharpeRatio {
 }
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Measure of the performance of a portfolio compared to a benchmark relative to the volatility of the active return.
 ///
@@ -60,9 +66,9 @@ impl PortfolioPerformanceMetric for SharpeRatio {
 /// - Original Source: N/A
 pub struct InformationRatio {
     /// Risk-free rate of return
-    rf: f64,
+    pub rf: f64,
     /// Sharpe ratio of the benchmark portfolio
-    benchmark_sharpe_ratio: f64,
+    pub benchmark_sharpe_ratio: f64,
 }
 
 impl PortfolioPerformanceMetric for InformationRatio {
@@ -89,6 +95,7 @@ impl PortfolioPerformanceMetric for InformationRatio {
 }
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Measure of the performance of a portfolio in excess of what could have been earned on an investment with no diversifiable risk.
 ///
@@ -127,6 +134,7 @@ impl PortfolioPerformanceMetric for TreynorRatio {
 }
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Measure of the performance of the portfolio in excess of its theoretical expected return.
 /// 
@@ -166,6 +174,7 @@ impl PortfolioPerformanceMetric for JensensAlpha {
 }
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Measure of the performance of the portfolio in the form of risk-adjusted return.
 /// 

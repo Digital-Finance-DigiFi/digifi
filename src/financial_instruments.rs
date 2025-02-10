@@ -1,7 +1,8 @@
 // Re-Exports
 pub use self::bonds::{bootstrap, YtMMethod, BondType, Bond};
 pub use self::derivatives::{
-    minimum_variance_hedge_ratio, ContractType, OptionType, BlackScholesType, OptionPricingMethod, PresentValueSurface, Contract, OptionContract,
+    minimum_variance_hedge_ratio, black_scholes_formula, ContractType, OptionType, BlackScholesType, OptionPricingMethod, PresentValueSurface, Contract,
+    OptionContract,
 };
 pub use self::rates_and_swaps::ForwardRateAgreement;
 pub use self::stocks::{QuoteValues, StockValuationType, ValuationByComparablesParams, Stock};
@@ -15,6 +16,8 @@ pub mod stocks;
 
 use std::io::Error;
 use ndarray::Array1;
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
 #[cfg(feature = "plotly")]
 use plotly::{Plot, Scatter, Layout, layout::Axis};
 use crate::utilities::{input_error, data_error};
@@ -147,6 +150,7 @@ pub trait Payoff: PayoffClone {
 
 
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Long call payoff and profit.
 pub struct LongCall {
@@ -208,6 +212,7 @@ impl Payoff for LongCall {
 
 
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Short call payoff and profit.
 pub struct ShortCall {
@@ -269,6 +274,7 @@ impl Payoff for ShortCall {
 
 
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Long put payoff and profit.
 pub struct LongPut {
@@ -330,6 +336,7 @@ impl Payoff for LongPut {
 
 
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Short put payoff and profit.
 pub struct ShortPut {
@@ -391,6 +398,7 @@ impl Payoff for ShortPut {
 
 
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Bull collar strategy payoff and profit.
 /// 
@@ -478,6 +486,7 @@ impl Payoff for BullCollar {
 
 
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Bear collar strategy payoff and profit.
 /// 
@@ -565,6 +574,7 @@ impl Payoff for BearCollar {
 
 
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Bull spread option payoff and profit.
 /// 
@@ -649,6 +659,7 @@ impl Payoff for BullSpread {
 
 
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Bear spread option payoff and profit.
 /// 
@@ -733,6 +744,7 @@ impl Payoff for BearSpread {
 
 
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Butterfly spread option payoff and profit.
 /// 
@@ -824,6 +836,7 @@ impl Payoff for LongButterfly {
 
 
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Box spread option payoff and profit.
 /// 
@@ -908,6 +921,7 @@ impl Payoff for BoxSpread {
 
 
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Straddle option payoff.
 /// 
@@ -971,6 +985,7 @@ impl Payoff for Straddle {
 
 
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Strangle option payoff.
 /// 
@@ -1055,6 +1070,7 @@ impl Payoff for Strangle {
 
 
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Strip option payoff.
 /// 
@@ -1118,6 +1134,7 @@ impl Payoff for Strip {
 
 
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Strap option payoff.
 /// 

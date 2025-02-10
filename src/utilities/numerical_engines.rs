@@ -1,5 +1,7 @@
 use std::{cmp::PartialOrd, io::Error};
 use ndarray::{Array, Array1, Array2, s};
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
 use crate::utilities::other_error;
 
 
@@ -20,6 +22,7 @@ impl<F: FnMut(&Array1<f64>) -> f64> WrappedFunction<F> {
 
 
 #[derive(Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// A minimizer for a scalar function of one or more variables using the Nelder-Mead algorithm.
 struct NelderMead {
     /// The maximum number of iterations to optimize.

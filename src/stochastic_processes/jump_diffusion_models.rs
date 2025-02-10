@@ -1,5 +1,7 @@
 use std::io::Error;
 use ndarray::Array1;
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
 use crate::utilities::input_error;
 use crate::random_generators::RandomGenerator;
 use crate::stochastic_processes::StochasticProcess;
@@ -8,6 +10,7 @@ use crate::statistics::discrete_distributions::PoissonDistribution;
 use crate::random_generators::generator_algorithms::inverse_transform;
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 // # Description
 /// Model describes stock price with continuous movement that have rare large jumps.
 /// 
@@ -55,9 +58,9 @@ pub struct MertonJumpDiffusionProcess {
     /// Number of paths to generate
     n_paths: usize,
     /// Number of steps
-    _n_steps: usize,
+    n_steps: usize,
     /// Final time step
-    _t_f: f64,
+    t_f: f64,
     /// Initial value of the stochastic process
     s_0: f64,
     /// Time difference between two consequtive time steps
@@ -83,7 +86,7 @@ impl MertonJumpDiffusionProcess {
     pub fn new(mu_s: f64, sigma_s: f64, mu_j: f64, sigma_j: f64, lambda_j: f64, n_paths: usize, n_steps: usize, t_f: f64, s_0: f64) -> Self {
         let dt: f64 = t_f / (n_steps as f64);
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
-        MertonJumpDiffusionProcess { mu_s, sigma_s, mu_j, sigma_j, lambda_j, n_paths, _n_steps: n_steps, _t_f: t_f, s_0, dt, t }
+        MertonJumpDiffusionProcess { mu_s, sigma_s, mu_j, sigma_j, lambda_j, n_paths, n_steps, t_f, s_0, dt, t }
     }
 
     /// # Description
@@ -102,6 +105,14 @@ impl MertonJumpDiffusionProcess {
 impl StochasticProcess for MertonJumpDiffusionProcess {
     fn update_n_paths(&mut self, n_paths: usize) -> () {
         self.n_paths = n_paths;
+    }
+
+    fn get_n_steps(&self) -> usize {
+        self.n_steps
+    }
+
+    fn get_t_f(&self) -> f64 {
+        self.t_f
     }
 
     /// # Description
@@ -146,6 +157,7 @@ impl StochasticProcess for MertonJumpDiffusionProcess {
 }
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 // # Description
 /// Model describes stock price with continuous movement that have rare large jumps, with the jump sizes following a double exponential distribution.
 /// 
@@ -197,9 +209,9 @@ pub struct KouJumpDiffusionProcess {
     /// Number of paths to generate
     n_paths: usize,
     /// Number of steps
-    _n_steps: usize,
+    n_steps: usize,
     /// Final time step
-    _t_f: f64,
+    t_f: f64,
     /// Initial value of the stochastic process
     s_0: f64,
     /// Time difference between two consequtive time steps
@@ -232,7 +244,7 @@ impl KouJumpDiffusionProcess {
         }
         let dt: f64 = t_f / (n_steps as f64);
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
-        Ok(KouJumpDiffusionProcess { mu, sigma, lambda_n, eta_1, eta_2, p, n_paths, _n_steps: n_steps, _t_f: t_f, s_0, dt, t })
+        Ok(KouJumpDiffusionProcess { mu, sigma, lambda_n, eta_1, eta_2, p, n_paths, n_steps, t_f, s_0, dt, t })
     }
 
     /// # Description
@@ -251,6 +263,14 @@ impl KouJumpDiffusionProcess {
 impl StochasticProcess for KouJumpDiffusionProcess {
     fn update_n_paths(&mut self, n_paths: usize) -> () {
         self.n_paths = n_paths;
+    }
+
+    fn get_n_steps(&self) -> usize {
+        self.n_steps
+    }
+
+    fn get_t_f(&self) -> f64 {
+        self.t_f
     }
 
     /// # Description

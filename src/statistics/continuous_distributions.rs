@@ -1,9 +1,12 @@
 use std::io::Error;
 use ndarray::Array1;
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
 use crate::utilities::{input_error, maths_utils::{FunctionEvalMethod, erf, erfinv, derivative}, numerical_engines::nelder_mead};
 use crate::statistics::{ProbabilityDistribution, ProbabilityDistributionType, gamma_function, lower_incomplete_gamma_function};
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Methods and properties of continuous uniform distribution.
 /// 
@@ -151,6 +154,7 @@ impl ProbabilityDistribution for ContinuousUniformDistribution {
 }
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Methods and properties of normal distribution.
 /// 
@@ -300,6 +304,7 @@ impl ProbabilityDistribution for NormalDistribution {
 }
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Methods and properties of exponential distribution.
 /// 
@@ -441,6 +446,7 @@ impl ProbabilityDistribution for ExponentialDistribution {
 }
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Methods and properties of Laplace distribution.
 /// 
@@ -582,6 +588,7 @@ impl ProbabilityDistribution for LaplaceDistribution {
 }
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Methods and properties of Gamma distribution.
 /// 

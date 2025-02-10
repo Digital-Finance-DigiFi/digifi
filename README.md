@@ -14,6 +14,7 @@ with probability distributions through a polymorphism to allow generation of pse
 - `portfolio_applications`: Portfolio performance metrics, risk metrics, algorithm for optimizing portfolio of financial instruments for a given
 performance metric.
 - `lattice_models`: Binomial and trinomial models for pricing options (European, American and Bermudan) with any payoff (e.g., Call, Straddle).
+- `monte_carlo`: Function for pricing custom payoffs over any stochastic processes using Monte-Carlo simulations.
 - `corporate_finance`: Functions for valuation of investment projects, and CAPM.
 - `technical_indicators`: Trading indicators such as RSI, MACD, Bollinger Bands, etc.
 - `market_making`: Automated Market Making (AMM) algorithm for simulation of transactions in liquidity pools.
@@ -27,6 +28,7 @@ Note that the developers of this package do not accept any responsibility or lia
 The following optional features are provided by `digifi` (Note: none of these features are the enabled by default):
 
 - `sample_data`: Provides some sample data to test CAPM and portfolio optimization algorithms.
+- `serde`: Provides serialization/deserialization for certain structs.
 - `plotly` (**Coming Soon**): Plotting support.
 
 # Errors

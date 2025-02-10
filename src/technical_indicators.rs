@@ -1,5 +1,7 @@
 use std::{vec, io::Error};
 use ndarray::{Array1, s};
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
 #[cfg(feature = "plotly")]
 use plotly::{Plot, Trace, Scatter, Bar, Layout, common::{Line, color::NamedColor}, layout::Axis};
 use crate::utilities::{compare_array_len, input_error, data_error, other_error};
@@ -96,6 +98,8 @@ pub fn ema(price_array: &Array1<f64>, period: usize, smoothing: i32) -> Result<A
 }
 
 
+
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Moving Average Convergence/Divergence (MACD) data.
 pub struct MACD {
     /// An array of smaller EMA readings
@@ -155,6 +159,7 @@ pub fn macd(price_array: &Array1<f64>, small_ema_period: usize, large_ema_period
 }
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Bollinger Band data.
 pub struct BollingerBands {
     /// An array of SMA readings
@@ -197,6 +202,7 @@ pub fn bollinger_bands(price_array: &Array1<f64>, period: usize, n_std: i32) -> 
 }
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Relative Strength Index (RSI) data.
 pub struct RSI {
     /// An array of upward price changes
@@ -272,6 +278,7 @@ pub fn rsi(price_array: &Array1<f64>, period: usize, oversold_band: f64, overbou
 }
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Average Directional Index (ADX) data.
 pub struct ADX {
     /// +DM. An array of directional movement up readings

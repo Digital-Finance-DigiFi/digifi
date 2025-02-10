@@ -116,7 +116,7 @@ pub fn trinomial_tree_nodes(s_0: f64, u: f64, d: f64, n_steps: usize) -> Result<
 /// assert!((fair_value - analytic_solution).abs() < TEST_ACCURACY);
 /// ```
 pub fn trinomial_model(payoff_object: &dyn Payoff, s_0: f64, u: f64, d: f64, p_u: f64, p_d: f64, n_steps: usize, exercise_time_steps: Option<Vec<bool>>) -> Result<f64, Error> {
-    // Data validation.
+    // Data validation
     payoff_object.validate_payoff(5)?;
     if (u <= 0.0) || (d <= 0.0) {
         return Err(input_error("Trinomial Model: The arguments u and d must be positive multiplicative factors of the trinomial model."));
@@ -138,7 +138,7 @@ pub fn trinomial_model(payoff_object: &dyn Payoff, s_0: f64, u: f64, d: f64, p_u
         },
         None => { exercise_time_steps_ = vec![true; n_steps]; },
     }
-    // Trinomial model.
+    // Trinomial model
     let mut trinomial_tree: Vec<Array1<f64>> = trinomial_tree_nodes(s_0, u, d, n_steps)?;
     let final_payoff_step: usize = trinomial_tree.len() - 1;
     trinomial_tree[final_payoff_step] = payoff_object.payoff(&trinomial_tree[final_payoff_step]);

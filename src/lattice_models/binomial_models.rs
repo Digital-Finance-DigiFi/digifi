@@ -108,7 +108,7 @@ pub fn binomial_tree_nodes(s_0: f64, u: f64, d: f64, n_steps: usize) -> Result<V
 /// assert!((predicted_value - analytic_solution).abs() < TEST_ACCURACY);
 /// ```
 pub fn binomial_model(payoff_object: &dyn Payoff, s_0: f64, u: f64, d: f64, p_u: f64, n_steps: usize, exercise_time_steps: Option<Vec<bool>>) -> Result<f64, Error> {
-    // Data validation.
+    // Data validation
     payoff_object.validate_payoff(5)?;
     if (u < 0.0) || (d < 0.0) {
         return Err(input_error("Binomial Model: The arguments u and d must be non-negative."));
@@ -126,10 +126,10 @@ pub fn binomial_model(payoff_object: &dyn Payoff, s_0: f64, u: f64, d: f64, p_u:
         },
         None => { exercise_time_steps_ = vec![true; n_steps]; },
     }
-    // Binomial model.
+    // Binomial model
     let mut binomial_tree: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
     let mut layer: Vec<f64> = Vec::<f64>::new();
-    // Final layer.
+    // Final layer
     for i in 0..(n_steps as i32 + 1) {
         let value: f64 = payoff_object.payoff(&Array1::from_vec(vec![s_0 * u.powi(i) * d.powi(n_steps as i32 - i)]))[0];
         layer.push(value);

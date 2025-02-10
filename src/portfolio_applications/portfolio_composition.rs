@@ -1,5 +1,7 @@
 use std::{collections::HashMap, io::Error};
 use ndarray::{Array1, Array2, Axis, arr1};
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
 #[cfg(feature = "plotly")]
 use plotly::{Plot, Trace, Scatter, Layout, layout::Axis as PlotAxis, common::{Mode, Marker, MarkerSymbol, HoverInfo, color::NamedColor}};
 use crate::utilities::{data_error, input_error};
@@ -30,6 +32,7 @@ pub enum PortfolioReturnsType {
 }
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Output produced by the portfolio optimization.
 pub struct PortfolioOptimizationResult {
@@ -79,6 +82,7 @@ impl PortfolioOptimizationResult {
 }
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Efficient frontier of the market for a given performance metric.
 pub struct EfficientFrontier {
@@ -109,6 +113,7 @@ impl EfficientFrontier {
 }
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Describes an asset inside a portfolio.
 pub struct Asset {

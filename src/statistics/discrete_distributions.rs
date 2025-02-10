@@ -1,10 +1,13 @@
 use std::io::Error;
 use ndarray::{Array1, arr1};
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
 use crate::utilities::{input_error, data_error, maths_utils::{FunctionEvalMethod, factorial}};
 use crate::statistics::{ProbabilityDistribution, ProbabilityDistributionType, n_choose_r, regularized_incomplete_beta_function};
 use crate::statistics::continuous_distributions::NormalDistribution;
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Methods and properties of Bernoulli distribution.
 /// 
@@ -153,6 +156,7 @@ impl ProbabilityDistribution for BernoulliDistribution {
 }
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Methods and properties of binomial distribution.
 /// 
@@ -321,6 +325,7 @@ impl ProbabilityDistribution for BinomialDistribution {
 }
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Methods and properties of discrete uniform distribution.
 /// 
@@ -462,6 +467,7 @@ impl ProbabilityDistribution for DiscreteUniformDistribution {
 }
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Methods and properties of Poisson distribution.
 /// 

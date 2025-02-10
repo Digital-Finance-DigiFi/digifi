@@ -1,9 +1,12 @@
 use std::io::Error;
 use ndarray::{Array1, Array2};
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
 use crate::utilities::{compare_array_len, input_error};
 use crate::statistics::{covariance, linear_regression};
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Parameters of CAPM model.
 pub struct CAPMParams {
@@ -17,11 +20,12 @@ pub struct CAPMParams {
     pub beta_h: Option<f64>,
     /// Sensitivity of the asset with respect to RMW returns
     pub beta_r: Option<f64>,
-    /// 
+    /// Sensitivity of the asset with respect to CMA returns
     pub beta_c: Option<f64>,
 }
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum CAPMType {
     Standard,
     ThreeFactorFamaFrench {
@@ -65,6 +69,7 @@ impl CAPMType {
 }
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Type of solution used for computing the parameters of the CAPM.
 ///
@@ -75,6 +80,7 @@ pub enum CAPMSolutionType {
 }
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// CAPM, three-factor and five-factor Famma-French models.
 /// 
@@ -243,16 +249,16 @@ impl CAPM {
     /// 
     /// # Output
     /// - Parameters of the chosen CAPM model
-    pub fn get_parameters(&self, risk_premium: Array1<f64>) -> Result<CAPMParams, Box<dyn std::error::Error>> {
-        compare_array_len(&risk_premium, &self.market_returns, "risk_premium", "market_returns")?;
+    pub fn get_parameters(&self, risk_premium: &Array1<f64>) -> Result<CAPMParams, Box<dyn std::error::Error>> {
+        compare_array_len(risk_premium, &self.market_returns, "risk_premium", "market_returns")?;
         match self.solution_type {
             CAPMSolutionType::Covariance => {
-                let numerator: f64 = covariance(&risk_premium, &self.market_returns, 0)?;
+                let numerator: f64 = covariance(risk_premium, &self.market_returns, 0)?;
                 let denominator: f64 = covariance(&self.market_returns, &self.market_returns, 0)?;
                 Ok(CAPMParams { alpha: None, beta: numerator/denominator, beta_s: None, beta_h: None, beta_r: None, beta_c: None })
             },
             CAPMSolutionType::LinearRegression => {
-                self.train(&risk_premium)
+                self.train(risk_premium)
             },
         }
     }
@@ -274,7 +280,7 @@ mod tests {
         };
         let solution_type: CAPMSolutionType = CAPMSolutionType::LinearRegression;
         let capm: CAPM = CAPM::new(sample_data.remove("Market").unwrap(), sample_data.remove("RF").unwrap(), capm_type, solution_type).unwrap();
-        let params: CAPMParams = capm.get_parameters(sample_data.remove("Stock Returns").unwrap()).unwrap();
+        let params: CAPMParams = capm.get_parameters(&sample_data.remove("Stock Returns").unwrap()).unwrap();
         // The results were found using LinearRegression from sklearn
         assert!((params.alpha.unwrap() - 0.01353015).abs() < TEST_ACCURACY);
         assert!((params.beta - 1.37731033).abs() < TEST_ACCURACY);

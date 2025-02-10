@@ -11,10 +11,13 @@ use std::io::Error;
 use std::ops::Rem;
 use ndarray::{Array1, Array2};
 use nalgebra::DMatrix;
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
 use crate::utilities::{compare_array_len, input_error, data_error, other_error, MatrixConversion};
 use crate::utilities::maths_utils::{FunctionEvalMethod, factorial, definite_integral};
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ProbabilityDistributionType {
     Discrete,
     Continuous,

@@ -1,8 +1,11 @@
 use std::io::Error;
 use ndarray::Array1;
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
 use crate::utilities::{input_error, data_error};
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Liquidity curve data for the AMM.
 pub struct LiquidityCurve {
     /// x-axis of the liquidity curve
@@ -13,6 +16,7 @@ pub struct LiquidityCurve {
 
 
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Token data format used to define `AMMLiquidityPool`.
 pub struct AMMToken {
@@ -27,6 +31,7 @@ pub struct AMMToken {
 }
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Liquidity data for the `AMM`.
 /// 
@@ -103,6 +108,7 @@ impl AMMLiquidityPool {
 }
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Transaction data used to pass transactions into AMM methods.
 pub struct AMMTransactionData {
@@ -139,6 +145,7 @@ impl AMMTransactionData {
 }
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Receipt of the transaction on the AMM.
 pub struct AMMTransactionResult {
     /// Amount of token that has to be sold to the AMM in exchange for the token being purchased
@@ -150,6 +157,7 @@ pub struct AMMTransactionResult {
 }
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Contains computational methods for an AMM with the liquidity pool given by:
 /// 
