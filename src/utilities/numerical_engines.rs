@@ -1,13 +1,14 @@
-use std::{cmp::PartialOrd, io::Error};
+use std::cmp::PartialOrd;
 use ndarray::{Array, Array1, Array2, s};
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
-use crate::utilities::other_error;
+use crate::error::DigiFiError;
 
 
 type Simplex = Vec<(f64, Array1<f64>)>;
 
 
+#[derive(Debug)]
 struct WrappedFunction<F: FnMut(&Array1<f64>) -> f64> {
     num: u64,
     func: F,
@@ -49,7 +50,7 @@ impl NelderMead {
 
     /// Search for the value minimizing `func` given an initial guess in the form of a point. The algorithm will
     /// explore the variable space without constraints.
-    fn minimize<F>(&self, func: F, x0: Array1<f64>) -> Result<Array1<f64>, Error>
+    fn minimize<F>(&self, func: F, x0: Array1<f64>) -> Result<Array1<f64>, DigiFiError>
     where F: FnMut(&Array1<f64>) -> f64 {
         let n: usize = x0.len();
         let eps: f64 = 0.05;
@@ -63,7 +64,7 @@ impl NelderMead {
     /// This algorithm only ever explores the space spanned by these initial vectors. If you have parameter restrictions
     /// that effectively place your parameters in a subspace, you can enforce these restrictions by setting `init_simplex`
     /// to a basis of this subspace.
-    fn minimize_simplex<F>(&self, func: F, init_simplex: Array2<f64>) -> Result<Array1<f64>, Error>
+    fn minimize_simplex<F>(&self, func: F, init_simplex: Array2<f64>) -> Result<Array1<f64>, DigiFiError>
     where F: FnMut(&Array1<f64>) -> f64 {
         let mut func: WrappedFunction<F> = WrappedFunction { num: 0, func: func };
         let mut simplex: Simplex = init_simplex.outer_iter().map(|xi| (func.call(&xi.to_owned()), xi.to_owned())).collect::<Simplex>();
@@ -156,11 +157,12 @@ impl NelderMead {
     /// the centroid directly, then removing the new 'worst x' and adding in the old 'worst x'. This update of `centroid` is O(n). 
     /// Shrinkage requires n function evaluations.
     #[inline]
-    fn shrink<F>(&self, simplex: &mut Simplex, f: &mut WrappedFunction<F>, sigma: f64, centroid: &mut Array1<f64>) -> Result<(), Error>
+    fn shrink<F>(&self, simplex: &mut Simplex, f: &mut WrappedFunction<F>, sigma: f64, centroid: &mut Array1<f64>) -> Result<(), DigiFiError>
     where F: FnMut(&Array1<f64>) -> f64 {
         {
             let mut iter = simplex.iter_mut();
-            let (_, x0) = iter.next().ok_or(other_error("Nelder-Mead Numerical Engine: Could not grab next element from the simplex."))?;
+            let (_, x0) = iter.next()
+                .ok_or(DigiFiError::Other { title: "Nelder-Mead Numerical Engine".to_owned(), details: "Could not grab next element from the simplex.".to_owned(), })?;
             for (fi, xi) in iter {
                 *xi *= sigma;
                 *xi += &((1.0 - sigma) * &x0.view());
@@ -214,7 +216,7 @@ impl NelderMead {
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Nelder-Mead_method>
 /// - Original Source: <https://doi.org/10.1093/comjnl/8.1.27>
 pub fn nelder_mead<F: FnMut(&[f64]) -> f64>(mut f: F, initial_guess: Vec<f64>, max_iterations: Option<u64>, max_fun_calls: Option<u64>, adaptive: Option<bool>,
-                      xtol: Option<f64>, ftol: Option<f64>) -> Result<Array1<f64>, Error> {
+                      xtol: Option<f64>, ftol: Option<f64>) -> Result<Array1<f64>, DigiFiError> {
     let minimizer: NelderMead = NelderMead::new(max_iterations, max_fun_calls, adaptive, xtol, ftol);
     minimizer.minimize(|x: &Array1<f64>| { f(&x.to_vec()) }, Array1::from_vec(initial_guess))
 }

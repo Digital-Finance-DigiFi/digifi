@@ -14,16 +14,16 @@ pub mod rates_and_swaps;
 pub mod stocks;
 
 
-use std::io::Error;
 use ndarray::Array1;
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
 #[cfg(feature = "plotly")]
 use plotly::{Plot, Scatter, Layout, layout::Axis};
-use crate::utilities::{input_error, data_error};
+use crate::error::DigiFiError;
 use crate::portfolio_applications::AssetHistData;
 
 
+#[derive(Debug)]
 pub enum FinancialInstrumentType {
     /// Value of the instrument is determined by the markets (e.g., stocks, bonds, deposits, loans, checks)
     CashInstrument,
@@ -32,6 +32,7 @@ pub enum FinancialInstrumentType {
 }
 
 
+#[derive(Debug)]
 pub enum AssetClass {
     /// Loans, certificates of deposit, bank deposits, futures, forwards, options, bonds, mortgage-backed securities
     DebtBasedInstrument,
@@ -42,6 +43,7 @@ pub enum AssetClass {
 }
 
 
+#[derive(Debug)]
 /// # Description
 /// Struct with general financial instrument data.
 pub struct FinancialInstrumentId {
@@ -57,15 +59,15 @@ pub struct FinancialInstrumentId {
 pub trait FinancialInstrument {
     /// # Description
     /// Computes the present value of the financial instrument.
-    fn present_value(&self) -> Result<f64, Box<dyn std::error::Error>>;
+    fn present_value(&self) -> Result<f64, DigiFiError>;
 
     /// # Description
     /// Computes the net present value of the financial instrument.
-    fn net_present_value(&self) -> Result<f64, Box<dyn std::error::Error>>;
+    fn net_present_value(&self) -> Result<f64, DigiFiError>;
 
     /// # Description
     /// Computes the future value of the financial instrument.
-    fn future_value(&self) -> Result<f64, Box<dyn std::error::Error>>;
+    fn future_value(&self) -> Result<f64, DigiFiError>;
 
     /// # Description
     /// Returns an array of asset prices.
@@ -73,7 +75,7 @@ pub trait FinancialInstrument {
     /// # Input
     /// - `end_index`: Time index beyond which no data will be returned
     /// - `start_index`: Time index below which no data will be returned
-    fn get_prices(&self, end_index: usize, start_index: Option<usize>) -> Result<Array1<f64>, Error>;
+    fn get_prices(&self, end_index: usize, start_index: Option<usize>) -> Result<Array1<f64>, DigiFiError>;
 
     /// # Description
     /// Returns an array of predictable incomes for an asset (i.e., dividends, coupons, etc.).
@@ -81,7 +83,7 @@ pub trait FinancialInstrument {
     /// # Input
     /// - `end_index`: Time index beyond which no data will be returned
     /// - `start_index`: Time index below which no data will be returned
-    fn get_predictable_income(&self, end_index: usize, start_index: Option<usize>) -> Result<Array1<f64>, Error>;
+    fn get_predictable_income(&self, end_index: usize, start_index: Option<usize>) -> Result<Array1<f64>, DigiFiError>;
 
     /// # Description
     /// Returns an array of time steps at which the asset price and predictable_income are recorded.
@@ -93,11 +95,11 @@ pub trait FinancialInstrument {
 
     /// # Description
     /// Simulates the paths of price action for the financial instrument.
-    fn stochastic_simulation(&self) -> Result<Vec<Array1<f64>>, Error>;
+    fn stochastic_simulation(&self) -> Result<Vec<Array1<f64>>, DigiFiError>;
 
     /// # Description
     /// Genrates and updates the historica data about the asset.
-    fn generate_historic_data(&mut self, in_place: bool) -> Result<AssetHistData, Error>;
+    fn generate_historic_data(&mut self, in_place: bool) -> Result<AssetHistData, DigiFiError>;
 }
 
 
@@ -125,11 +127,11 @@ pub trait Payoff: PayoffClone {
     /// 
     /// # Input
     /// - `length_value`: Number of test data points to validate payoff method on
-    fn validate_payoff(&self, val_length: usize) -> Result<(), Error> {
+    fn validate_payoff(&self, val_length: usize) -> Result<(), DigiFiError> {
         let s: Array1<f64> = Array1::from_vec(vec![1.0; val_length]);
         let result: Array1<f64> = self.payoff(&s);
         if result.len() != val_length {
-            return Err(data_error(format!("The payoff does not produce an array of length {}.", val_length)));
+            return Err(DigiFiError::ValidationError { title: "Validate Payoff".to_owned(), details: format!("The payoff does not produce an array of length {}.", val_length), });
         }
         Ok(())
     }
@@ -149,7 +151,7 @@ pub trait Payoff: PayoffClone {
 }
 
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Long call payoff and profit.
@@ -211,7 +213,7 @@ impl Payoff for LongCall {
 }
 
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Short call payoff and profit.
@@ -273,7 +275,7 @@ impl Payoff for ShortCall {
 }
 
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Long put payoff and profit.
@@ -335,7 +337,7 @@ impl Payoff for LongPut {
 }
 
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Short put payoff and profit.
@@ -397,7 +399,7 @@ impl Payoff for ShortPut {
 }
 
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Bull collar strategy payoff and profit.
@@ -426,9 +428,9 @@ impl BullCollar {
     /// 
     /// # Errors
     /// - Returns an error if the long put strike price is larger than the short call strike price.
-    pub fn new(k_p: f64, k_c: f64, cost: f64, cost_s: f64) -> Result<Self, Error> {
+    pub fn new(k_p: f64, k_c: f64, cost: f64, cost_s: f64) -> Result<Self, DigiFiError> {
         if k_c < k_p {
-            return Err(input_error("Bull Collar: The argument k_p must be smaller or equal to k_c."));
+            return Err(DigiFiError::ParameterConstraint { title: "Bull Collar".to_owned(), constraint: "The argument `k_p` must be smaller or equal to `k_c`.".to_owned(), });
         }
         Ok(BullCollar { k_p, k_c, cost, cost_s })
     }
@@ -485,7 +487,7 @@ impl Payoff for BullCollar {
 }
 
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Bear collar strategy payoff and profit.
@@ -514,9 +516,9 @@ impl BearCollar {
     /// 
     /// # Errors
     /// - Returns an error if the short put strike price is larger than the long call strike price.
-    pub fn new(k_p: f64, k_c: f64, cost: f64, cost_s: f64) -> Result<Self, Error> {
+    pub fn new(k_p: f64, k_c: f64, cost: f64, cost_s: f64) -> Result<Self, DigiFiError> {
         if k_c < k_p {
-            return Err(input_error("Bear Collar: The argument k_p must be smaller or equal to k_c."));
+            return Err(DigiFiError::ParameterConstraint { title: "Bear Collar".to_owned(), constraint: "The argument `k_p` must be smaller or equal to `k_c`.".to_owned(), });
         }
         Ok(BearCollar { k_p, k_c, cost, cost_s })
     }
@@ -573,7 +575,7 @@ impl Payoff for BearCollar {
 }
 
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Bull spread option payoff and profit.
@@ -599,9 +601,9 @@ impl BullSpread {
     /// 
     /// # Errors
     /// - Returns an error if the short call strike price is smaller than the long call strike price.
-    pub fn new(k_l: f64, k_s: f64, cost: f64) -> Result<Self, Error> {
+    pub fn new(k_l: f64, k_s: f64, cost: f64) -> Result<Self, DigiFiError> {
         if k_s < k_l {
-            return Err(input_error("Bull Spread: The argument k_l must be smaller or equal to k_s."));
+            return Err(DigiFiError::ParameterConstraint { title: "Bull Spread".to_owned(), constraint: "The argument `k_l` must be smaller or equal to `k_s`.".to_owned() });
         }
         Ok(BullSpread { k_l, k_s, cost })
     }
@@ -658,7 +660,7 @@ impl Payoff for BullSpread {
 }
 
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Bear spread option payoff and profit.
@@ -684,9 +686,9 @@ impl BearSpread {
     /// 
     /// # Errors
     /// - Returns an error if the long put strike price is smaller than the short put strike price.
-    pub fn new(k_l: f64, k_s: f64, cost: f64) -> Result<Self, Error> {
+    pub fn new(k_l: f64, k_s: f64, cost: f64) -> Result<Self, DigiFiError> {
         if k_l < k_s {
-            return Err(input_error("Bear Spread: The argument k_s must be smaller or equal to k_l."));
+            return Err(DigiFiError::ParameterConstraint { title: "Bear Spread".to_owned(), constraint: "The argument `k_s` must be smaller or equal to `k_l`.".to_owned(), });
         }
         Ok(BearSpread { k_l, k_s, cost })
     }
@@ -743,7 +745,7 @@ impl Payoff for BearSpread {
 }
 
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Butterfly spread option payoff and profit.
@@ -772,13 +774,14 @@ impl LongButterfly {
     /// 
     /// # Errors
     /// - Returns an error if the long put strike price is smaller than the short put strike price.
-    pub fn new(k1_c: f64, k2_c: f64, k_p: f64, cost: f64) -> Result<Self, Error> {
+    pub fn new(k1_c: f64, k2_c: f64, k_p: f64, cost: f64) -> Result<Self, DigiFiError> {
+        let error_title: String = String::from("Long Butterfly");
         // Check that k1_c <= k_p <= k2_c
         if k2_c < k_p {
-            return Err(input_error("Long Butterfly: The argument k_p must be smaller or equal to k1_c."));
+            return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument `k_p` must be smaller or equal to `k1_c`.".to_owned(), });
         }
         if k_p < k1_c {
-            return Err(input_error("Long Butterfly: The argument k1_c must be smaller or equal to k_p."));
+            return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument `k1_c` must be smaller or equal to `k_p`.".to_owned(), });
         }
         Ok(LongButterfly { k1_c, k2_c, k_p, cost })
     }
@@ -835,7 +838,7 @@ impl Payoff for LongButterfly {
 }
 
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Box spread option payoff and profit.
@@ -861,9 +864,9 @@ impl BoxSpread {
     /// 
     /// # Errors
     /// - Returns an error if the k_2 strike price is smaller than the k_1 strike price.
-    pub fn new(k_1: f64, k_2: f64, cost: f64) -> Result<Self, Error> {
+    pub fn new(k_1: f64, k_2: f64, cost: f64) -> Result<Self, DigiFiError> {
         if k_2 < k_1 {
-            return Err(input_error("Box Spread: The argument k_1 must be smaller or equal to k_2."));
+            return Err(DigiFiError::ParameterConstraint { title: "Box Spread".to_owned(), constraint: "The argument `k_1` must be smaller or equal to `k_2`.".to_owned(), });
         }
         Ok(BoxSpread { k_1, k_2, cost })
     }
@@ -920,7 +923,7 @@ impl Payoff for BoxSpread {
 }
 
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Straddle option payoff.
@@ -984,7 +987,7 @@ impl Payoff for Straddle {
 }
 
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Strangle option payoff.
@@ -1010,9 +1013,9 @@ impl Strangle {
     /// 
     /// # Errors
     /// - Returns an error if the `k_c` strike price is smaller or equal to the `k_p` strike price.
-    pub fn new(k_c: f64, k_p: f64, cost: f64) -> Result<Self, Error> {
+    pub fn new(k_c: f64, k_p: f64, cost: f64) -> Result<Self, DigiFiError> {
         if k_c <= k_p {
-            return Err(input_error("Strangle: The argument k_p must be smaller than k_c."));
+            return Err(DigiFiError::ParameterConstraint { title: "Strangle".to_owned(), constraint: "The argument `k_p` must be smaller than `k_c`.".to_owned(), });
         }
         Ok(Strangle { k_c, k_p, cost })
     }
@@ -1069,7 +1072,7 @@ impl Payoff for Strangle {
 }
 
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Strip option payoff.
@@ -1133,7 +1136,7 @@ impl Payoff for Strip {
 }
 
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Strap option payoff.

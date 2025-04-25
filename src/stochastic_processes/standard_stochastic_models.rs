@@ -1,13 +1,13 @@
-use std::io::Error;
 use ndarray::{Array1, Axis};
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
-use crate::utilities::input_error;
+use crate::error::DigiFiError;
 use crate::random_generators::RandomGenerator;
 use crate::stochastic_processes::StochasticProcess;
 use crate::random_generators::standard_normal_generators::StandardNormalInverseTransform;
 
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Different methods of simulating the Feller Square-Root Process.
@@ -17,6 +17,7 @@ pub enum FSRSimulationMethod {
 }
 
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Arithmetic Brownian motion.
@@ -126,13 +127,14 @@ impl ArithmeticBrownianMotion {
     /// 
     /// # LaTeX Formula
     /// - \\textit{Cov}(S_{t_{1}}, S_{t_{2}}) = \\sigma^{2} \\min(S_{t_{1}}, S_{t_{2}})
-    pub fn get_auto_cov(&self, index_t1: usize, index_t2: usize) -> Result<f64, Error> {
+    pub fn get_auto_cov(&self, index_t1: usize, index_t2: usize) -> Result<f64, DigiFiError> {
+        let error_title: String = String::from("Arithmetic Brownian Motion");
         let t_len: usize = self.t.len();
         if t_len < index_t1 {
-            return Err(input_error(format!("Arithmetic Brownian Motion: The argument index_t1 is out of range for price array of length {}.", t_len)));
+            return Err(DigiFiError::IndexOutOfRange { title: error_title.clone(), index: "index_t1".to_owned(), array: "time".to_owned(), });
         }
         if t_len < index_t2 {
-            return Err(input_error(format!("Arithmetic Brownian Motion: The argument index_t2 is out of range for price array of length {}.", t_len)));
+            return Err(DigiFiError::IndexOutOfRange { title: error_title.clone(), index: "index_t1".to_owned(), array: "time".to_owned(), });
         }
         Ok(self.sigma.powi(2) * self.t[index_t1].min(self.t[index_t2]))
     }
@@ -159,7 +161,7 @@ impl StochasticProcess for ArithmeticBrownianMotion {
     /// 
     /// # LaTeX Formula
     /// - dS_{t} = \\mu dt + \\sigma dW_{t}
-    fn get_paths(&self) -> Result<Vec<Array1<f64>>, Error> {
+    fn get_paths(&self) -> Result<Vec<Array1<f64>>, DigiFiError> {
         let mut paths: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
         for _ in 0..self.n_paths {
             let dw: Array1<f64> = self.dt.sqrt() * StandardNormalInverseTransform::new_shuffle(self.t.len())?.generate()?;
@@ -173,6 +175,7 @@ impl StochasticProcess for ArithmeticBrownianMotion {
 }
 
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Model describing the evolution of stock prices.
@@ -291,7 +294,7 @@ impl StochasticProcess for GeometricBrownianMotion {
     /// 
     /// # LaTeX Formula
     /// - dS_{t} = \\mu S_{t} dt + \\sigma S_{t} dW_{t}
-    fn get_paths(&self) -> Result<Vec<Array1<f64>>, Error> {
+    fn get_paths(&self) -> Result<Vec<Array1<f64>>, DigiFiError> {
         let mut paths: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
         for _ in 0..self.n_paths {
             let dw: Array1<f64> = self.dt.sqrt() * StandardNormalInverseTransform::new_shuffle(self.t.len())?.generate()?;
@@ -306,6 +309,7 @@ impl StochasticProcess for GeometricBrownianMotion {
 }
 
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Model describes the evolution of interest rates.
@@ -429,7 +433,7 @@ impl StochasticProcess for OrnsteinUhlenbeckProcess {
     /// 
     /// # LaTeX Formula
     /// - dS_{t} = \\alpha(\\mu - S_{t}) dt + \\sigma dW_{t}
-    fn get_paths(&self) -> Result<Vec<Array1<f64>>, Error> {
+    fn get_paths(&self) -> Result<Vec<Array1<f64>>, DigiFiError> {
         let mut paths: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
         let std: f64;
         if self.analytic_em {
@@ -459,6 +463,7 @@ impl StochasticProcess for OrnsteinUhlenbeckProcess {
 }
 
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Model can support useful variance reduction techniques for pricing derivative contracts using Monte-Carlo simulation, 
@@ -579,7 +584,7 @@ impl StochasticProcess for BrownianBridge {
     /// 
     /// # LaTeX Formula
     /// - dS_{t} = ((\\beta - \\alpha)/(T - t)) dt + \\sigma dW_{t}
-    fn get_paths(&self) -> Result<Vec<Array1<f64>>, Error> {
+    fn get_paths(&self) -> Result<Vec<Array1<f64>>, DigiFiError> {
         let mut paths: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
         for _ in 0..self.n_paths {
             let dw: Array1<f64> = self.dt.sqrt() * StandardNormalInverseTransform::new_shuffle(self.t.len())?.generate()?;
@@ -595,6 +600,7 @@ impl StochasticProcess for BrownianBridge {
 }
 
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Model describes the evolution of interest rates.
@@ -717,7 +723,7 @@ impl StochasticProcess for FellerSquareRootProcess {
     ///
     /// # LaTeX Formula
     /// - dS_{t} = \\alpha*(\\mu-S_{t})*dt + \\sigma\\sqrt(S_{t})*dW_{t}
-    fn get_paths(&self) -> Result<Vec<Array1<f64>>, Error> {
+    fn get_paths(&self) -> Result<Vec<Array1<f64>>, DigiFiError> {
         let mut paths: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
         for _ in 0..self.n_paths {
             let mut s: Array1<f64> = Array1::from_vec(vec![self.s_0; self.t.len()]);

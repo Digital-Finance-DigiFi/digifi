@@ -1,11 +1,12 @@
-use std::io::Error;
 use ndarray::{Array1, Array2};
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
-use crate::utilities::{compare_array_len, input_error};
+use crate::error::DigiFiError;
+use crate::utilities::compare_array_len;
 use crate::statistics::{covariance, linear_regression};
 
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Parameters of CAPM model.
@@ -25,6 +26,7 @@ pub struct CAPMParams {
 }
 
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum CAPMType {
     Standard,
@@ -53,7 +55,7 @@ impl CAPMType {
     ///
     /// # Errors
     /// - Returns an error if the length of any of the arrays do not match in length (i.e., `smb`, `hml`, `rmw`, `cma`)
-    pub fn self_validate(&self) -> Result<(), Error> {
+    pub fn self_validate(&self) -> Result<(), DigiFiError> {
         match self {
             CAPMType::Standard => Ok(()),
             CAPMType::ThreeFactorFamaFrench { smb, hml } => {
@@ -69,6 +71,7 @@ impl CAPMType {
 }
 
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Type of solution used for computing the parameters of the CAPM.
@@ -80,6 +83,7 @@ pub enum CAPMSolutionType {
 }
 
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// CAPM, three-factor and five-factor Famma-French models.
@@ -109,7 +113,7 @@ pub enum CAPMSolutionType {
 ///     let solution_type: CAPMSolutionType = CAPMSolutionType::LinearRegression;
 ///
 ///     let capm: CAPM = CAPM::new(sample_data.remove("Market").unwrap(), sample_data.remove("RF").unwrap(), capm_type, solution_type).unwrap();
-///     let params: CAPMParams = capm.get_parameters(sample_data.remove("Stock Returns").unwrap()).unwrap();
+///     let params: CAPMParams = capm.get_parameters(&sample_data.remove("Stock Returns").unwrap()).unwrap();
 ///
 ///     // The results were found using LinearRegression from sklearn
 ///     assert!((params.alpha.unwrap() - 0.01353015).abs() < TEST_ACCURACY);
@@ -144,7 +148,7 @@ impl CAPM {
     /// # Errors
     /// - Returns an error if the length of the market_returns array does not match any other array (i.e., `rf`, `smb`, `hml`, `rmw`, `cma`).
     /// - Returns an error if covariance solution type used with non-standard CAPM.
-    pub fn new(market_returns: Array1<f64>, rf: Array1<f64>, capm_type: CAPMType, solution_type: CAPMSolutionType) -> Result<Self, Error> {
+    pub fn new(market_returns: Array1<f64>, rf: Array1<f64>, capm_type: CAPMType, solution_type: CAPMSolutionType) -> Result<Self, DigiFiError> {
         // Cross-validate the lengths of all arrays
         compare_array_len(&market_returns, &rf, "market_returns", "rf")?;
         capm_type.self_validate()?;
@@ -163,7 +167,7 @@ impl CAPM {
             _ => {
                 match solution_type {
                     CAPMSolutionType::Covariance => {
-                        return Err(input_error("CAPMData: The covariance solution method is only available for the standard CAPM."));
+                        return Err(DigiFiError::ValidationError { title: "CAPM".to_owned(), details: "The `covariance` solution method is only available for the standard CAPM.".to_owned(), });
                     },
                     CAPMSolutionType::LinearRegression => (),
                 }
@@ -188,7 +192,7 @@ impl CAPM {
     /// 
     /// # LaTeX Formula
     /// - E[R_{A}] - R_{rf} = \\alpha + \\beta_{M}(E[R_{M}] - R_{rf}) + \\beta_{S}SMB + \\beta_{H}HML + \\beta_{R}RMW + \\beta_{C}CMA
-    pub fn predict_asset_return(&self, alpha: f64, beta: f64, beta_s: f64, beta_h: f64, beta_r: f64, beta_c: f64) -> Result<Array1<f64>, Error> {
+    pub fn predict_asset_return(&self, alpha: f64, beta: f64, beta_s: f64, beta_h: f64, beta_r: f64, beta_c: f64) -> Result<Array1<f64>, DigiFiError> {
         let mut lin_reg: Array1<f64> = alpha + beta * (&self.market_returns - &self.rf);
         match &self.capm_type {
             CAPMType::Standard => (),

@@ -1,6 +1,6 @@
-use std::io::Error;
 use ndarray::Array1;
-use crate::utilities::{input_error, time_value_utils::{CompoundingType, Compounding, forward_rate}};
+use crate::error::DigiFiError;
+use crate::utilities::time_value_utils::{CompoundingType, Compounding, forward_rate};
 use crate::financial_instruments::{FinancialInstrument, FinancialInstrumentId};
 use crate::portfolio_applications::{AssetHistData, PortfolioInstrument};
 use crate::statistics::covariance;
@@ -71,7 +71,7 @@ impl ForwardRateAgreement {
     /// - `stochastic_model`: Stochastic model to use for price paths generation
     pub fn new(agreed_fixed_rate: f64, current_forward_rate: f64, time_to_maturity: f64, principal: f64, initial_price: f64,
                compounding_type: CompoundingType, financial_instrument_id: FinancialInstrumentId, asset_historical_data: AssetHistData,
-               stochastic_model: Option<Box<dyn StochasticProcess>>) -> Result<Self, Error> {
+               stochastic_model: Option<Box<dyn StochasticProcess>>) -> Result<Self, DigiFiError> {
         let stochastic_model_: Box<dyn StochasticProcess> = match stochastic_model {
             Some(model) => model,
             None => {
@@ -123,7 +123,7 @@ impl ForwardRateAgreement {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Forward_rate>
     /// - Original Source: N/A
-    pub fn future_rate(&self, time_1: f64, future_compounding_term: &Compounding, time_2: f64) -> Result<f64, Error> {
+    pub fn future_rate(&self, time_1: f64, future_compounding_term: &Compounding, time_2: f64) -> Result<f64, DigiFiError> {
         let current_compounding_term: Compounding = Compounding::new(self.current_forward_rate, &self.compounding_type);
         forward_rate(&current_compounding_term, time_1, future_compounding_term, time_2)
     }
@@ -143,9 +143,9 @@ impl ForwardRateAgreement {
     /// 
     /// # LaTeX Formula
     /// - \\textit{Forward Rate} = \\textit{Futures Rate} - \\textit{C}
-    pub fn rate_adjustment(&mut self, futures_rate: f64, convexity_adjustment: f64, in_place: bool) -> Result<f64, Error> {
+    pub fn rate_adjustment(&mut self, futures_rate: f64, convexity_adjustment: f64, in_place: bool) -> Result<f64, DigiFiError> {
         if convexity_adjustment <= 0.0 {
-            return Err(input_error("Forward Rate: The argument convexity adjustment must be positive."));
+            return Err(DigiFiError::ParameterConstraint { title: "Forward Rate".to_owned(), constraint: "The argument `convexity` adjustment must be positive.".to_owned(), });
         }
         let forward_rate: f64 = futures_rate - convexity_adjustment;
         if in_place {
@@ -168,7 +168,7 @@ impl FinancialInstrument for ForwardRateAgreement {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Forward_rate_agreement#Valuation_and_pricing>
     /// - Original Source: N/A
-    fn present_value(&self) -> Result<f64, Box<dyn std::error::Error>> {
+    fn present_value(&self) -> Result<f64, DigiFiError> {
         let discount_term: Compounding = Compounding::new(self.current_forward_rate, &self.compounding_type);
         Ok((self.time_to_maturity * (self.current_forward_rate - self.agreed_fixed_rate) * self.principal) * discount_term.compounding_term(self.time_to_maturity))
     }
@@ -178,7 +178,7 @@ impl FinancialInstrument for ForwardRateAgreement {
     /// 
     /// # Output
     /// - Present value of the forward rate agreement minus the initial price it took to purchase the contract
-    fn net_present_value(&self) -> Result<f64, Box<dyn std::error::Error>> {
+    fn net_present_value(&self) -> Result<f64, DigiFiError> {
         Ok(-self.initial_price + self.present_value()?)
     }
 
@@ -187,7 +187,7 @@ impl FinancialInstrument for ForwardRateAgreement {
     /// 
     /// # Output
     /// - Future value of the forward rate agreement at it maturity (Computed from the present value of the forward rate agreement)
-    fn future_value(&self) -> Result<f64, Box<dyn std::error::Error>> {
+    fn future_value(&self) -> Result<f64, DigiFiError> {
         let discount_term: Compounding = Compounding::new(self.current_forward_rate, &self.compounding_type);
         Ok(self.present_value()? / discount_term.compounding_term(self.time_to_maturity))
     }
@@ -198,7 +198,7 @@ impl FinancialInstrument for ForwardRateAgreement {
     /// # Input
     /// - `end_index`: Time index beyond which no data will be returned
     /// - `start_index`: Time index below which no data will be returned
-    fn get_prices(&self, end_index: usize, start_index: Option<usize>) -> Result<Array1<f64>, Error> {
+    fn get_prices(&self, end_index: usize, start_index: Option<usize>) -> Result<Array1<f64>, DigiFiError> {
         self.asset_historical_data.get_price(end_index, start_index)
     }
 
@@ -208,7 +208,7 @@ impl FinancialInstrument for ForwardRateAgreement {
     /// # Input
     /// - `end_index`: Time index beyond which no data will be returned
     /// - `start_index`: Time index below which no data will be returned
-    fn get_predictable_income(&self, end_index: usize, start_index: Option<usize>) -> Result<Array1<f64>, Error> {
+    fn get_predictable_income(&self, end_index: usize, start_index: Option<usize>) -> Result<Array1<f64>, DigiFiError> {
         self.asset_historical_data.get_predictable_income(end_index, start_index)
     }
 
@@ -232,7 +232,7 @@ impl FinancialInstrument for ForwardRateAgreement {
     /// 
     /// # Output
     /// - Simulated spot prices of the forward rate agreement
-    fn stochastic_simulation(&self) -> Result<Vec<Array1<f64>>, Error> {
+    fn stochastic_simulation(&self) -> Result<Vec<Array1<f64>>, DigiFiError> {
         self.stochastic_model.get_paths()
     }
 
@@ -241,7 +241,7 @@ impl FinancialInstrument for ForwardRateAgreement {
     /// 
     /// # Input
     /// - `in_place`: If true, uses generated data to update the asset history data 
-    fn generate_historic_data(&mut self, in_place: bool) -> Result<AssetHistData, Error> {
+    fn generate_historic_data(&mut self, in_place: bool) -> Result<AssetHistData, DigiFiError> {
         let prices: Array1<f64> = self.stochastic_model.get_paths()?.remove(0);
         let new_data: AssetHistData = AssetHistData::new(prices,
                                                          Array1::from_vec(vec![0.0; self.asset_historical_data.time_array.len()]),

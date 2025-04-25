@@ -1,14 +1,14 @@
-use std::io::Error;
 use ndarray::Array1;
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
-use crate::utilities::input_error;
+use crate::error::DigiFiError;
 use crate::random_generators::RandomGenerator;
 use crate::stochastic_processes::StochasticProcess;
 use crate::random_generators::{standard_normal_generators::StandardNormalInverseTransform, generator_algorithms::inverse_transform};
 use crate::statistics::continuous_distributions::GammaDistribution;
 
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Model used to reproduce the volatility smile effect.
@@ -76,9 +76,9 @@ impl ConstantElasticityOfVariance {
     /// - `n_steps`: Number of steps
     /// - `t_f`: Final time step
     /// - `s_0`: Initial value of the stochastic process
-    pub fn new(mu: f64, sigma: f64, gamma: f64, n_paths: usize, n_steps: usize, t_f: f64, s_0: f64) -> Result<Self, Error> {
+    pub fn new(mu: f64, sigma: f64, gamma: f64, n_paths: usize, n_steps: usize, t_f: f64, s_0: f64) -> Result<Self, DigiFiError> {
         if gamma < 0.0 {
-            Err(input_error("Constant Elasticity of Variance: Tha value of argument gamma cannot be smaller than 0."))?;
+            return Err(DigiFiError::ParameterConstraint { title: "Constant Elasticity of Variance".to_owned(), constraint: "Tha value of argument `gamma` cannot be smaller than `0`.".to_owned(), });
         }
         let dt: f64 = t_f / (n_steps as f64);
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
@@ -119,7 +119,7 @@ impl StochasticProcess for ConstantElasticityOfVariance {
     ///
     /// # LaTeX Formula
     /// - dS_{t} = \\mu*S_{t}*dt + \\sigma*S^{beta+1}_{t}*dW_{t}
-    fn get_paths(&self) -> Result<Vec<Array1<f64>>, Error> {
+    fn get_paths(&self) -> Result<Vec<Array1<f64>>, DigiFiError> {
         let mut paths: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
         for _ in 0..self.n_paths {
             let dw: Array1<f64> = self.dt.sqrt() * StandardNormalInverseTransform::new_shuffle(self.t.len())?.generate()?;
@@ -134,6 +134,7 @@ impl StochasticProcess for ConstantElasticityOfVariance {
 }
 
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Model describes the evolution of stock price and its volatility.
@@ -254,7 +255,7 @@ impl StochasticProcess for HestonStochasticVolatility {
     /// - dS_{t} = \\mu*S_{t}*dt + \\sqrt{v_{t}}*S_{t}*dW^{S}_{t}
     /// - dv_{t} = k*(\\theta-v)*dt + \\epsilon*\\sqrt{v}dW^{v}_{t}
     /// - Corr(W^{S}_{t}, W^{v}_{t}) = \\rho
-    fn get_paths(&self) -> Result<Vec<Array1<f64>>, Error> {
+    fn get_paths(&self) -> Result<Vec<Array1<f64>>, DigiFiError> {
         let mut paths: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
         let a: f64 = self.epsilon.powi(2) / self.k * ((-self.k * self.dt).exp() - (-2.0 * self.k * self.dt).exp());
         let b: f64 = self.theta * self.epsilon.powi(2) / (2.0 * self.k) * (1.0 - (-self.k * self.dt).exp()).powi(2);
@@ -277,6 +278,7 @@ impl StochasticProcess for HestonStochasticVolatility {
 }
 
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Model used in option pricing.
@@ -388,7 +390,7 @@ impl StochasticProcess for VarianceGammaProcess {
     ///
     /// # LaTeX Formula
     /// - dS_{t} = \\mu*dG(t) + \\sigma*\\sqrt{dG(t)}\\mathcal{N}(0,1)
-    fn get_paths(&self) -> Result<Vec<Array1<f64>>, Error> {
+    fn get_paths(&self) -> Result<Vec<Array1<f64>>, DigiFiError> {
         let mut paths: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
         for _ in 0..self.n_paths {
             let gamma_dist: GammaDistribution = GammaDistribution::new(self.dt*self.kappa, 1.0/self.kappa)?;

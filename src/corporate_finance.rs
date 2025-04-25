@@ -25,8 +25,13 @@ pub mod capm;
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Operating_leverage>
 /// - Original Source: N/A
-pub fn dol(quantity_of_goods: f64, price_per_unit: f64, variable_cost_per_unit: f64, total_fixed_cost: f64) -> f64 {
-    1.0 + total_fixed_cost / (quantity_of_goods*(price_per_unit - variable_cost_per_unit) - total_fixed_cost)
+pub fn dol(quantity_of_goods: f64, price_per_unit: f64, variable_cost_per_unit: f64, total_fixed_cost: f64) -> Option<f64> {
+    let denominator: f64 = quantity_of_goods*(price_per_unit - variable_cost_per_unit) - total_fixed_cost;
+    if denominator == 0.0 {
+        None
+    } else {
+        Some(1.0 + total_fixed_cost / denominator)
+    }
 }
 
 
@@ -49,8 +54,12 @@ pub fn dol(quantity_of_goods: f64, price_per_unit: f64, variable_cost_per_unit: 
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Earnings_per_share>
 /// - Original Source: N/A
-pub fn earnings_per_share(net_income: f64, preferred_dividends: f64, n_common_shares_outstanding: usize) -> f64 {
-    (net_income - preferred_dividends) / n_common_shares_outstanding as f64
+pub fn earnings_per_share(net_income: f64, preferred_dividends: f64, n_common_shares_outstanding: usize) -> Option<f64> {
+    if n_common_shares_outstanding == 0 {
+        None
+    } else {
+        Some((net_income - preferred_dividends) / n_common_shares_outstanding as f64)
+    }
 }
 
 
@@ -72,8 +81,12 @@ pub fn earnings_per_share(net_income: f64, preferred_dividends: f64, n_common_sh
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Price%E2%80%93earnings_ratio>
 /// - Original Source: N/A
-pub fn pe_ratio(share_price: f64, eps: f64) -> f64 {
-    share_price / eps
+pub fn pe_ratio(share_price: f64, eps: f64) -> Option<f64> {
+    if eps == 0.0 {
+        None
+    } else {
+        Some(share_price / eps)
+    }
 }
 
 
@@ -122,8 +135,12 @@ pub fn pb_ratio(market_cap: f64, book_value: f64) -> Option<f64> {
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Dividend_yield>
 /// - Original Source: N/A
-pub fn dividend_yield(share_price: f64, dividend: f64) -> f64 {
-    100.0 * dividend / share_price
+pub fn dividend_yield(share_price: f64, dividend: f64) -> Option<f64> {
+    if share_price == 0.0 {
+        None
+    } else {
+        Some(100.0 * dividend / share_price)
+    }
 }
 
 
@@ -422,17 +439,47 @@ pub fn expected_return_on_equity(equity: f64, debt: f64, return_on_assets: f64, 
 /// # Output
 /// - Return on equity (ROE)
 /// 
-/// LaTeX Formula
+/// # LaTeX Formula
 /// - ROE = \\frac{\\textit{Net Income}}{Equity}
 /// 
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Return_on_equity>
-/// - Original SOurce: N/A
+/// - Original Source: N/A
 pub fn return_on_equity(net_income: f64, equity: f64) -> Option<f64> {
     if equity == 0.0 {
         None
     } else {
         Some(net_income / equity)
+    }
+}
+
+
+/// # Description
+/// Measure of a company's performance, but the ROE is split into multiple components.
+/// 
+/// ROE = Net Profit Margin * Total Asset Turnover * Financial Leverage
+/// 
+/// # Input
+/// - `net_profit_margin`: Net profit margin
+/// - `total_asset_turnover`: Financial ratio that measures the efficiency of a company's use of its assets in generating sales revenue or sales income to the company
+/// - `total_assets`: Total assets of the company
+/// - `total_shareholders_equity`: Total shareholder's equity
+/// 
+/// # Output
+/// - DuPont return on equity (ROE)
+/// 
+/// # LaTeX Formula
+/// - ROE_{DuPont} = \\textit{Net Profit Margin} \\times \\textit{Total Asset Turnover} \\times\\frac{\\textit{Total Assets}}{\\textit{Total Shareholders' Equity}}
+/// 
+/// # Links
+/// - Wikipedia: <https://en.wikipedia.org/wiki/DuPont_analysis>
+/// - Original Source: N/A
+pub fn return_on_equity_dupont(net_profit_margin: f64, total_asset_turnover: f64, total_assets: f64, total_shareholders_equity: f64) -> Option<f64> {
+    if total_shareholders_equity == 0.0 {
+        None
+    } else {
+        let financial_leverage: f64 = total_assets / total_shareholders_equity;
+        Some(net_profit_margin * total_asset_turnover * financial_leverage)
     }
 }
 

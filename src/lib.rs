@@ -55,6 +55,7 @@
 
 
 pub mod corporate_finance;
+pub mod error;
 pub mod financial_instruments;
 pub mod lattice_models;
 pub mod market_making;

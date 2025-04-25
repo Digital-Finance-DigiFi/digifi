@@ -1,6 +1,6 @@
-use std::io::Error;
 use ndarray::Array1;
-use crate::utilities::{input_error, compare_array_len, Time, ParameterType, time_value_utils::{internal_rate_of_return, CompoundingType, Compounding, Cashflow}};
+use crate::error::DigiFiError;
+use crate::utilities::{compare_array_len, Time, ParameterType, time_value_utils::{internal_rate_of_return, CompoundingType, Compounding, Cashflow}};
 use crate::financial_instruments::{FinancialInstrument, FinancialInstrumentId};
 use crate::portfolio_applications::{AssetHistData, PortfolioInstrument};
 use crate::statistics::covariance;
@@ -42,14 +42,14 @@ use crate::stochastic_processes::{StochasticProcess, standard_stochastic_models:
 ///
 /// assert!((spot_rates - theor).map(|v| v.abs() ).sum() < 10_000.0 * TEST_ACCURACY);
 /// ```
-pub fn bootstrap(principals: Array1<f64>, maturities: Array1<f64>, coupons: Array1<f64>, prices: Array1<f64>, coupon_dt: Array1<f64>) -> Result<Array1<f64>, Error> {
+pub fn bootstrap(principals: Array1<f64>, maturities: Array1<f64>, coupons: Array1<f64>, prices: Array1<f64>, coupon_dt: Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
     compare_array_len(&principals, &maturities, "principals", "maturities")?;
     compare_array_len(&principals, &coupons, "principals", "coupons")?;
     compare_array_len(&principals, &prices, "principals", "prices")?;
     compare_array_len(&principals, &coupon_dt, "principals", "coupon_dt")?;
     for dt in &coupon_dt {
         if (dt < &0.0) || (&1.0 < dt) {
-            return Err(input_error("Bootstrap: The argument coupon_dt must contain values in the range [0, 1]."));
+            return Err(DigiFiError::ParameterConstraint { title: "Bootstrap".to_owned(), constraint: "The argument `coupon_dt` must contain values in the range `[0, 1]`.".to_owned(), });
         }
     }
     let mut spot_rates: Vec<f64> = Vec::<f64>::new();
@@ -87,6 +87,7 @@ pub enum YtMMethod {
 }
 
 
+#[derive(Debug)]
 /// # Description
 /// Type of bond that specifies the structure of the cashflow payoffs.
 pub enum BondType {
@@ -175,7 +176,7 @@ impl Bond {
     /// - `asset_historical_data`: Time series asset data
     /// - `stochastic_model`: Stochastic model to use for price paths generation
     pub fn new(bond_type: BondType, discount_rate: ParameterType, initial_price: f64, compounding_type: CompoundingType, inflation_rate: Option<f64>,
-               financial_instrument_id: FinancialInstrumentId, asset_historical_data: AssetHistData, stochastic_model: Option<Box<dyn StochasticProcess>>) -> Result<Self, Error> {
+               financial_instrument_id: FinancialInstrumentId, asset_historical_data: AssetHistData, stochastic_model: Option<Box<dyn StochasticProcess>>) -> Result<Self, DigiFiError> {
         let principal_: f64;
         let coupon_rate_: f64;
         let maturity_: f64;
@@ -248,7 +249,7 @@ impl Bond {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Yield_to_maturity>
     /// - Original Source: N/A
-    pub fn yield_to_maturity(&self, ytm_method: YtMMethod) -> Result<f64, Error> {
+    pub fn yield_to_maturity(&self, ytm_method: YtMMethod) -> Result<f64, DigiFiError> {
         match ytm_method {
             YtMMethod::Approximation => {
                 Ok((self.coupon + (self.principal - self.initial_price) / self.maturity) / (0.5 * (self.principal * self.initial_price)))
@@ -270,7 +271,7 @@ impl Bond {
     ///
     /// # Output
     /// - Yield-to-Call
-    pub fn yield_to_call(&self, call_price: f64) -> Result<f64, Error> {
+    pub fn yield_to_call(&self, call_price: f64) -> Result<f64, DigiFiError> {
         let mut cashflow: Array1<f64> = self.cashflow.cashflow().clone();
         let last_index: usize = cashflow.len() - 1;
         cashflow[last_index] = cashflow[last_index] + call_price;
@@ -289,7 +290,8 @@ impl Bond {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Spot_contract#Bonds_and_swaps>
     /// - Original Source: N/A
-    pub fn spot_rate(&self, spot_rates: Option<Array1<f64>>) -> Result<f64, Error> {
+    pub fn spot_rate(&self, spot_rates: Option<Array1<f64>>) -> Result<f64, DigiFiError> {
+        let error_title: String = String::from("Bond");
         match self.bond_type {
             BondType::ZeroCouponBond { principal, maturity } => {
                 Ok((self.initial_price / principal).ln() / maturity)
@@ -297,10 +299,10 @@ impl Bond {
             _ => {
                 let spot_rates: Array1<f64> = match spot_rates {
                     Some(v) => v,
-                    None => return Err(input_error("Bond: The argument spot_rates must be an array if the bond type is not ZeroCouponBond.")),
+                    None => return Err(DigiFiError::ValidationError { title: error_title.clone(), details: "The argument `spot_rates` must be an array if the bond type is not `ZeroCouponBond`.".to_owned() }),
                 };
                 if spot_rates.len() != (self.cashflow.cashflow().len() - 1) {
-                    return Err(input_error("Bond: The length of spot_rate and cashflow (without the last element) do not coincide."));
+                    return Err(DigiFiError::UnmatchingLength { array_1: "spot_rate".to_owned(), array_2: "cashflow (without the last element)".to_owned(), });
                 }
                 let time_array: Array1<f64> = self.cashflow.time_array();
                 let mut discounted_coupons: f64 = 0.0;
@@ -358,7 +360,7 @@ impl Bond {
     /// # Links
     /// - Wikipedia:<https://en.wikipedia.org/wiki/Bond_duration>
     /// - Original Source: N/A
-    pub fn duration(&self, modified: bool) -> Result<f64, Error> {
+    pub fn duration(&self, modified: bool) -> Result<f64, DigiFiError> {
         let ytm: f64 = self.yield_to_maturity(YtMMethod::Numerical)?;
         let time_array: Array1<f64> = self.cashflow.time_array();
         let mut weighted_cashflows: f64 = 0.0;
@@ -397,7 +399,7 @@ impl Bond {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Bond_convexity>
     /// - Original Source: N/A
-    pub fn convexity(&self, modified: bool) -> Result<f64, Error> {
+    pub fn convexity(&self, modified: bool) -> Result<f64, DigiFiError> {
         let ytm: f64 = self.yield_to_maturity(YtMMethod::Numerical)?;
         let time_array: Array1<f64> = self.cashflow.time_array();
         let mut weighted_cashflows: f64 = 0.0;
@@ -487,7 +489,7 @@ impl Bond {
     /// 
     /// # LaTeX Formula
     /// - B_{t}-B_{t-1} = \Delta B_{t} = \\frac{dB}{dy}\\Delta y + 0.5\\frac{d^{2}B}{dy^{2}}\Delta y^{2}
-    pub fn bond_price_from_yield_spread(&self, current_price: f64, yield_spread: f64) -> Result<f64, Error> {
+    pub fn bond_price_from_yield_spread(&self, current_price: f64, yield_spread: f64) -> Result<f64, DigiFiError> {
         let (duration, convexity) = match self.compounding_type {
             CompoundingType::Periodic { .. } => (self.duration(true)?, self.convexity(true)?),
             CompoundingType::Continuous => (self.duration(false)?, self.convexity(false)?),
@@ -509,7 +511,7 @@ impl FinancialInstrument for Bond {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Bond_valuation>
     /// - Original Source: N/A
-    fn present_value(&self) -> Result<f64, Box<dyn std::error::Error>> {
+    fn present_value(&self) -> Result<f64, DigiFiError> {
         let time_array: Array1<f64> = self.cashflow.time_array();
         let mut present_value: f64 = 0.0;
         // Present value of coupon payments
@@ -528,7 +530,7 @@ impl FinancialInstrument for Bond {
     ///
     /// # Output
     /// - Present value of the bond minus the initial price it took to purchase the bond
-    fn net_present_value(&self) -> Result<f64, Box<dyn std::error::Error>> {
+    fn net_present_value(&self) -> Result<f64, DigiFiError> {
         Ok(self.present_value()? - self.initial_price)
     }
 
@@ -537,7 +539,7 @@ impl FinancialInstrument for Bond {
     ///
     /// # Output
     /// - Future value of the bond at it maturity (Computed from the present value of the bond)
-    fn future_value(&self) -> Result<f64, Box<dyn std::error::Error>> {
+    fn future_value(&self) -> Result<f64, DigiFiError> {
         let time_array: Array1<f64> = self.cashflow.time_array();
         let mut future_multiplicator: f64 = 0.0;
         for i in 0..time_array.len() {
@@ -553,7 +555,7 @@ impl FinancialInstrument for Bond {
     /// # Input
     /// - `end_index`: Time index beyond which no data will be returned
     /// - `start_index`: Time index below which no data will be returned
-    fn get_prices(&self, end_index: usize, start_index: Option<usize>) -> Result<Array1<f64>, Error> {
+    fn get_prices(&self, end_index: usize, start_index: Option<usize>) -> Result<Array1<f64>, DigiFiError> {
         self.asset_historical_data.get_price(end_index, start_index)
     }
 
@@ -563,7 +565,7 @@ impl FinancialInstrument for Bond {
     /// # Input
     /// - `end_index`: Time index beyond which no data will be returned
     /// - `start_index`: Time index below which no data will be returned
-    fn get_predictable_income(&self, end_index: usize, start_index: Option<usize>) -> Result<Array1<f64>, Error> {
+    fn get_predictable_income(&self, end_index: usize, start_index: Option<usize>) -> Result<Array1<f64>, DigiFiError> {
         self.asset_historical_data.get_predictable_income(end_index, start_index)
     }
 
@@ -587,7 +589,7 @@ impl FinancialInstrument for Bond {
     /// 
     /// # Output
     /// - Simulated spot prices of the bond
-    fn stochastic_simulation(&self) -> Result<Vec<Array1<f64>>, Error> {
+    fn stochastic_simulation(&self) -> Result<Vec<Array1<f64>>, DigiFiError> {
         self.stochastic_model.get_paths()
     }
 
@@ -596,7 +598,7 @@ impl FinancialInstrument for Bond {
     /// 
     /// # Input
     /// - `in_place`: If true, uses generated data to update the asset history data 
-    fn generate_historic_data(&mut self, in_place: bool) -> Result<AssetHistData, Error> {
+    fn generate_historic_data(&mut self, in_place: bool) -> Result<AssetHistData, DigiFiError> {
         let prices: Array1<f64> = self.stochastic_model.get_paths()?.remove(0);
         let new_data: AssetHistData = AssetHistData::new(prices,
                                                          Array1::from_vec(vec![0.0; self.asset_historical_data.time_array.len()]),

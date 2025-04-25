@@ -1,6 +1,7 @@
 // Re-Exports
 pub use self::loss_functions::{LossFunction, MAE, MSE, StraddleLoss};
 pub use self::maths_utils::{FunctionEvalMethod, factorial, rising_factorial, erf, erfinv, derivative, definite_integral};
+pub use self::minimal_spanning_tree::{MSTDistance, MSTNode, MSTEdge, MST};
 pub use self::numerical_engines::nelder_mead;
 #[cfg(feature = "sample_data")]
 pub use self::sample_data::SampleData;
@@ -13,6 +14,7 @@ pub use self::time_value_utils::{
 
 
 pub mod maths_utils;
+pub mod minimal_spanning_tree;
 pub mod numerical_engines;
 pub mod loss_functions;
 pub mod time_value_utils;
@@ -20,15 +22,15 @@ pub mod time_value_utils;
 pub mod sample_data;
 
 
-use std::io::{Error, ErrorKind};
 use ndarray::{Array1, Array2};
 use nalgebra::DMatrix;
+use crate::error::DigiFiError;
 
 
 pub const TEST_ACCURACY: f64 = 0.00000001;
 
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 /// # Description
 /// Type of parameter used in calculations.
 pub enum ParameterType {
@@ -37,6 +39,7 @@ pub enum ParameterType {
 }
 
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Struct for generating time array.
@@ -100,50 +103,11 @@ impl Time {
 ///
 /// compare_array_len(&a, &b, "a", "b").unwrap();
 /// ```
-pub fn compare_array_len<T>(array_1: &Array1<T>, array_2: &Array1<T>, array_1_name: &str, array_2_name: &str) -> Result<(), Error> {
+pub fn compare_array_len<T>(array_1: &Array1<T>, array_2: &Array1<T>, array_1_name: &str, array_2_name: &str) -> Result<(), DigiFiError> {
     if array_1.len() != array_2.len() {
-        return Err(data_error(format!("Compare Array Length: The length of {} and {} do not coincide.", array_1_name, array_2_name)));
+        return Err(DigiFiError::UnmatchingLength { array_1: array_1_name.to_owned(), array_2: array_2_name.to_owned(), });
     }
     Ok(())
-}
-
-
-/// # Description
-/// Creates an invalid input standard io error with the custom message.
-/// 
-/// # Input
-/// - `msg`: Custom message
-/// 
-/// # Output
-/// - Invalid input standard io error with the custom message
-pub fn input_error<T: Into<Box<dyn std::error::Error + Send + Sync>>>(msg: T) -> Error {
-    Error::new(ErrorKind::InvalidInput, msg)
-}
-
-
-/// # Description
-/// Creates an invalid data standard io error with the custom message.
-/// 
-/// # Input
-/// - `msg`: Custom message
-/// 
-/// # Output
-/// - Invalid data standard io error with the custom message
-pub fn data_error<T: Into<Box<dyn std::error::Error + Send + Sync>>>(msg: T) -> Error {
-    Error::new(ErrorKind::InvalidData, msg)
-}
-
-
-/// # Description
-/// Creates an other standard io error with the custom message.
-/// 
-/// # Input
-/// - `msg`: Custom message
-/// 
-/// # Output
-/// - Other standard io error with the custom message
-pub fn other_error<T: Into<Box<dyn std::error::Error + Send + Sync>>>(msg: T) -> Error {
-    Error::new(ErrorKind::Other, msg)
 }
 
 
@@ -177,7 +141,7 @@ impl MatrixConversion {
     /// ```
     pub fn ndarray_to_nalgebra(matrix: &Array2<f64>) -> DMatrix<f64> {
         let (n_rows, n_columns) = matrix.dim();
-        let n_matrix: DMatrix<f64> = DMatrix::from_vec(n_columns, n_rows, matrix.clone().into_raw_vec());
+        let n_matrix: DMatrix<f64> = DMatrix::from_vec(n_columns, n_rows, matrix.clone().into_raw_vec_and_offset().0);
         n_matrix.transpose()
     }
 
@@ -189,7 +153,7 @@ impl MatrixConversion {
     /// 
     /// # Ouput
     /// - ndarray matrix
-    pub fn nalgebra_to_ndarray(matrix: &DMatrix<f64>) -> Result<Array2<f64>, Box<dyn std::error::Error>> {
+    pub fn nalgebra_to_ndarray(matrix: &DMatrix<f64>) -> Result<Array2<f64>, DigiFiError> {
         let dim = (matrix.row(0).len(), matrix.column(0).len());
         Ok(Array2::from_shape_vec(dim, matrix.as_slice().to_vec())?)
     }

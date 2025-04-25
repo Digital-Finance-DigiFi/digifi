@@ -1,12 +1,12 @@
-use std::io::Error;
 use ndarray::Array1;
-use crate::utilities::{input_error, other_error};
+use crate::error::DigiFiError;
 use crate::random_generators::{RandomGenerator, generate_seed, uniform_generators::FibonacciGenerator};
 use crate::random_generators::generator_algorithms::{accept_reject, inverse_transform, box_muller, marsaglia, ziggurat};
 use crate::statistics::continuous_distributions::{LaplaceDistribution, NormalDistribution};
 use crate::statistics::ProbabilityDistribution;
 
 
+#[derive(Debug)]
 /// # Description
 /// Pseudo-random number generator for standard normal distribution.
 /// 
@@ -53,9 +53,9 @@ impl StandardNormalAcceptReject {
     /// 
     /// # Errors
     /// - Returns an error if the argument `lap_b` is not positive.
-    pub fn new(max_sample_size: usize, lap_b: f64, seed_1: u32, seed_2: u32) -> Result<Self, Error> {
+    pub fn new(max_sample_size: usize, lap_b: f64, seed_1: u32, seed_2: u32) -> Result<Self, DigiFiError> {
         if lap_b <= 0.0 {
-            return Err(input_error("Accept-Reject Algorithm: The argument lap_b must be positive."));
+            return Err(DigiFiError::ParameterConstraint { title: "Accept-Reject Algorithm".to_owned(), constraint: "The argument `lap_b` must be positive.".to_owned(), });
         }
         Ok(StandardNormalAcceptReject { max_sample_size, lap_b, seed_1, seed_2 })
     }
@@ -67,7 +67,7 @@ impl RandomGenerator<StandardNormalAcceptReject> for StandardNormalAcceptReject 
     /// 
     /// # Input
     /// - `sample_size`: The maximum size of the sample to generate
-    fn new_shuffle(sample_size: usize) -> Result<Self, Error> {
+    fn new_shuffle(sample_size: usize) -> Result<Self, DigiFiError> {
         Ok(StandardNormalAcceptReject { max_sample_size: sample_size, lap_b: 1.0, seed_1: generate_seed()?, seed_2: generate_seed()? })
     }
 
@@ -76,7 +76,7 @@ impl RandomGenerator<StandardNormalAcceptReject> for StandardNormalAcceptReject 
     /// 
     /// # Output
     /// - An array of pseudo-random numbers following a standard normal distribution
-    fn generate(&self) -> Result<Array1<f64>, Error> {
+    fn generate(&self) -> Result<Array1<f64>, DigiFiError> {
         let u_1: Array1<f64> = FibonacciGenerator::new(self.seed_1, self.max_sample_size, 5, 17, 714_025, 1_366, 150_889).generate()?;
         let m: f64 = (2.0 * std::f64::consts::E / std::f64::consts::PI).sqrt();
         let u_2: Array1<f64> = FibonacciGenerator::new(self.seed_2, self.max_sample_size, 5, 17, 714_025, 1_366, 150_889).generate()?;
@@ -91,6 +91,7 @@ impl RandomGenerator<StandardNormalAcceptReject> for StandardNormalAcceptReject 
 }
 
 
+#[derive(Debug)]
 /// # Description
 /// Pseudo-random number generator for standard normal distribution.
 /// 
@@ -136,7 +137,7 @@ impl RandomGenerator<StandardNormalInverseTransform> for StandardNormalInverseTr
     /// 
     /// # Input
     /// - `sample_size`: Number of pseudo-random numbers to generate
-    fn new_shuffle(sample_size: usize) -> Result<Self, Error> {
+    fn new_shuffle(sample_size: usize) -> Result<Self, DigiFiError> {
         Ok(StandardNormalInverseTransform { sample_size })
     }
 
@@ -145,13 +146,14 @@ impl RandomGenerator<StandardNormalInverseTransform> for StandardNormalInverseTr
     /// 
     /// # Output
     /// - An array of pseudo-random numbers following a standard normal distribution
-    fn generate(&self) -> Result<Array1<f64>, Error> {
+    fn generate(&self) -> Result<Array1<f64>, DigiFiError> {
         let standard_normal_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0)?;
         inverse_transform(&standard_normal_dist, self.sample_size)
     }
 }
 
 
+#[derive(Debug)]
 /// # Description
 /// Pseudo-random number generator for standard normal distribution.
 /// 
@@ -208,7 +210,7 @@ impl RandomGenerator<StandardNormalBoxMuller> for StandardNormalBoxMuller {
     /// 
     /// # Input
     /// - `sample_size`: Number of pseudo-random numbers to generate
-    fn new_shuffle(sample_size: usize) -> Result<Self, Error> {
+    fn new_shuffle(sample_size: usize) -> Result<Self, DigiFiError> {
         Ok(StandardNormalBoxMuller { sample_size, seed_1: generate_seed()?, seed_2: generate_seed()? })
     }
 
@@ -217,7 +219,7 @@ impl RandomGenerator<StandardNormalBoxMuller> for StandardNormalBoxMuller {
     /// 
     /// # Output
     /// - Two arrays of pseudo-random numbers following a standard normal distribution
-    fn generate(&self) -> Result<Array1<f64>, Error> {
+    fn generate(&self) -> Result<Array1<f64>, DigiFiError> {
         let u_1: Array1<f64> = FibonacciGenerator::new(self.seed_1, self.sample_size, 5, 17, 714_025, 1_366, 150_889).generate()?;
         let u_2: Array1<f64> = FibonacciGenerator::new(self.seed_2, self.sample_size, 5, 17, 714_025, 1_366, 150_889).generate()?;
         let normal_arrays: (Array1<f64>, Array1<f64>) = box_muller(&u_1, &u_2);
@@ -226,6 +228,7 @@ impl RandomGenerator<StandardNormalBoxMuller> for StandardNormalBoxMuller {
 }
 
 
+#[derive(Debug)]
 /// # Description
 /// Pseudo-random number generator for standard normal distribution.
 /// 
@@ -280,7 +283,7 @@ impl RandomGenerator<StandardNormalMarsaglia> for StandardNormalMarsaglia {
     /// 
     /// # Input
     /// - `sample_size`: Number of pseudo-random numbers to generate
-    fn new_shuffle(sample_size: usize) -> Result<Self, Error> {
+    fn new_shuffle(sample_size: usize) -> Result<Self, DigiFiError> {
         Ok(StandardNormalMarsaglia { sample_size, max_iterations: 1_000 })
     }
 
@@ -289,18 +292,20 @@ impl RandomGenerator<StandardNormalMarsaglia> for StandardNormalMarsaglia {
     /// 
     /// # Output
     /// - Two arrays of pseudo-random numbers following a standard normal distribution
-    fn generate(&self) -> Result<Array1<f64>, Error> {
+    fn generate(&self) -> Result<Array1<f64>, DigiFiError> {
         let mut z_1: Array1<f64> = Array1::from_vec(vec![1.0; self.sample_size]);
         let mut z_2: Array1<f64> = Array1::from_vec(vec![1.0; self.sample_size]);
         //  Marsaglia method.
         for i in 0..self.sample_size {
-            (z_1[i], z_2[i]) = marsaglia(self.max_iterations)?.ok_or(other_error("Marsaglia Algorithm: Marsaglia algorithm failed to generate pseudo-random numbers."))?;
+            (z_1[i], z_2[i]) = marsaglia(self.max_iterations)?
+                .ok_or(DigiFiError::Other { title: "Marsaglia Algorithm".to_owned(), details: "Marsaglia algorithm failed to generate pseudo-random numbers.".to_owned(), })?;
         }
         Ok(z_1)
     }
 }
 
 
+#[derive(Debug)]
 /// # Description
 /// Pseudo-random number generator for standard normal distribution.
 /// 
@@ -352,7 +357,7 @@ impl RandomGenerator<StandardNormalZiggurat> for StandardNormalZiggurat {
     /// 
     /// # Input
     /// - `sample_size`: Number of pseudo-random numbers to generate
-    fn new_shuffle(sample_size: usize) -> Result<Self, Error> {
+    fn new_shuffle(sample_size: usize) -> Result<Self, DigiFiError> {
         Ok(StandardNormalZiggurat { sample_size, rectangle_size: 1.0/256.0, max_iterations: 10_000, dx: 0.001, limit: 6.0 })
     }
 
@@ -363,7 +368,7 @@ impl RandomGenerator<StandardNormalZiggurat> for StandardNormalZiggurat {
     /// 
     /// # Output
     /// - An array of pseudo-random numbers following a standard normal distribution
-    fn generate(&self) -> Result<Array1<f64>, Error> {
+    fn generate(&self) -> Result<Array1<f64>, DigiFiError> {
         let mut x_guess: Vec<f64> = Vec::<f64>::new();
         let mut current_x: f64 = 0.0;
         let mut rectangle_length: f64 = 0.0;

@@ -7,16 +7,17 @@ pub mod continuous_distributions;
 pub mod discrete_distributions;
 
 
-use std::io::Error;
 use std::ops::Rem;
 use ndarray::{Array1, Array2};
 use nalgebra::DMatrix;
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
-use crate::utilities::{compare_array_len, input_error, data_error, other_error, MatrixConversion};
+use crate::error::DigiFiError;
+use crate::utilities::{compare_array_len, MatrixConversion};
 use crate::utilities::maths_utils::{FunctionEvalMethod, factorial, definite_integral};
 
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ProbabilityDistributionType {
     Discrete,
@@ -57,11 +58,11 @@ pub trait ProbabilityDistribution {
 
     /// # Description
     /// Probability density function.
-    fn pdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, Error>;
+    fn pdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, DigiFiError>;
 
     /// # Description
     /// Cummulative distribution function (CDF).
-    fn cdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, Error>;
+    fn cdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, DigiFiError>;
 
     /// # Description
     /// Moment generating function (MGF).
@@ -69,7 +70,7 @@ pub trait ProbabilityDistribution {
 
     /// # Description
     /// Inverse cumulative distribution function (CDF), else knwon as quantile function.
-    fn inverse_cdf(&self, p: &Array1<f64>) -> Result<Array1<f64>, Error>;
+    fn inverse_cdf(&self, p: &Array1<f64>) -> Result<Array1<f64>, DigiFiError>;
 }
 
 
@@ -108,10 +109,13 @@ pub trait ProbabilityDistribution {
 ///
 /// assert!((covariance(&array_1, &array_2, 0).unwrap() - array![-0.8, -4.4, 0.0, 1.4, 6.8].sum()/5.0).abs() < TEST_ACCURACY);
 /// ```
-pub fn covariance(array_1: &Array1<f64>, array_2: &Array1<f64>, ddof: usize) -> Result<f64, Error> {
+pub fn covariance(array_1: &Array1<f64>, array_2: &Array1<f64>, ddof: usize) -> Result<f64, DigiFiError> {
+    let error_title: String = String::from("Covariance");
     compare_array_len(array_1, array_2, "array_1", "array_2")?;
-    let x: Array1<f64> = array_1 - array_1.mean().ok_or(other_error("Covariance: Mean of array_1 is not computed."))?;
-    let y: Array1<f64> = array_2 - array_2.mean().ok_or(other_error("Covariance: Mean of array_2 is not computed."))?;
+    let x: Array1<f64> = array_1 - array_1.mean()
+        .ok_or(DigiFiError::MeanCalculation { title: error_title.clone(), series: "array_1".to_owned(), })?;
+    let y: Array1<f64> = array_2 - array_2.mean()
+        .ok_or(DigiFiError::MeanCalculation { title: error_title.clone(), series: "array_2".to_owned(), })?;
     Ok((&x * &y).sum() / (x.len() - ddof) as f64)
 }
 
@@ -149,10 +153,14 @@ pub fn covariance(array_1: &Array1<f64>, array_2: &Array1<f64>, ddof: usize) -> 
 ///
 /// assert!((skewness(&array_).unwrap() - numerator/denominator).abs() < TEST_ACCURACY);
 /// ```
-pub fn skewness(array: &Array1<f64>) -> Result<f64, Error> {
-    let difference: Array1<f64> = array - array.mean().ok_or(other_error("Skewness: Mean of array is not computed."))?;
-    let numerator: f64 = difference.map(| i | i.powi(3)).mean().ok_or(other_error("Skewness: Mean of difference array is not computed."))?;
-    let denominator: f64 = difference.map(| i | i.powi(2)).mean().ok_or(other_error("Skewness: Mean of difference array is not computed."))?.powf(3.0/2.0);
+pub fn skewness(array: &Array1<f64>) -> Result<f64, DigiFiError> {
+    let error_title: String = String::from("Skewness");
+    let difference: Array1<f64> = array - array.mean()
+        .ok_or(DigiFiError::MeanCalculation { title: error_title.clone(), series: "array".to_owned(), })?;
+    let numerator: f64 = difference.map(| i | i.powi(3)).mean()
+        .ok_or(DigiFiError::MeanCalculation { title: error_title.clone(), series: "difference array".to_owned(), })?;
+    let denominator: f64 = difference.map(| i | i.powi(2)).mean()
+        .ok_or(DigiFiError::MeanCalculation { title: error_title.clone(), series: "difference array".to_owned(), })?.powf(3.0/2.0);
     if denominator == 0.0 {
         Ok(f64::NAN)
     } else {
@@ -194,10 +202,14 @@ pub fn skewness(array: &Array1<f64>) -> Result<f64, Error> {
 ///
 /// assert!((kurtosis(&array_).unwrap() - numerator/denuminator).abs() < TEST_ACCURACY);
 /// ```
-pub fn kurtosis(array: &Array1<f64>) -> Result<f64, Error> {
-    let difference: Array1<f64> = array - array.mean().ok_or(other_error("Kurtosis: Mean of array is not computed."))?;
-    let numerator: f64 = difference.map(| i | i.powi(2)).mean().ok_or(other_error("Kurtosis: Mean of difference array is not computed."))?;
-    let denominator: f64 = difference.map(| i | i.powi(2)).mean().ok_or(other_error("Kurtosis: Mean of difference array is not computed."))?.powi(2);
+pub fn kurtosis(array: &Array1<f64>) -> Result<f64, DigiFiError> {
+    let error_title: String = String::from("Kurtosis");
+    let difference: Array1<f64> = array - array.mean()
+        .ok_or(DigiFiError::MeanCalculation { title: error_title.clone(), series: "array".to_owned(), })?;
+    let numerator: f64 = difference.map(| i | i.powi(2)).mean()
+        .ok_or(DigiFiError::MeanCalculation { title: error_title.clone(), series: "difference array".to_owned(), })?;
+    let denominator: f64 = difference.map(| i | i.powi(2)).mean()
+        .ok_or(DigiFiError::MeanCalculation { title: error_title.clone(), series: "difference array".to_owned(), })?.powi(2);
     if denominator == 0.0 {
         Ok(f64::NAN)
     } else {
@@ -241,7 +253,7 @@ pub fn kurtosis(array: &Array1<f64>) -> Result<f64, Error> {
 /// let array_2: Array1<f64> = Array1::from_vec(vec![-1.0, 1.0]);
 /// assert!((pearson_correlation(&array_1, &array_2, 1).unwrap() + 1.0).abs() < TEST_ACCURACY);
 /// ```
-pub fn pearson_correlation(array_1: &Array1<f64>, array_2: &Array1<f64>, ddof: usize) -> Result<f64, Error> {
+pub fn pearson_correlation(array_1: &Array1<f64>, array_2: &Array1<f64>, ddof: usize) -> Result<f64, DigiFiError> {
     let cov: f64 = covariance(array_1, array_2, ddof)?;
     let sigma_1: f64 = covariance(array_1, array_1, ddof)?.sqrt();
     let sigma_2: f64 = covariance(array_2, array_2, ddof)?.sqrt();
@@ -270,9 +282,9 @@ pub fn pearson_correlation(array_1: &Array1<f64>, array_2: &Array1<f64>, ddof: u
 ///
 /// assert_eq!(10, n_choose_r(5, 2).unwrap());
 /// ```
-pub fn n_choose_r(n: u128, r: u128) -> Result<u128, Error> {
+pub fn n_choose_r(n: u128, r: u128) -> Result<u128, DigiFiError> {
     if n < r {
-        return Err(input_error("n Chose r: The value of variable n must be larger or equal to the value of variable r."));
+        return Err(DigiFiError::ParameterConstraint { title: "n Choose r".to_owned(), constraint: "The value of variable n must be larger or equal to the value of variable r.".to_owned(), });
     }
     Ok(factorial(n) / (factorial(n - r) * factorial(r)))
 }
@@ -313,14 +325,15 @@ pub fn n_choose_r(n: u128, r: u128) -> Result<u128, Error> {
 /// let results: Array1<f64> = Array1::from(vec![-2.49556592e-16, 1.0, -2.0]);
 /// assert!((&params - &results).sum().abs() < TEST_ACCURACY);
 /// ```
-pub fn linear_regression(x: &Array2<f64>, y: &Array1<f64>) -> Result<Array1<f64>, Box<dyn std::error::Error>> {
+pub fn linear_regression(x: &Array2<f64>, y: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
     if x.dim().0 != y.len() {
-        Err(data_error("Linear Regression: The length of x and y do not coincide."))?;
+        return Err(DigiFiError::UnmatchingLength { array_1: "x".to_owned(), array_2: "y".to_owned(), });
     }
     let square_matrix: Array2<f64> = x.t().dot(x);
     // Matrix inverse is done via nalgebra.
     let n_square_matrix: DMatrix<f64> = MatrixConversion::ndarray_to_nalgebra(&square_matrix);
-    let n_inv_matrix: DMatrix<f64> = n_square_matrix.try_inverse().ok_or("Linear Regression: No matrix inverse exists to perform linear regression.")?;
+    let n_inv_matrix: DMatrix<f64> = n_square_matrix.try_inverse()
+        .ok_or(DigiFiError::Other { title: "Linear Regression".to_owned(), details: "No matrix inverse exists to perform linear regression.".to_owned(), })?;
     let inv_matrix: Array2<f64> = MatrixConversion::nalgebra_to_ndarray(&n_inv_matrix)?;
     Ok(inv_matrix.dot(&x.t().dot(&y.t())))
 }
@@ -343,10 +356,11 @@ pub fn linear_regression(x: &Array2<f64>, y: &Array1<f64>) -> Result<Array1<f64>
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Coefficient_of_determination>
 /// - Original Source: N/A
-pub fn r_square(real_values: &Array1<f64>, predicted_values: &Array1<f64>) -> Result<f64, Error> {
+pub fn r_square(real_values: &Array1<f64>, predicted_values: &Array1<f64>) -> Result<f64, DigiFiError> {
     compare_array_len(&real_values, &predicted_values, "real_values", "predicted_values")?;
     let residual_sum: f64 = (real_values - predicted_values).map(|x| x.powi(2)).sum();
-    let total_sum: f64 = (real_values - real_values.mean().ok_or(other_error("R Square: Could not compute the mean of real_values."))?).map(|x| x.powi(2)).sum();
+    let total_sum: f64 = (real_values - real_values.mean()
+        .ok_or(DigiFiError::MeanCalculation { title: "R Square".to_owned(), series: "real_values".to_owned(), })?).map(|x| x.powi(2)).sum();
     Ok(1.0 - residual_sum/total_sum)
 }
 
@@ -369,7 +383,7 @@ pub fn r_square(real_values: &Array1<f64>, predicted_values: &Array1<f64>) -> Re
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Coefficient_of_determination#Adjusted_R2>
 /// - Original Source: N/A
-pub fn adjusted_r_square(real_values: &Array1<f64>, predicted_values: &Array1<f64>, sample_size: usize, k_variables: usize) -> Result<f64, Error> {
+pub fn adjusted_r_square(real_values: &Array1<f64>, predicted_values: &Array1<f64>, sample_size: usize, k_variables: usize) -> Result<f64, DigiFiError> {
     Ok(1.0 - (1.0-r_square(real_values, predicted_values)?) * (sample_size as f64 - 1.0) / ((sample_size-k_variables) as f64 - 1.0))
 }
 
@@ -541,9 +555,9 @@ pub fn gamma_function(z: f64, method: &FunctionEvalMethod) -> f64 {
 /// assert!((upper_incomplete_gamma_function(1.0, 3.0, &FunctionEvalMethod::Integral { n_intervals: 1_000_000 }).unwrap() - (-3.0_f64).exp()).abs() < TEST_ACCURACY);
 /// assert!((upper_incomplete_gamma_function(1.0, 3.0, &FunctionEvalMethod::Approximation { n_terms: 30 }).unwrap() - (-3.0_f64).exp()).abs() < TEST_ACCURACY);
 /// ```
-pub fn upper_incomplete_gamma_function(z: f64, x: f64, method: &FunctionEvalMethod) -> Result<f64, Error> {
+pub fn upper_incomplete_gamma_function(z: f64, x: f64, method: &FunctionEvalMethod) -> Result<f64, DigiFiError> {
     if x < 0.0 {
-        return Err(input_error("Upper Incomplete Function: The value of x must be non-negative."));
+        return Err(DigiFiError::ParameterConstraint { title: "Upper Incomplete Function".to_owned(), constraint: "The value of `x` must be non-negative.".to_owned(), });
     }
     match method {
         FunctionEvalMethod::Integral { n_intervals } => {
@@ -588,9 +602,9 @@ pub fn upper_incomplete_gamma_function(z: f64, x: f64, method: &FunctionEvalMeth
 /// assert!((lower_incomplete_gamma_function(1.0, 3.0, &FunctionEvalMethod::Integral { n_intervals: 1_000_000 }).unwrap() - (1.0 - (-3.0_f64).exp())).abs() < 100.0 * TEST_ACCURACY);
 /// assert!((lower_incomplete_gamma_function(1.0, 3.0, &FunctionEvalMethod::Approximation { n_terms: 20 }).unwrap() - (1.0 - (-3.0_f64).exp())).abs() < TEST_ACCURACY);
 /// ```
-pub fn lower_incomplete_gamma_function(z: f64, x: f64, method: &FunctionEvalMethod) -> Result<f64, Error> {
+pub fn lower_incomplete_gamma_function(z: f64, x: f64, method: &FunctionEvalMethod) -> Result<f64, DigiFiError> {
     if x < 0.0 {
-        return Err(input_error("Lower Incomplete Function: The value of x must be non-negative."));
+        return Err(DigiFiError::ParameterConstraint { title: "Lower Incomplete Function".to_owned(), constraint: "The value of `x` must be non-negative.".to_owned(), });
     }
     match method {
         FunctionEvalMethod::Integral { n_intervals } => {
@@ -653,12 +667,13 @@ pub fn lower_incomplete_gamma_function(z: f64, x: f64, method: &FunctionEvalMeth
 /// assert!((beta_function(0.5, 0.5, &FunctionEvalMethod::Integral { n_intervals: 100_000_000 }).unwrap() - std::f64::consts::PI).abs() < 15_000_000.0 * TEST_ACCURACY);
 /// assert!((beta_function(0.5, 0.5, &FunctionEvalMethod::Approximation { n_terms: 100 }).unwrap() - std::f64::consts::PI).abs() < 1_000_000.0 * TEST_ACCURACY);
 /// ```
-pub fn beta_function(z_1: f64, z_2: f64, method: &FunctionEvalMethod) -> Result<f64, Error> {
+pub fn beta_function(z_1: f64, z_2: f64, method: &FunctionEvalMethod) -> Result<f64, DigiFiError> {
+    let error_title: String = String::from("Beta Function");
     if z_1 <= 0.0 {
-        return Err(input_error("Beta Function: The argument z_1 must be positive."));
+        return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument `z_1` must be positive.".to_owned(), });
     }
     if z_2 <= 0.0 {
-        return Err(input_error("Beta Function: The argument z_2 must be positive."));
+        return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument `z_2` must be positive.".to_owned(), });
     }
     match method {
         FunctionEvalMethod::Integral { n_intervals }  => {
@@ -700,12 +715,13 @@ pub fn beta_function(z_1: f64, z_2: f64, method: &FunctionEvalMethod) -> Result<
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Beta_function>
 /// - Original Source: N/A
-pub fn incomplete_beta_function(x: f64, a: f64, b: f64, method: &FunctionEvalMethod) -> Result<f64, Error> {
+pub fn incomplete_beta_function(x: f64, a: f64, b: f64, method: &FunctionEvalMethod) -> Result<f64, DigiFiError> {
+    let error_title: String = String::from("Incomeplete Beta Function");
     if a <= 0.0 {
-        return Err(input_error("Beta Function: The argument a must be positive."));
+        return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument `a` must be positive.".to_owned(), });
     }
     if b <= 0.0 {
-        return Err(input_error("Beta Function: The argument b must be positive."));
+        return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument `b` must be positive.".to_owned(), });
     }
     match method {
         FunctionEvalMethod::Integral { n_intervals } => {
@@ -714,7 +730,7 @@ pub fn incomplete_beta_function(x: f64, a: f64, b: f64, method: &FunctionEvalMet
         },
         FunctionEvalMethod::Approximation { n_terms } => {
             if (x - 1.0).abs() <= 0.0001 {
-                return Err(input_error("Incomplete Beta Function: For values of x close to 1 use integration method."));
+                return Err(DigiFiError::Other { title: error_title.clone(), details: "For values of `x` close to `1` use integration method.".to_owned(), });
             }
             let odd_coeff = |m: f64| { (a + m) * (a + b + m) * x / ((a + 2.0*m) * (a + 2.0*m + 1.0)) };
             let even_coeff = |m: f64| { m * (b - m) * x / ((a + 2.0*m) * (a + 2.0*m - 1.0)) };
@@ -724,7 +740,7 @@ pub fn incomplete_beta_function(x: f64, a: f64, b: f64, method: &FunctionEvalMet
                 let d:  f64  = match m.rem(2) {
                     0 => { even_coeff(m_) },
                     1 => { odd_coeff(m_) },
-                    _ => { return Err(data_error("Incomplete Beta Function: Remainder is a fraction.")); },
+                    _ => return Err(DigiFiError::Other { title: error_title.clone(), details: "Remainder is a fraction.".to_owned(), }),
                 };
                 continued_fraction = 1.0 + d / continued_fraction;
             }
@@ -777,12 +793,13 @@ pub fn incomplete_beta_function(x: f64, a: f64, b: f64, method: &FunctionEvalMet
 /// // I_{x}(1, b) = 1 - (1 - x)^{b}
 /// assert!((regularized_incomplete_beta_function(0.5, 1.0, 3.0, &FunctionEvalMethod::Integral { n_intervals: 1_000_000 }).unwrap() - (1.0 - 0.5_f64.powi(3))).abs() < 10_000.0 * TEST_ACCURACY);
 /// ```
-pub fn regularized_incomplete_beta_function(x: f64, a: f64, b: f64, method: &FunctionEvalMethod) -> Result<f64, Error> {
+pub fn regularized_incomplete_beta_function(x: f64, a: f64, b: f64, method: &FunctionEvalMethod) -> Result<f64, DigiFiError> {
+    let error_title: String = String::from("Regularized Incomplete Beta function");
     if a <= 0.0 {
-        return Err(input_error("Beta Function: The argument a must be positive."));
+        return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument `a` must be positive.".to_owned(), });
     }
     if b <= 0.0 {
-        return Err(input_error("Beta Function: The argument b must be positive."));
+        return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument `b` must be positive.".to_owned(), });
     }
     Ok(incomplete_beta_function(x, a, b, method)? / beta_function(a, b, method)?)
 }

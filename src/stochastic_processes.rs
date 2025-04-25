@@ -12,10 +12,10 @@ pub mod jump_diffusion_models;
 pub mod stochastic_process_generator;
 
 
-use std::io::Error;
 use ndarray::Array1;
 #[cfg(feature = "plotly")]
 use plotly::{Plot, Trace, Layout, Scatter, layout::Axis};
+use crate::error::DigiFiError;
 #[cfg(feature = "plotly")]
 use crate::utilities::compare_array_len;
 
@@ -39,7 +39,7 @@ pub trait StochasticProcess {
 
     /// # Description
     /// Paths, S, of the stochastic process.
-    fn get_paths(&self) -> Result<Vec<Array1<f64>>, Error>;
+    fn get_paths(&self) -> Result<Vec<Array1<f64>>, DigiFiError>;
 }
 
 
@@ -129,7 +129,7 @@ pub trait StochasticProcess {
 ///
 /// ```rust
 /// use ndarray::Array1;
-/// use digifi::stochastic_processes::stochastic_process_generator::{SDE, SDEComponent, Noise, Jump};
+/// use digifi::stochastic_processes::{StochasticProcess, stochastic_process_generator::{SDE, SDEComponent, Noise, Jump}};
 ///
 /// #[cfg(feature = "plotly")]
 /// fn unit_test_sde_abm_plot() -> () {
@@ -153,7 +153,7 @@ pub trait StochasticProcess {
 ///     plot.show()
 /// }
 /// ```
-pub fn plot_stochastic_paths(paths: &Vec<Array1<f64>>, expected_path: Option<&Array1<f64>>) -> Result<Plot, Error> {
+pub fn plot_stochastic_paths(paths: &Vec<Array1<f64>>, expected_path: Option<&Array1<f64>>) -> Result<Plot, DigiFiError> {
     let t: Array1<f64> = Array1::range(0.0, paths[0].len() as f64, 1.0);
     let mut traces: Vec<Box<dyn Trace>> = Vec::<Box<dyn Trace>>::new();
     match expected_path {

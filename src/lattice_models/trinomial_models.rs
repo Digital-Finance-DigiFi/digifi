@@ -1,6 +1,5 @@
-use std::io::Error;
 use ndarray::Array1;
-use crate::utilities::{input_error, data_error};
+use crate::error::DigiFiError;
 use crate::financial_instruments::Payoff;
 use crate::lattice_models::LatticeModel;
 
@@ -35,9 +34,9 @@ use crate::lattice_models::LatticeModel;
 /// assert!((&tree[1] - Array1::from_vec(vec![9.0, 10.0*s, 12.0])).sum().abs() < TEST_ACCURACY);
 /// assert!((&tree[2] - Array1::from_vec(vec![8.1, 9.0*s, 10.0*s*s, 12.0*s, 14.4])).sum().abs() < TEST_ACCURACY);
 /// ```
-pub fn trinomial_tree_nodes(s_0: f64, u: f64, d: f64, n_steps: usize) -> Result<Vec<Array1<f64>>, Error> {
+pub fn trinomial_tree_nodes(s_0: f64, u: f64, d: f64, n_steps: usize) -> Result<Vec<Array1<f64>>, DigiFiError> {
     if (u <= 0.0) || (d <= 0.0) {
-        return Err(input_error( "Trinomial Tree Nodes: The arguments u and d must be positive multiplicative factors of the trinomial model."));
+        return Err(DigiFiError::ParameterConstraint { title: "Trinomial Tree Nodes".to_owned(), constraint: "The arguments `u` and `d` must be positive multiplicative factors of the trinomial model.".to_owned(), });
     }
     let s: f64 = (u * d).sqrt();
     let mut trinomial_tree: Vec<Array1<f64>> = vec![Array1::from_vec(vec![s_0])];
@@ -115,24 +114,25 @@ pub fn trinomial_tree_nodes(s_0: f64, u: f64, d: f64, n_steps: usize) -> Result<
 /// let analytic_solution: f64 = 0.25*(0.25*3.4 + 0.5*(12.0*s - 11.0) + 0.25*(11.0 - 10.0*s*s)) + 0.5*(0.25*(12.0*s - 11.0) + 0.5*(11.0 - 10.0*s*s) + 0.25*(11.0 - 9.0*s)) + 0.25*(0.25*(11.0 - 10.0*s*s) + 0.5*(11.0 - 9.0*s) + 0.25*2.9);
 /// assert!((fair_value - analytic_solution).abs() < TEST_ACCURACY);
 /// ```
-pub fn trinomial_model(payoff_object: &dyn Payoff, s_0: f64, u: f64, d: f64, p_u: f64, p_d: f64, n_steps: usize, exercise_time_steps: Option<Vec<bool>>) -> Result<f64, Error> {
+pub fn trinomial_model(payoff_object: &dyn Payoff, s_0: f64, u: f64, d: f64, p_u: f64, p_d: f64, n_steps: usize, exercise_time_steps: Option<Vec<bool>>) -> Result<f64, DigiFiError> {
+    let error_title: String = String::from("Trinomial Model");
     // Data validation
     payoff_object.validate_payoff(5)?;
     if (u <= 0.0) || (d <= 0.0) {
-        return Err(input_error("Trinomial Model: The arguments u and d must be positive multiplicative factors of the trinomial model."));
+        return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The arguments `u` and `d` must be positive multiplicative factors of the trinomial model.".to_owned(), });
     }
     if (p_u <= 0.0) || (1.0 <= p_u) || (p_d <= 0.0) || (1.0 <= p_d) {
-        return Err(input_error("Trinomial Model: The arguments p_u and p_d must be a defined over a range [0,1]."));
+        return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The arguments `p_u` and `p_d` must be a defined over a range `[0,1]`.".to_owned(), });
     }
     if 1.0 < (p_u + p_d) {
-        return Err(input_error("Trinomial Model: The probabilities p_u, p_d and (1-p_u-p_d) must add up to 1."));
+        return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The probabilities `p_u`, `p_d` and `1 - p_u - p_d` must add up to `1`.".to_owned(), });
     }
     let p_s: f64 = 1.0 - p_u - p_d;
     let exercise_time_steps_: Vec<bool>;
     match exercise_time_steps {
         Some(exercise_time_steps_vec) => {
             if exercise_time_steps_vec.len() != n_steps {
-                return Err(data_error("Trinomial Model: The argument exercise_time_steps should be of length n_steps."));
+                return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument `exercise_time_steps` should be of length `n_steps`.".to_owned(), });
             }
             exercise_time_steps_ = exercise_time_steps_vec
         },
@@ -219,11 +219,12 @@ impl BrownianMotionTrinomialModel {
     ///
     /// # Errors
     /// - Returns an error if the condition \\Delta t<\\frac{{\\sigma^{{2}}}}{{(r-q)^{{2}}}} is not satisfied
-    pub fn new(payoff_object: Box<dyn Payoff>, s_0: f64, time_to_maturity: f64, r: f64, sigma: f64, q: f64, n_steps: usize) -> Result<Self, Error> {
+    pub fn new(payoff_object: Box<dyn Payoff>, s_0: f64, time_to_maturity: f64, r: f64, sigma: f64, q: f64, n_steps: usize) -> Result<Self, DigiFiError> {
         payoff_object.validate_payoff(5)?;
         let dt: f64 = time_to_maturity / (n_steps as f64);
         if (2.0 * sigma.powi(2) / (r-q).powi(2)) <= dt {
-            return Err(data_error("Brownian Motion Trinomial Model: With the given arguments, the condition \\Delta t<\\frac{{\\sigma^{{2}}}}{{(r-q)^{{2}}}} is not satisfied."));
+            return Err(DigiFiError::ParameterConstraint { title: "Brownian Motion Trinomial Model".to_owned(),
+                constraint: "With the given arguments, the condition \\Delta t<\\frac{{\\sigma^{{2}}}}{{(r-q)^{{2}}}} is not satisfied.".to_owned(), });
         }
         let u: f64 = (sigma * (2.0*dt).sqrt()).exp();
         let d: f64 = (-sigma * (2.0*dt).sqrt()).exp();
@@ -239,7 +240,7 @@ impl LatticeModel for BrownianMotionTrinomialModel {
     /// 
     /// # Output
     /// - The present value of an instrument with the European exercise style
-    fn european(&self) -> Result<f64, Error> {
+    fn european(&self) -> Result<f64, DigiFiError> {
         let mut exercise_time_steps: Vec<bool> = Vec::<bool>::new();
         for _ in 0..self.n_steps {
             exercise_time_steps.push(false);
@@ -252,7 +253,7 @@ impl LatticeModel for BrownianMotionTrinomialModel {
     /// 
     /// # Output
     /// - The present value of an instrument with the American exercise style
-    fn american(&self) -> Result<f64, Error> {
+    fn american(&self) -> Result<f64, DigiFiError> {
         let mut exercise_time_steps: Vec<bool> = Vec::<bool>::new();
         for _ in 0..self.n_steps {
             exercise_time_steps.push(true);
@@ -268,7 +269,7 @@ impl LatticeModel for BrownianMotionTrinomialModel {
     /// 
     /// # Output
     /// - The present value of an instrument with the Bermudan exercise style
-    fn bermudan(&self, exercise_time_steps: &Vec<bool>) -> Result<f64, Error> {
+    fn bermudan(&self, exercise_time_steps: &Vec<bool>) -> Result<f64, DigiFiError> {
         Ok((-self.r*self.time_to_maturity).exp() * trinomial_model(self.payoff_object.as_ref(), self.s_0, self.u, self.d, self.p_u, self.p_d, self.n_steps, Some(exercise_time_steps.clone()))?)
     }
 }

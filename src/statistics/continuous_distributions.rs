@@ -1,11 +1,12 @@
-use std::io::Error;
 use ndarray::Array1;
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
-use crate::utilities::{input_error, maths_utils::{FunctionEvalMethod, erf, erfinv, derivative}, numerical_engines::nelder_mead};
+use crate::error::DigiFiError;
+use crate::utilities::{maths_utils::{FunctionEvalMethod, erf, erfinv, derivative}, numerical_engines::nelder_mead};
 use crate::statistics::{ProbabilityDistribution, ProbabilityDistributionType, gamma_function, lower_incomplete_gamma_function};
 
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Methods and properties of continuous uniform distribution.
@@ -55,9 +56,9 @@ impl ContinuousUniformDistribution {
     /// 
     /// # Errors
     /// - Returns an error if the value of `a` is larger or equal to `b`.
-    pub fn new(a: f64, b: f64) -> Result<Self, Error> {
+    pub fn new(a: f64, b: f64) -> Result<Self, DigiFiError> {
         if b <= a {
-            return Err(input_error("Continuous Uniform Distribution: The argument a must be smaller or equal to the argument b."));
+            return Err(DigiFiError::ParameterConstraint { title: "Continuous Uniform Distribution".to_owned(), constraint: "The argument `a` must be smaller or equal to the argument `b`.".to_owned(), });
         }
         Ok(ContinuousUniformDistribution { a, b, _distribution_type: ProbabilityDistributionType::Continuous })
     }
@@ -104,7 +105,7 @@ impl ProbabilityDistribution for ContinuousUniformDistribution {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Continuous_uniform_distribution#Probability_density_function>
     /// - Original Source: N/A
-    fn pdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, Error> {
+    fn pdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
         Ok(x.map(|x_| if (self.a <= *x_) && ( *x_ <= self.b) {1.0 / (self.b - self.a) } else { 0.0 } ))
     }
 
@@ -120,7 +121,7 @@ impl ProbabilityDistribution for ContinuousUniformDistribution {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Continuous_uniform_distribution#Cumulative_distribution_function>
     /// - Original Sourcew: N/A
-    fn cdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, Error> {
+    fn cdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
         Ok(x.map(|x_| if self.a <= *x_ { ((x_ - self.a) / (self.b - self.a)).min(1.0) } else { 0.0 } ))
     }
 
@@ -132,7 +133,7 @@ impl ProbabilityDistribution for ContinuousUniformDistribution {
     /// 
     /// # Output
     /// - Inverse CDF values for the given probabilities
-    fn inverse_cdf(&self, p: &Array1<f64>) -> Result<Array1<f64>, Error> {
+    fn inverse_cdf(&self, p: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
         let p: Array1<f64> = p.map(|p_| if (*p_ < 0.0) || (1.0 < *p_) { f64::NAN } else {*p_} );
         Ok(self.a + p * (self.b - self.a))
     }
@@ -154,6 +155,7 @@ impl ProbabilityDistribution for ContinuousUniformDistribution {
 }
 
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Methods and properties of normal distribution.
@@ -203,9 +205,9 @@ impl NormalDistribution {
     /// 
     /// # Errors
     /// - Returns an error if `sigma` is negative.
-    pub fn new(mu: f64, sigma: f64) -> Result<Self, Error> {
+    pub fn new(mu: f64, sigma: f64) -> Result<Self, DigiFiError> {
         if sigma < 0.0 {
-            return Err(input_error("Normal Distribution: The argument sigma must be non-negative."));
+            return Err(DigiFiError::ParameterConstraint { title: "Normal Distribution".to_owned(), constraint: "The argument `sigma` must be non-negative.".to_owned(), });
         }
         Ok(NormalDistribution { mu, sigma, _distribution_type: ProbabilityDistributionType::Continuous })
     }
@@ -252,7 +254,7 @@ impl ProbabilityDistribution for NormalDistribution {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Normal_distribution#Probability_density_function>
     /// - Original Source: N/A
-    fn pdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, Error> {
+    fn pdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
         Ok(x.map(|x_| {
             (((x_ - self.mu) / self.sigma).powi(2) / -2.0).exp() / (self.sigma * (2.0*std::f64::consts::PI).sqrt())
         } ))
@@ -270,7 +272,7 @@ impl ProbabilityDistribution for NormalDistribution {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Normal_distribution#Cumulative_distribution_function>
     /// - Original Source: N/A
-    fn cdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, Error> {
+    fn cdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
         Ok((1.0 + ((x - self.mu) / (self.sigma * 2.0_f64.sqrt())).map(|x_| erf(*x_, FunctionEvalMethod::Approximation { n_terms: 20 }) )) / 2.0)
     }
 
@@ -282,7 +284,7 @@ impl ProbabilityDistribution for NormalDistribution {
     /// 
     /// # Output
     /// - Inverse CDF values for the given probabilities
-    fn inverse_cdf(&self, p: &Array1<f64>) -> Result<Array1<f64>, Error> {
+    fn inverse_cdf(&self, p: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
         let p: Array1<f64> = p.map(|p_| if (*p_ < 0.0) || (1.0 < *p_) { f64::NAN } else {*p_} );
         Ok(self.mu + self.sigma * 2.0_f64.sqrt() * p.map(|p_| erfinv(2.0 * *p_ - 1.0, 30) ))
     }
@@ -304,6 +306,7 @@ impl ProbabilityDistribution for NormalDistribution {
 }
 
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Methods and properties of exponential distribution.
@@ -350,9 +353,9 @@ impl ExponentialDistribution {
     /// 
     /// # Errors
     /// - Returns an error if `lambda` is not positive.
-    pub fn new(lambda: f64) -> Result<Self, Error> {
+    pub fn new(lambda: f64) -> Result<Self, DigiFiError> {
         if lambda <= 0.0 {
-            return Err(input_error("Exponential Distribution: The argument lambda must be positive."));
+            return Err(DigiFiError::ParameterConstraint { title: "Exponential Distribution".to_owned(), constraint: "The argument `lambda` must be positive.".to_owned(), });
         }
         Ok(ExponentialDistribution { lambda, _distribution_type: ProbabilityDistributionType::Continuous })
     }
@@ -399,7 +402,7 @@ impl ProbabilityDistribution for ExponentialDistribution {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Exponential_distribution#Probability_density_function>
     /// - Original Source: N/A
-    fn pdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, Error> {
+    fn pdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
         Ok(x.map(|x_| self.lambda * (-self.lambda * x_).exp() ))
     }
 
@@ -415,7 +418,7 @@ impl ProbabilityDistribution for ExponentialDistribution {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Exponential_distribution#Cumulative_distribution_function>
     /// - Original Source: N/A
-    fn cdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, Error> {
+    fn cdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
         Ok(x.map(|x_| 1.0 - (-self.lambda * x_).exp() ))
     }
 
@@ -427,7 +430,7 @@ impl ProbabilityDistribution for ExponentialDistribution {
     /// 
     /// # Output
     /// - Inverse CDF values for the given probabilities
-    fn inverse_cdf(&self, p: &Array1<f64>) -> Result<Array1<f64>, Error> {
+    fn inverse_cdf(&self, p: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
         let p: Array1<f64> = p.map(|p_| if (*p_ < 0.0) || (1.0 < *p_) { f64::NAN } else {*p_} );
         Ok(p.map(|p_| (1.0 - p_).ln() / -self.lambda ))
     }
@@ -446,6 +449,7 @@ impl ProbabilityDistribution for ExponentialDistribution {
 }
 
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Methods and properties of Laplace distribution.
@@ -492,7 +496,7 @@ impl LaplaceDistribution {
     /// # Input
     /// - `mu`: Location parameter, which is the peak of the distribution
     /// - `b`: Scale parameter, which controls the spread of the distribution
-    pub fn new(mu: f64, b: f64) -> Result<Self, Error> {
+    pub fn new(mu: f64, b: f64) -> Result<Self, DigiFiError> {
         Ok(LaplaceDistribution { mu, b, _distribution_type: ProbabilityDistributionType::Continuous })
     }
 }
@@ -538,7 +542,7 @@ impl ProbabilityDistribution for LaplaceDistribution {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Laplace_distribution#Probability_density_function>
     /// - Original Source: N/A
-    fn pdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, Error> {
+    fn pdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
         Ok(x.map(|x_| (-(x_ - self.mu).abs() / self.b).exp() / (2.0 * self.b) ))
     }
 
@@ -554,7 +558,7 @@ impl ProbabilityDistribution for LaplaceDistribution {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Laplace_distribution#Cumulative_distribution_function>
     /// - Original Source: N/A
-    fn cdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, Error> {
+    fn cdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
         Ok(x.map(|x_| if *x_ <= self.b { 0.5 * ((x_ - self.mu) / self.b).exp() } else { 1.0 - 0.5 * (-(x_ - self.mu) / self.b).exp() } ))
     }
 
@@ -566,7 +570,7 @@ impl ProbabilityDistribution for LaplaceDistribution {
     /// 
     /// # Output
     /// - Inverse CDF values for the given probabilities
-    fn inverse_cdf(&self, p: &Array1<f64>) -> Result<Array1<f64>, Error> {
+    fn inverse_cdf(&self, p: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
         let p: Array1<f64> = p.map(|p_| if (*p_ < 0.0) || (1.0 < *p_) { f64::NAN } else {*p_} );
         Ok(p.map(|p_| self.mu - self.b * (p_ - 0.5).signum() * (1.0 - 2.0*(p_ - 0.5).abs()).ln() ))
     }
@@ -588,6 +592,7 @@ impl ProbabilityDistribution for LaplaceDistribution {
 }
 
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Methods and properties of Gamma distribution.
@@ -634,12 +639,13 @@ impl GammaDistribution {
     /// # Input
     /// - `k`: Shape parameter, which controls the shape of the distribution
     /// - `theta`: Scale parameter, which controls the spread of the distribution
-    pub fn new(k: f64, theta: f64) -> Result<Self, Error> {
+    pub fn new(k: f64, theta: f64) -> Result<Self, DigiFiError> {
+        let error_title: String = String::from("Gamma Distribution");
         if k <= 0.0 {
-            return Err(input_error("Gamma Distribution: The argument k must be positive."))
+            return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument `k` must be positive.".to_owned(), });
         }
         if theta <= 0.0 {
-            return Err(input_error("Gamma Distribution: The argument theta must be positive."))
+            return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument `theta` must be positive.".to_owned(), });
         }
         Ok(GammaDistribution { k, theta, _distribution_type: ProbabilityDistributionType::Continuous })
     }
@@ -688,7 +694,7 @@ impl ProbabilityDistribution for GammaDistribution {
     /// 
     /// # Output
     /// - PDF values at the given `x`
-    fn pdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, Error> {
+    fn pdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
         let x_: Array1<f64> = x.map(|v| if *v < 0.0{ f64::NAN } else {*v});
         Ok(x_.map(|v| v.powf(self.k - 1.0) * (-v / self.theta).exp() / (gamma_function(self.k, &FunctionEvalMethod::Approximation { n_terms: 0 }) * self.theta.powf(self.k)) ))
     }
@@ -701,7 +707,7 @@ impl ProbabilityDistribution for GammaDistribution {
     /// 
     /// # Output
     /// - CDF values at the given `x`
-    fn cdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, Error> {
+    fn cdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
         let x_: Array1<f64> = x.map(|v| if *v < 0.0{ f64::NAN } else {*v});
         let mut y: Vec<f64> = Vec::<f64>::new();
         for v in x_ {
@@ -718,7 +724,7 @@ impl ProbabilityDistribution for GammaDistribution {
     /// 
     /// # Output
     /// - Inverse CDF values for the given probabilities
-    fn inverse_cdf(&self, p: &Array1<f64>) -> Result<Array1<f64>, Error> {
+    fn inverse_cdf(&self, p: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
         let p: Array1<f64> = p.map(|p_| if (*p_ < 0.0) || (1.0 < *p_) { f64::NAN } else {*p_} );
         let mut y: Vec<f64> = Vec::<f64>::new();
         for p_ in p {

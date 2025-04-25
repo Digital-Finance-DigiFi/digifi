@@ -1,14 +1,14 @@
-use std::{collections::HashMap, io::Error};
+use std::collections::HashMap;
 use ndarray::{Array1, Array2, Axis, arr1};
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
 #[cfg(feature = "plotly")]
 use plotly::{Plot, Trace, Scatter, Layout, layout::Axis as PlotAxis, common::{Mode, Marker, MarkerSymbol, HoverInfo, color::NamedColor}};
-use crate::utilities::{data_error, input_error};
+use crate::error::DigiFiError;
 use crate::utilities::loss_functions::{LossFunction, StraddleLoss};
 use crate::utilities::numerical_engines::nelder_mead;
 use crate::statistics::covariance;
-use crate::portfolio_applications::{ReturnsMethod, returns_average, AssetHistData, PortfolioInstrument, prices_to_returns};
+use crate::portfolio_applications::{ReturnsMethod, ReturnsTransformation, returns_average, AssetHistData, PortfolioInstrument, prices_to_returns};
 use crate::portfolio_applications::portfolio_performance::PortfolioPerformanceMetric;
 
 
@@ -32,6 +32,7 @@ pub enum PortfolioReturnsType {
 }
 
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Output produced by the portfolio optimization.
@@ -82,6 +83,7 @@ impl PortfolioOptimizationResult {
 }
 
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Efficient frontier of the market for a given performance metric.
@@ -113,6 +115,7 @@ impl EfficientFrontier {
 }
 
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Describes an asset inside a portfolio.
@@ -130,9 +133,9 @@ impl Asset {
     ///
     /// # Errors
     /// - Returns an error if the weight is infinite or NAN.
-    pub fn validate(&self) -> Result<(), Error> {
+    pub fn validate(&self) -> Result<(), DigiFiError> {
         if self.weight.is_nan() || self.weight.is_infinite() {
-            return Err(data_error("Asset: The weight of the portfolio asset cannot be infinite or NAN."));
+            return Err(DigiFiError::ValidationError { title: "Asset".to_owned(), details: "The `weight` of the portfolio asset cannot be infinite or `NAN`.".to_owned(), });
         }
         Ok(())
     }
@@ -151,7 +154,7 @@ impl Asset {
 /// # Output
 /// - `Portfolio` struct
 pub fn generate_portfolio(financial_instruments: Vec<impl PortfolioInstrument>, n_periods: Option<usize>, returns_method: Option<ReturnsMethod>,
-                          performance_metric: Box<dyn PortfolioPerformanceMetric>) -> Result<Portfolio, Error> {
+                          performance_metric: Box<dyn PortfolioPerformanceMetric>) -> Result<Portfolio, DigiFiError> {
     let mut assets: HashMap<String, Asset>  = HashMap::<String, Asset>::new();
     let weight: f64 = 1.0 / financial_instruments.len() as f64;
     for fi in financial_instruments {
@@ -240,7 +243,7 @@ pub fn generate_portfolio(financial_instruments: Vec<impl PortfolioInstrument>, 
 ///
 /// 3. Building efficient frontier (Using Sharpe ratio):
 ///
-///```rust
+/// ```rust
 /// use std::collections::HashMap;
 /// use ndarray::Array1;
 /// use digifi::utilities::TEST_ACCURACY;
@@ -306,7 +309,7 @@ impl Portfolio {
     /// - Returns an error if the assets provided do not have time series of the same length.
     /// - Returns an error if the sum of portfolio weights is not equal to `1` (Subject to `rounding_error_tol`).
     pub fn new(assets: HashMap<String, Asset>, rounding_error_tol: Option<f64>, n_periods: Option<usize>, returns_method: Option<ReturnsMethod>,
-               performance_metric: Box<dyn PortfolioPerformanceMetric>) -> Result<Self, Error> {
+               performance_metric: Box<dyn PortfolioPerformanceMetric>) -> Result<Self, DigiFiError> {
         let rounding_error_tol: f64 = match rounding_error_tol { Some(v) => v, None => 0.001 };
         let mut assets_: Vec<AssetHistData> = Vec::<AssetHistData>::new();
         let mut assets_names: Vec<String> = Vec::<String>::new();
@@ -319,7 +322,7 @@ impl Portfolio {
             match time_series_len {
                 Some(l) => {
                     if v.hist_data.get_n_datapoints() != l {
-                        return Err(input_error("Portfolio: The assets provided do not have time series of the same length."));
+                        return Err(DigiFiError::ValidationError { title: "Portfolio".to_owned(), details: "The assets provided do not have time series of the same length.".to_owned(), });
                     }
                 },
                 None => { time_series_len = Some(v.hist_data.get_n_datapoints()); },
@@ -336,6 +339,18 @@ impl Portfolio {
     }
 
     /// # Description
+    /// Returns the names of the assets in portfolio.
+    pub fn assets_names(&self) -> &Vec<String> {
+        &self.assets_names
+    }
+
+    /// # Description
+    /// Returns the historical asset data for every asset in the portfolio.
+    pub fn assets(&self) -> &Vec<AssetHistData> {
+        &self.assets
+    }
+
+    /// # Description
     /// Validates the weights of the portfolio, and cleans them (i.e., makes the sum of weights equal to `1`) if the dicrepancy
     /// between the weights and 1 is less than the `rounding_error_tol`.
     ///
@@ -345,14 +360,14 @@ impl Portfolio {
     ///
     /// # Errors
     /// - Returns an error if the sum of portfolio weights is not equal to 1 (Subject to `rounding_error_tol`).
-    fn validate_and_clean_weights(weights: &mut Vec<f64>, rounding_error_tol: f64) -> Result<(), Error> {
+    fn validate_and_clean_weights(weights: &mut Vec<f64>, rounding_error_tol: f64) -> Result<(), DigiFiError> {
         let mut cumsum: f64 = 0.0;
         for w in weights.iter() {
             cumsum += *w;
         }
         let diff: f64 = cumsum - 1.0;
         if rounding_error_tol < diff.abs() {
-            return Err(data_error("Portfolio: The sum of protfolio weights is not equal to 1."))
+            return Err(DigiFiError::ValidationError { title: "Portfolio".to_owned(), details: "The sum of protfolio weights is not equal to `1`.".to_owned(), });
         }
         weights[0] = weights[0] + diff;
         Ok(())
@@ -377,9 +392,9 @@ impl Portfolio {
     /// # Errors
     /// - Returns an error if the number of weights does not match the number of assets.
     /// - Rerutns an error if the sum of portfolio weights is not equal to 1 (Subject to `rounding_error_tol`).
-    pub fn change_weights(&mut self, mut new_weights: Vec<f64>) -> Result<(), Error> {
+    pub fn change_weights(&mut self, mut new_weights: Vec<f64>) -> Result<(), DigiFiError> {
         if self.assets.len() != new_weights.len() {
-            return Err(input_error("Portfolio: The number of weights does not match the number of assets."));
+            return Err(DigiFiError::ValidationError { title: "Portfolio".to_owned(), details: "The number of weights does not match the number of assets.".to_owned() });
         }
         Portfolio::validate_and_clean_weights(&mut new_weights, self.rounding_error_tol)?;
         self.weights = new_weights;
@@ -397,7 +412,7 @@ impl Portfolio {
     /// # Errors
     /// - Returns an error if the weight is infinite or `NAN`.
     /// - Returns an error if the assets provided do not have time series of the same length.
-    pub fn add_assets(&mut self, new_assets: HashMap<String, Asset>) -> Result<(), Error> {
+    pub fn add_assets(&mut self, new_assets: HashMap<String, Asset>) -> Result<(), DigiFiError> {
         let mut new_assets_names: Vec<String> = Vec::<String>::new();
         let mut new_hist_data: Vec<AssetHistData> = Vec::<AssetHistData>::new();
         let time_series_len: usize = self.assets[0].get_n_datapoints();
@@ -406,7 +421,7 @@ impl Portfolio {
             v.validate()?;
             // Validation of the asset (dependend of other assets)
             if v.hist_data.get_n_datapoints() != time_series_len {
-                return Err(input_error("Portfolio: The assets provided do not have time series of the same length."));
+                return Err(DigiFiError::ValidationError { title: "Portfolio".to_owned(), details: "The assets provided do not have time series of the same length.".to_owned(), });
             }
             // Generation of data for portfolio
             new_assets_names.push(k);
@@ -428,7 +443,7 @@ impl Portfolio {
     ///
     /// # Input
     /// - `assets_names`: Names/labels of the assets to remove
-    pub fn remove_assets(&mut self, assets_names: Vec<String>) -> Result<(), Error> {
+    pub fn remove_assets(&mut self, assets_names: Vec<String>) -> Result<(), DigiFiError> {
         for label in assets_names {
             let mut index: Option<usize> = None;
             for i in 0..self.assets_names.len() {
@@ -466,7 +481,7 @@ impl Portfolio {
         let mut returns: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
         for a in &self.assets {
             let extra_returns: Array1<f64> = Portfolio::predictable_income_to_return(&a.price_array, &a.predictable_income);
-            returns.push(prices_to_returns(&a.price_array) + extra_returns);
+            returns.push(prices_to_returns(&a.price_array, &ReturnsTransformation::Arithmetic) + extra_returns);
         }
         match asset_returns_type {
             AssetReturnsType::ReturnsOfAssets => (),
@@ -507,10 +522,10 @@ impl Portfolio {
     ///
     /// # Output
     /// - Mean of the portfolio returns
-    pub fn mean_return(&self) -> Result<f64, Error> {
+    pub fn mean_return(&self) -> Result<f64, DigiFiError> {
         let mut mean: f64 = 0.0;
         for i in 0..self.assets.len() {
-            mean += returns_average(&self.assets[i].price_array, &self.returns_method, self.n_periods)? * self.weights[i];
+            mean += returns_average(&self.assets[i].price_array, &self.returns_method, &ReturnsTransformation::Arithmetic, self.n_periods)? * self.weights[i];
         }
         Ok(mean)
     }
@@ -520,7 +535,7 @@ impl Portfolio {
     ///
     /// # Output
     /// - Covariance of asset returns
-    pub fn covariance(&self) -> Result<Array2<f64>, Box<dyn std::error::Error>> {
+    pub fn covariance(&self) -> Result<Array2<f64>, DigiFiError> {
         let n_assets: usize = self.assets.len();
         let n_periods: f64 = self.n_periods as f64;
         let asset_returns: Vec<Array1<f64>> = self.asset_returns(&AssetReturnsType::ReturnsOfAssets);
@@ -545,7 +560,7 @@ impl Portfolio {
     ///
     /// # Output
     /// - Standard deviavion of the portfolio returns
-    pub fn standard_deviation(&self) -> Result<f64, Box<dyn std::error::Error>> {
+    pub fn standard_deviation(&self) -> Result<f64, DigiFiError> {
         let weights: Array1<f64> = Array1::from_vec(self.weights.clone());
         let cov_matrix: Array2<f64> = self.covariance()?;
         // Standard deviation
@@ -558,7 +573,7 @@ impl Portfolio {
     ///
     /// # Output
     /// - Portfolio performance score
-    pub fn performance(&self) -> Result<f64, Box<dyn std::error::Error>> {
+    pub fn performance(&self) -> Result<f64, DigiFiError> {
         let mean_returns: f64 = self.mean_return()?;
         let std_returns: f64 = self.standard_deviation()?;
         Ok(self.performance_metric.performance(mean_returns, std_returns))
@@ -573,7 +588,7 @@ impl Portfolio {
     ///
     /// # Output
     /// - Portfolio optimization result (i.e., optimized performance score and weights of the protfolio that produce that performance score)
-    pub fn maximize_performance(&mut self, max_iterations: Option<u64>, max_fun_calls: Option<u64>) -> Result<PortfolioOptimizationResult, Box<dyn std::error::Error>> {
+    pub fn maximize_performance(&mut self, max_iterations: Option<u64>, max_fun_calls: Option<u64>) -> Result<PortfolioOptimizationResult, DigiFiError> {
         let initial_guess: Vec<f64> = self.uniform_weights();
         let f = |v: &[f64]| {
             // Weights constraint
@@ -603,7 +618,7 @@ impl Portfolio {
     ///
     /// # Output
     /// - Portfolio optimization result (i.e., optimized performance score and weights of the protfolio that produce minimum standard deviation)
-    pub fn minimize_std(&mut self, max_iterations: Option<u64>, max_fun_calls: Option<u64>) -> Result<PortfolioOptimizationResult, Box<dyn std::error::Error>> {
+    pub fn minimize_std(&mut self, max_iterations: Option<u64>, max_fun_calls: Option<u64>) -> Result<PortfolioOptimizationResult, DigiFiError> {
         let initial_guess: Vec<f64> = self.uniform_weights();
         let f = |v: &[f64]| {
             // Weights constraint
@@ -632,7 +647,7 @@ impl Portfolio {
     ///
     /// # Output
     /// - Portfolio optimization result (i.e., optimized performance score and weights of the protfolio that produce the target return)
-    pub fn efficient_optimization(&mut self, target_return: f64, max_iterations: Option<u64>, max_fun_calls: Option<u64>) -> Result<PortfolioOptimizationResult, Box<dyn std::error::Error>> {
+    pub fn efficient_optimization(&mut self, target_return: f64, max_iterations: Option<u64>, max_fun_calls: Option<u64>) -> Result<PortfolioOptimizationResult, DigiFiError> {
         let initial_guess: Vec<f64> = self.uniform_weights();
         let f = |v: &[f64]| {
             // Weights constraint
@@ -665,7 +680,7 @@ impl Portfolio {
     ///
     /// # Output
     /// - Efficient frontier over the market for a given performance metric
-    pub fn efficient_frontier(&mut self, n_points: usize, max_iterations: Option<u64>, max_fun_calls: Option<u64>) -> Result<EfficientFrontier, Box<dyn std::error::Error>> {
+    pub fn efficient_frontier(&mut self, n_points: usize, max_iterations: Option<u64>, max_fun_calls: Option<u64>) -> Result<EfficientFrontier, DigiFiError> {
         let min_std: PortfolioOptimizationResult = self.minimize_std(max_iterations, max_fun_calls)?;
         let max_performance: PortfolioOptimizationResult = self.maximize_performance(max_iterations, max_fun_calls)?;
         let mut frontier: Vec<PortfolioOptimizationResult> = Vec::<PortfolioOptimizationResult>::new();

@@ -1,22 +1,23 @@
 // Re-Exports
 pub use self::portfolio_performance::{PortfolioPerformanceMetric, SharpeRatio, InformationRatio, TreynorRatio, JensensAlpha, SortinoRatio};
+pub use self::portfolio_taxonomy::PortfolioTaxonomy;
 pub use self::risk_measures::{value_at_risk, expected_shortfall};
 pub use self::utility_functions::{cara, crra};
 pub use self::portfolio_composition::{AssetReturnsType, PortfolioReturnsType, PortfolioOptimizationResult, EfficientFrontier, Asset, generate_portfolio, Portfolio};
 
 
 pub mod portfolio_performance;
-// pub mod portfolio_taxonomy;
+pub mod portfolio_taxonomy;
 pub mod risk_measures;
 pub mod utility_functions;
 pub mod portfolio_composition;
 
 
-use std::io::Error;
 use ndarray::{Array1, s, concatenate, Axis};
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
-use crate::utilities::{compare_array_len, data_error, other_error};
+use crate::error::DigiFiError;
+use crate::utilities::compare_array_len;
 use crate::statistics::covariance;
 
 
@@ -30,7 +31,17 @@ pub enum ReturnsMethod {
 }
 
 
-#[derive(Clone)]
+/// # Description
+/// Transformation applied when computing returns from price series.
+pub enum ReturnsTransformation {
+    /// No transformation is applied and returns are just the percent return from previous period.
+    Arithmetic,
+    /// Log transformation is applied to produce log-returns.
+    LogReturn,
+}
+
+
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Struct with data to be used inside the InstumentsPortfolio.
@@ -54,7 +65,7 @@ impl AssetHistData {
     /// 
     /// # Errors
     /// - Returns an error if the length of `price_array`, `predictable_income` and/or `time_array` do not match.
-    pub fn new(price_array: Array1<f64>, predictable_income: Array1<f64>, time_array: Array1<f64>) -> Result<Self, Error> {
+    pub fn new(price_array: Array1<f64>, predictable_income: Array1<f64>, time_array: Array1<f64>) -> Result<Self, DigiFiError> {
         compare_array_len(&price_array, &predictable_income, "price_array", "predictable_income")?;
         compare_array_len(&price_array, &time_array, "price_array", "time_array")?;
         Ok(AssetHistData { price_array, predictable_income, time_array })
@@ -69,9 +80,9 @@ impl AssetHistData {
     /// 
     /// # Errors
     /// - Returns an error if the index provided is out of bounds for the price array.
-    fn validate_index(&self, index: usize, index_label: &str) -> Result<(), Error> {
+    fn validate_index(&self, index: usize, index_label: &str) -> Result<(), DigiFiError> {
         if self.price_array.len() < index {
-            return Err(data_error(format!("AssetHistData: The argument {} is out of range for price array of length {}.", index_label, self.price_array.len())));
+            return Err(DigiFiError::IndexOutOfRange { title: "AssetHistData".to_owned(), index: index_label.to_owned(), array: "price array".to_owned(), });
         }
         Ok(())
     }
@@ -98,14 +109,14 @@ impl AssetHistData {
     /// 
     /// # Errors
     /// - Returns an error if the index provided is out of bounds for the price array.
-    pub fn get_price(&self, end_index: usize, start_index: Option<usize>) -> Result<Array1<f64>, Error> {
+    pub fn get_price(&self, end_index: usize, start_index: Option<usize>) -> Result<Array1<f64>, DigiFiError> {
         self.validate_index(end_index, "end_index")?;
         let mut start_index_: usize = 0;
         match start_index {
             Some(index) => {
                 self.validate_index(index, "start_index")?;
                 if end_index <= index {
-                    return Err(data_error("AssetHistData: The argument start_index must be smaller than the end_index"));
+                    return Err(DigiFiError::ParameterConstraint { title: "AssetHistData".to_owned(), constraint: "The argument `start_index` must be smaller than the `end_index`.".to_owned(), });
                 }
                 start_index_ = index;
             },
@@ -131,14 +142,14 @@ impl AssetHistData {
     /// 
     /// # Output
     /// - Historical and/or current predictable income(s)
-    pub fn get_predictable_income(&self, end_index: usize, start_index: Option<usize>) -> Result<Array1<f64>, Error> {
+    pub fn get_predictable_income(&self, end_index: usize, start_index: Option<usize>) -> Result<Array1<f64>, DigiFiError> {
         self.validate_index(end_index, "end_index")?;
         let mut start_index_: usize = 0;
         match start_index {
             Some(index) => {
                 self.validate_index(index, "start_index")?;
                 if end_index <= index {
-                    return Err(data_error("The argument start_index must be smaller than the end_index"));
+                    return Err(DigiFiError::ParameterConstraint { title: "AssetHistData".to_owned(), constraint: "The argument `start_index` must be smaller than the `end_index`.".to_owned(), });
                 }
                 start_index_ = index;
             },
@@ -183,16 +194,20 @@ pub trait PortfolioInstrument {
 /// ```rust
 /// use ndarray::Array1;
 /// use digifi::utilities::TEST_ACCURACY;
-/// use digifi::portfolio_applications::prices_to_returns;
+/// use digifi::portfolio_applications::{prices_to_returns, ReturnsTransformation};
 ///
 /// let price_array: Array1<f64> = Array1::from_vec(vec![100.0, 101.0, 102.0, 101.0, 103.0, 102.0]);
-/// let result: Array1<f64> = prices_to_returns(&price_array);
+/// let result: Array1<f64> = prices_to_returns(&price_array, &ReturnsTransformation::Arithmetic);
 ///
 /// assert!((result - Array1::from_vec(vec![0.0, 0.01, 1.0/101.0, -1.0/102.0, 2.0/101.0, -1.0/103.0])).sum().abs() < TEST_ACCURACY);
-pub fn prices_to_returns(price_array: &Array1<f64>) -> Array1<f64> {
+pub fn prices_to_returns(price_array: &Array1<f64>, returns_transformation: &ReturnsTransformation) -> Array1<f64> {
     let price_diff: Array1<f64> = &price_array.slice(s![1..(price_array.len())]) - &price_array.slice(s![0..(price_array.len()-1)]);
     let returns: Array1<f64> = price_diff / price_array.slice(s![0..(price_array.len()-1)]);
-    concatenate![Axis(0), Array1::from_vec(vec![0.0]), returns]
+    let arithmetic_returns: Array1<f64> = concatenate![Axis(0), Array1::from_vec(vec![0.0]), returns];
+    match returns_transformation {
+        ReturnsTransformation::Arithmetic => arithmetic_returns,
+        ReturnsTransformation::LogReturn => arithmetic_returns.map(|v| (v + 1.0).ln() ),
+    }
 }
 
 
@@ -206,11 +221,11 @@ pub fn prices_to_returns(price_array: &Array1<f64>) -> Array1<f64> {
 /// 
 /// # Output
 /// - Average return over a certain period
-pub fn returns_average(price_array: &Array1<f64>, method: &ReturnsMethod, n_periods: usize) -> Result<f64, Error> {
-    let returns: Array1<f64> = prices_to_returns(price_array);
+pub fn returns_average(price_array: &Array1<f64>, method: &ReturnsMethod, returns_transformation: &ReturnsTransformation, n_periods: usize) -> Result<f64, DigiFiError> {
+    let returns: Array1<f64> = prices_to_returns(price_array, returns_transformation);
     match method {
         ReturnsMethod::ImpliedAverageReturn => {
-            Ok((1.0 + returns.mean().ok_or(other_error("Could not compute the mean of the returns."))?).powi(n_periods as i32) - 1.0)
+            Ok((1.0 + returns.mean().ok_or(DigiFiError::MeanCalculation { title: "Returns Average".to_owned(), series: "returns".to_owned(), })?).powi(n_periods as i32) - 1.0)
         },
         ReturnsMethod::EstimatedFromTotalReturn => {
             let returns_len: f64 = returns.len() as f64;
@@ -229,8 +244,8 @@ pub fn returns_average(price_array: &Array1<f64>, method: &ReturnsMethod, n_peri
 /// 
 /// # Output
 /// - Standard deviation of returns over a certain period
-pub fn returns_std(price_array: &Array1<f64>, n_periods: usize) -> Result<f64, Error> {
-    let returns: Array1<f64> = prices_to_returns(price_array);
+pub fn returns_std(price_array: &Array1<f64>, returns_transformation: &ReturnsTransformation, n_periods: usize) -> Result<f64, DigiFiError> {
+    let returns: Array1<f64> = prices_to_returns(price_array, returns_transformation);
     let returns_std: f64 = covariance(&returns, &returns, 0)?.sqrt();
     Ok(returns_std * (n_periods as f64).sqrt())
 }
@@ -245,8 +260,8 @@ pub fn returns_std(price_array: &Array1<f64>, n_periods: usize) -> Result<f64, E
 /// 
 /// # Output
 /// - Variance of returns over a certain period
-pub fn returns_variance(price_array: &Array1<f64>, n_periods: usize) -> Result<f64, Error> {
-    let returns: Array1<f64> = prices_to_returns(price_array);
+pub fn returns_variance(price_array: &Array1<f64>, returns_transformation: &ReturnsTransformation, n_periods: usize) -> Result<f64, DigiFiError> {
+    let returns: Array1<f64> = prices_to_returns(price_array, returns_transformation);
     Ok(covariance(&returns, &returns, 0)? * (n_periods as f64))
 }
 
@@ -258,9 +273,9 @@ mod tests {
 
     #[test]
     fn unit_test_prices_to_returns() -> () {
-        use crate::portfolio_applications::prices_to_returns;
+        use crate::portfolio_applications::{prices_to_returns, ReturnsTransformation};
         let price_array: Array1<f64> = Array1::from_vec(vec![100.0, 101.0, 102.0, 101.0, 103.0, 102.0]);
-        let result: Array1<f64> = prices_to_returns(&price_array);
+        let result: Array1<f64> = prices_to_returns(&price_array, &ReturnsTransformation::Arithmetic);
         assert!((result - Array1::from_vec(vec![0.0, 0.01, 1.0/101.0, -1.0/102.0, 2.0/101.0, -1.0/103.0])).sum().abs() < TEST_ACCURACY);
     }
 }

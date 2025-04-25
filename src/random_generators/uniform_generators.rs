@@ -1,8 +1,9 @@
-use std::io::Error;
 use ndarray::{Array1, Axis};
+use crate::error::DigiFiError;
 use crate::random_generators::{RandomGenerator, generate_seed};
 
 
+#[derive(Debug)]
 /// # Description
 /// Pseudo-random number generator for uniform distribution.
 /// 
@@ -60,7 +61,7 @@ impl RandomGenerator<LinearCongruentialGenerator> for LinearCongruentialGenerato
     /// 
     /// # Input
     /// - `sample_size`: Number of pseudo-random numbers to generate
-    fn new_shuffle(sample_size: usize) -> Result<Self, Error> {
+    fn new_shuffle(sample_size: usize) -> Result<Self, DigiFiError> {
         let seed: u32 = generate_seed()?;
         let m: u32 = (seed * 1_234) as u32;
         let a: u32 = (seed as f64 / 10.0) as u32;
@@ -73,7 +74,7 @@ impl RandomGenerator<LinearCongruentialGenerator> for LinearCongruentialGenerato
     /// 
     /// # Output
     /// - An array pseudo-random numbers following Uniform distribution
-    fn generate(&self) -> Result<Array1<f64>, Error> {
+    fn generate(&self) -> Result<Array1<f64>, DigiFiError> {
         let mut u: Array1<f64> = Array1::from_vec(vec![0.0; self.sample_size + 1]);
         u[0] = self.seed as f64;
         let a: f64 = self.a as f64;
@@ -88,6 +89,7 @@ impl RandomGenerator<LinearCongruentialGenerator> for LinearCongruentialGenerato
 }
 
 
+#[derive(Debug)]
 /// # Description
 /// Pseudo-random number generator for uniform distribution.
 /// 
@@ -159,7 +161,7 @@ impl RandomGenerator<FibonacciGenerator> for FibonacciGenerator {
     /// 
     /// # Input
     /// - `sample_size`: Number of pseudo-random numbers to generate
-    fn new_shuffle(sample_size: usize) -> Result<Self, Error> {
+    fn new_shuffle(sample_size: usize) -> Result<Self, DigiFiError> {
         let seed: u32 = generate_seed()?;
         let m: u32 = (seed * 1_234) as u32;
         let a: u32 = (seed as f64 / 10.0) as u32;
@@ -172,7 +174,7 @@ impl RandomGenerator<FibonacciGenerator> for FibonacciGenerator {
     /// 
     /// # Output
     /// - An array pseudo-random numberss following Uniform distribution
-    fn generate(&self) -> Result<Array1<f64>, Error> {
+    fn generate(&self) -> Result<Array1<f64>, DigiFiError> {
         let mut u: Array1<f64> = Array1::from_vec(vec![0.0; self.sample_size + 1]);
         u[0] = self.seed as f64;
         let a: f64 = self.a as f64;

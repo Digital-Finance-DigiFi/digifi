@@ -11,17 +11,17 @@ pub mod standard_normal_generators;
 pub mod uniform_generators;
 
 
-use std::io::{Error, ErrorKind};
 use std::time::{SystemTime, UNIX_EPOCH};
 use ndarray::Array1;
 #[cfg(feature = "plotly")]
 use plotly::{Plot, Histogram, Scatter, Scatter3D, common::Mode, traces::histogram::HistNorm};
+use crate::error::DigiFiError;
 
 
 pub trait RandomGenerator<T> {
-    fn new_shuffle(sample_size: usize) -> Result<T, Error>;
+    fn new_shuffle(sample_size: usize) -> Result<T, DigiFiError>;
 
-    fn generate(&self) -> Result<Array1<f64>, Error>;
+    fn generate(&self) -> Result<Array1<f64>, DigiFiError>;
 }
 
 
@@ -38,17 +38,9 @@ pub trait RandomGenerator<T> {
 ///
 /// assert!(seed_1 != seed_2);
 /// ```
-pub fn generate_seed () -> Result<u32, Error> {
+pub fn generate_seed () -> Result<u32, DigiFiError> {
     let start: SystemTime = SystemTime::now();
-    let delta: f64;
-    match start.duration_since(UNIX_EPOCH) {
-        Ok(duration) => {
-            delta = duration.subsec_nanos() as f64
-        },
-        Err(e) => {
-            return Err(Error::new(ErrorKind::Other, e.to_string()));
-        },
-    }
+    let delta: f64 = start.duration_since(UNIX_EPOCH)?.subsec_nanos() as f64;
     // Drop the first two digits and last two digits from delta
     let delta: u32 = (delta / 100.0) as u32;
     let remainder: u32 = delta.rem_euclid(100_000);

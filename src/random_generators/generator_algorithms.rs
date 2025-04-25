@@ -1,5 +1,5 @@
-use std::io::Error;
 use ndarray::Array1;
+use crate::error::DigiFiError;
 use crate::statistics::ProbabilityDistribution;
 use crate::statistics::continuous_distributions::NormalDistribution;
 use crate::utilities::compare_array_len;
@@ -27,7 +27,7 @@ use crate::random_generators::{RandomGenerator, uniform_generators::{LinearCongr
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Rejection_sampling>
 /// - Original Source: N/A
 pub fn accept_reject(f_x: &impl ProbabilityDistribution, g_x : &impl ProbabilityDistribution, y_sample: &Array1<f64>,
-                            m: f64, uniform_sample: &Array1<f64>) -> Result<Array1<f64>, Error> {
+                            m: f64, uniform_sample: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
     let g: Array1<f64> = g_x.pdf(y_sample)?;
     let f: Array1<f64> = f_x.pdf(y_sample)?;
     compare_array_len(&g, &f, "g", "f")?;
@@ -60,7 +60,7 @@ pub fn accept_reject(f_x: &impl ProbabilityDistribution, g_x : &impl Probability
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Inverse_transform_sampling>
 /// - Original SOurce: N/A
-pub fn inverse_transform(f_x: &impl ProbabilityDistribution, sample_size: usize) -> Result<Array1<f64>, Error> {
+pub fn inverse_transform(f_x: &impl ProbabilityDistribution, sample_size: usize) -> Result<Array1<f64>, DigiFiError> {
     let u: Array1<f64> = FibonacciGenerator::new_shuffle(sample_size)?.generate()?;
     f_x.inverse_cdf(&u)
 }
@@ -109,7 +109,7 @@ pub fn box_muller(uniform_sample_1: &Array1<f64>, unfiform_sample_2: &Array1<f64
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Marsaglia_polar_method>
 /// - Original Source: <https://doi.org/10.1137%2F1006063>
-pub fn marsaglia(max_iterations: usize) -> Result<Option<(f64, f64)>, Error> {
+pub fn marsaglia(max_iterations: usize) -> Result<Option<(f64, f64)>, DigiFiError> {
     let w_1: Array1<f64> = 2.0 * FibonacciGenerator::new_shuffle(max_iterations)?.generate()? - 1.0;
     let w_2: Array1<f64> = 2.0 * FibonacciGenerator::new_shuffle(max_iterations)?.generate()? - 1.0;
     let mut i: usize = 0;
@@ -141,7 +141,7 @@ pub fn marsaglia(max_iterations: usize) -> Result<Option<(f64, f64)>, Error> {
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Ziggurat_algorithm>
 /// - Original Source: <https://doi.org/10.1145/1464291.1464310>
-pub fn ziggurat(x_guess: &Array1<f64>, sample_size: usize, max_iterations: usize) -> Result<Array1<f64>, Error> {
+pub fn ziggurat(x_guess: &Array1<f64>, sample_size: usize, max_iterations: usize) -> Result<Array1<f64>, DigiFiError> {
     let normal_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0)?;
     let y: Array1<f64> = normal_dist.pdf(&x_guess)?;
     let mut z: Array1<f64> = Array1::from_vec(vec![1.0; sample_size]);

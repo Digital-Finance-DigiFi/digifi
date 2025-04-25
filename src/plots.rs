@@ -7,10 +7,10 @@ pub use crate::stochastic_processes::plot_stochastic_paths;
 pub use crate::technical_indicators::{plot_moving_average, plot_macd, plot_bollinger_bands, plot_rsi, plot_adx, plot_obv};
 
 
-use std::io::Error;
 use ndarray::Array1;
 use plotly::{Plot, Bar, Candlestick, Layout, layout::{Axis, RangeSlider}};
-use crate::utilities::{compare_array_len, input_error};
+use crate::error::DigiFiError;
+use crate::utilities::compare_array_len;
 
 
 /// # Description
@@ -50,12 +50,12 @@ use crate::utilities::{compare_array_len, input_error};
 ///     plot.show();
 /// }
 /// ```
-pub fn plot_candlestick_chart(open: &Array1<f64>, high: &Array1<f64>, low: &Array1<f64>, close: &Array1<f64>, times: &Vec<String>) -> Result<Plot, Error> {
+pub fn plot_candlestick_chart(open: &Array1<f64>, high: &Array1<f64>, low: &Array1<f64>, close: &Array1<f64>, times: &Vec<String>) -> Result<Plot, DigiFiError> {
     compare_array_len(&open, &high, "open", "high")?;
     compare_array_len(&open, &low, "open", "low")?;
     compare_array_len(&open, &close, "open", "close")?;
     if open.len() != times.len() {
-        return Err(input_error("Plot Candlestick Chart: The length of time vector does not match the lengths of price arrays."))
+        return Err(DigiFiError::UnmatchingLength { array_1: "times".to_owned(), array_2: "open price".to_owned(), });
     }
     // Candlestick chart
     let mut plot: Plot = Plot::new();
@@ -102,9 +102,9 @@ pub fn plot_candlestick_chart(open: &Array1<f64>, high: &Array1<f64>, low: &Arra
 ///     plot.show();
 /// }
 /// ```
-pub fn plot_volume(volume: &Array1<f64>, times: &Vec<String>) -> Result<Plot, Error> {
+pub fn plot_volume(volume: &Array1<f64>, times: &Vec<String>) -> Result<Plot, DigiFiError> {
     if volume.len() != times.len() {
-        return Err(input_error("Plot Volume: The length of time vector does not match the length of the volume array."));
+        return Err(DigiFiError::UnmatchingLength { array_1: "times".to_owned(), array_2: "volume".to_owned(), });
     }
     let mut plot: Plot = Plot::new();
     plot.add_trace(Bar::new(times.clone(), volume.to_vec()));

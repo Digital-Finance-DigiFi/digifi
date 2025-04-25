@@ -7,8 +7,8 @@ pub mod stochastic_drift_components;
 pub mod sde_components;
 
 
-use std::io::Error;
 use ndarray::Array1;
+use crate::error::DigiFiError;
 use crate::stochastic_processes::StochasticProcess;
 
 
@@ -144,7 +144,7 @@ impl SDE {
     /// - `diffusion_component`: Type of function \\sigma(S_{t}, t) to be used when constructing the diffusion
     /// - `noise`: Type of noise to be used when constructing the diffusion
     /// - `jump`: Type of function dJ to be used when constructing the jump
-    pub fn new(t_f: f64, s_0: f64, n_steps: usize, n_paths: usize, drift_component: SDEComponent, diffusion_component: SDEComponent, noise: Noise, jump: Jump) -> Result<Self, Error> {
+    pub fn new(t_f: f64, s_0: f64, n_steps: usize, n_paths: usize, drift_component: SDEComponent, diffusion_component: SDEComponent, noise: Noise, jump: Jump) -> Result<Self, DigiFiError> {
         // Input validation
         drift_component.validate(n_paths)?;
         diffusion_component.validate(n_paths)?;
@@ -175,7 +175,7 @@ impl StochasticProcess for SDE {
     ///
     /// # Output
     /// - An array of random paths
-    fn get_paths(&self) -> Result<Vec<Array1<f64>>, Error> {
+    fn get_paths(&self) -> Result<Vec<Array1<f64>>, DigiFiError> {
         let mut time_steps: Vec<Array1<f64>> = vec![Array1::from_vec(vec![self.s_0; self.n_paths])];
         for i in 1..self.t.len() {
             let mut time_slice: Array1<f64> = self.drift_component.get_component_values(self.n_paths, &time_steps[time_steps.len() - 1], self.t[i], self.dt)? * self.dt
@@ -264,7 +264,7 @@ impl StochasticDrift {
     /// - `n_paths`: Number of paths to return
     /// - `stochastic_drift_type`: Type of stochastic drift
     /// - `error`: Type of error function to be used in the construction of an error term
-    pub fn new(t_f: f64, n_steps: usize, n_paths: usize, stochastic_drift_type: StochasticDriftType, error: StationaryError) -> Result<Self, Error> {
+    pub fn new(t_f: f64, n_steps: usize, n_paths: usize, stochastic_drift_type: StochasticDriftType, error: StationaryError) -> Result<Self, DigiFiError> {
         // Input validation
         match &stochastic_drift_type {
             StochasticDriftType::TrendStationary { trend, .. } => { trend.validate(n_paths)?; },
@@ -296,7 +296,7 @@ impl StochasticProcess for StochasticDrift {
     ///
     /// # Output
     /// - An array of random paths
-    fn get_paths(&self) -> Result<Vec<Array1<f64>>, Error> {
+    fn get_paths(&self) -> Result<Vec<Array1<f64>>, DigiFiError> {
         let mut time_steps: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
         match &self.stochastic_drift_type {
             StochasticDriftType::TrendStationary { trend, s_0 } => {

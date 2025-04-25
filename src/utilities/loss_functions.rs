@@ -1,5 +1,5 @@
-use std::io::Error;
 use ndarray::Array1;
+use crate::error::DigiFiError;
 use crate::utilities::compare_array_len;
 
 
@@ -27,7 +27,7 @@ pub trait LossFunction {
     ///
     /// # Output
     /// - An array of errors/losses
-    fn loss_array(&self, observed_values: &Array1<f64>, predicted_values: &Array1<f64>) -> Result<f64, Error>;
+    fn loss_array(&self, observed_values: &Array1<f64>, predicted_values: &Array1<f64>) -> Result<f64, DigiFiError>;
 }
 
 
@@ -60,7 +60,7 @@ impl LossFunction for MAE {
     ///
     /// # Errors
     /// - Returns an error if the lengths of `observed_values` and `predicted_values` do not coincide.
-    fn loss_array(&self, observed_values: &Array1<f64>, predicted_values: &Array1<f64>) -> Result<f64, Error> {
+    fn loss_array(&self, observed_values: &Array1<f64>, predicted_values: &Array1<f64>) -> Result<f64, DigiFiError> {
         compare_array_len(observed_values, predicted_values, "observed_values", "predicted_values")?;
         Ok((observed_values - predicted_values).map(|v| { v.abs() } ).sum() / (observed_values.len() as f64))
     }
@@ -96,7 +96,7 @@ impl LossFunction for MSE {
     ///
     /// # Errors
     /// - Returns an error if the lengths of `observed_values` and `predicted_values` do not coincide.
-    fn loss_array(&self, observed_values: &Array1<f64>, predicted_values: &Array1<f64>) -> Result<f64, Error> {
+    fn loss_array(&self, observed_values: &Array1<f64>, predicted_values: &Array1<f64>) -> Result<f64, DigiFiError> {
         compare_array_len(observed_values, predicted_values, "observed_values", "predicted_values")?;
     Ok((observed_values - predicted_values).map(|v| { v.powi(2) } ).sum() / (observed_values.len() as f64))
     }
@@ -133,7 +133,7 @@ impl LossFunction for StraddleLoss {
     ///
     /// # Errors
     /// - Returns an error if the lengths of `observed_values` and `predicted_values` do not coincide.
-    fn loss_array(&self, observed_values: &Array1<f64>, predicted_values: &Array1<f64>) -> Result<f64, Error> {
+    fn loss_array(&self, observed_values: &Array1<f64>, predicted_values: &Array1<f64>) -> Result<f64, DigiFiError> {
         compare_array_len(observed_values, predicted_values, "observed_values", "predicted_values")?;
         Ok((predicted_values / observed_values).map(|v| { (v - 1.0).abs() + (1.0 - v).abs() } ).sum() / (observed_values.len() as f64))
     }

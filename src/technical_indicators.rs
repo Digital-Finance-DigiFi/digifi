@@ -1,10 +1,10 @@
-use std::{vec, io::Error};
 use ndarray::{Array1, s};
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
 #[cfg(feature = "plotly")]
 use plotly::{Plot, Trace, Scatter, Bar, Layout, common::{Line, color::NamedColor}, layout::Axis};
-use crate::utilities::{compare_array_len, input_error, data_error, other_error};
+use crate::error::DigiFiError;
+use crate::utilities::compare_array_len;
 
 
 /// # Description
@@ -59,11 +59,11 @@ pub fn maximum_drawdown(asset_value: &Array1<f64>) -> f64 {
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Moving_average#Simple_moving_average>
 /// - Original Source: N/A
-pub fn sma(price_array: &Array1<f64>, period: usize) -> Result<Array1<f64>, Error> {
+pub fn sma(price_array: &Array1<f64>, period: usize) -> Result<Array1<f64>, DigiFiError> {
     let mut sma: Vec<f64> = vec![f64::NAN; period - 1];
     let windows = price_array.windows(period).to_owned();
     for window in windows {
-        sma.push(window.mean().ok_or(other_error("SMA: Mean of SMA slice is not computed."))?);
+        sma.push(window.mean().ok_or(DigiFiError::MeanCalculation { title: "SMA".to_owned(), series: "price array slice".to_owned() })?);
     }
     Ok(Array1::from_vec(sma))
 }
@@ -87,10 +87,10 @@ pub fn sma(price_array: &Array1<f64>, period: usize) -> Result<Array1<f64>, Erro
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Moving_average#Exponential_moving_average>
 /// - Original Source: N/A
-pub fn ema(price_array: &Array1<f64>, period: usize, smoothing: i32) -> Result<Array1<f64>, Error> {
+pub fn ema(price_array: &Array1<f64>, period: usize, smoothing: i32) -> Result<Array1<f64>, DigiFiError> {
     let multiplier: f64 = smoothing as f64 / (1.0 + period as f64);
     let mut ema: Vec<f64> = vec![f64::NAN; period - 1];
-    ema.push(price_array.slice(s![0..period]).mean().ok_or(other_error("EMA: Mean of price array slice is not computed."))?);
+    ema.push(price_array.slice(s![0..period]).mean().ok_or(DigiFiError::MeanCalculation { title: "EMA".to_owned(), series: "price array slice".to_owned() })?);
     for i in period..price_array.len() {
         ema.push(price_array[i]*multiplier + ema[i-1]*(1.0-multiplier));
     }
@@ -98,7 +98,7 @@ pub fn ema(price_array: &Array1<f64>, period: usize, smoothing: i32) -> Result<A
 }
 
 
-
+#[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Moving Average Convergence/Divergence (MACD) data.
 pub struct MACD {
@@ -134,9 +134,10 @@ pub struct MACD {
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/MACD>
 /// - Original Source: N/A
-pub fn macd(price_array: &Array1<f64>, small_ema_period: usize, large_ema_period: usize, signal_line: usize, smoothing: i32) -> Result<MACD, Error> {
+pub fn macd(price_array: &Array1<f64>, small_ema_period: usize, large_ema_period: usize, signal_line: usize, smoothing: i32) -> Result<MACD, DigiFiError> {
+    let error_title: String = String::from("MACD");
     if large_ema_period <= small_ema_period {
-        return Err(input_error("MACD: The argument large_ema_period must be bigger than the argument small_ema_period."));
+        return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument large_ema_period must be bigger than the argument small_ema_period.".to_owned(), });
     }
     let signal_line_mult: f64 = smoothing as f64 / (1.0 + signal_line as f64);
     // Small EMA
@@ -148,7 +149,7 @@ pub fn macd(price_array: &Array1<f64>, small_ema_period: usize, large_ema_period
     // Signal Line
     let mut signal_line_: Vec<f64> = vec![f64::NAN; price_array.len()];
     signal_line_[large_ema_period-2+signal_line] = macd.slice(s![large_ema_period-1..large_ema_period-1+signal_line]).mean()
-                                                       .ok_or(other_error("MACD: Mean of MACD slice is not computed."))?;
+        .ok_or(DigiFiError::MeanCalculation { title: error_title.clone(), series: "price array slice".to_owned(), })?;
     for i in (large_ema_period-1+signal_line)..small_ema.len() {
         signal_line_[i] = macd[i]*signal_line_mult + signal_line_[i-1]*(1.0-signal_line_mult);
     }
@@ -159,6 +160,7 @@ pub fn macd(price_array: &Array1<f64>, small_ema_period: usize, large_ema_period
 }
 
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Bollinger Band data.
 pub struct BollingerBands {
@@ -188,7 +190,7 @@ pub struct BollingerBands {
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Bollinger_Bands>
 /// - Original Source: N/A
-pub fn bollinger_bands(price_array: &Array1<f64>, period: usize, n_std: i32) -> Result<BollingerBands, Error> {
+pub fn bollinger_bands(price_array: &Array1<f64>, period: usize, n_std: i32) -> Result<BollingerBands, DigiFiError> {
     let sma: Array1<f64> = sma(price_array, period)?;
     let mut deviation:Vec<f64> = vec![f64::NAN; period - 1];
     let windows = price_array.windows(period).to_owned();
@@ -202,6 +204,7 @@ pub fn bollinger_bands(price_array: &Array1<f64>, period: usize, n_std: i32) -> 
 }
 
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Relative Strength Index (RSI) data.
 pub struct RSI {
@@ -244,7 +247,8 @@ pub struct RSI {
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Relative_strength_index>
 /// - Original Source: N/A
-pub fn rsi(price_array: &Array1<f64>, period: usize, oversold_band: f64, overbought_band: f64) -> Result<RSI, Error> {
+pub fn rsi(price_array: &Array1<f64>, period: usize, oversold_band: f64, overbought_band: f64) -> Result<RSI, DigiFiError> {
+    let error_title: String = String::from("RSI");
     let price_array_length: usize = price_array.len();
     let mut u: Vec<f64> = vec![0.0; price_array_length];
     let mut d: Vec<f64> = vec![0.0; price_array_length];
@@ -261,8 +265,10 @@ pub fn rsi(price_array: &Array1<f64>, period: usize, oversold_band: f64, overbou
     let u: Array1<f64> = Array1::from_vec(u);
     let d: Array1<f64> = Array1::from_vec(d);
     // U SMMA and D SMMA
-    u_smma[period] = u.slice(s![1..period+1]).mean().ok_or(other_error("RSI: Mean of U slice is not computed."))?;
-    d_smma[period] = d.slice(s![1..period+1]).mean().ok_or(other_error("RSI: Mean of D slice is not computed."))?;
+    u_smma[period] = u.slice(s![1..period+1]).mean()
+        .ok_or(DigiFiError::MeanCalculation { title: error_title.clone(), series: "U slice".to_owned(), })?;
+    d_smma[period] = d.slice(s![1..period+1]).mean()
+        .ok_or(DigiFiError::MeanCalculation { title: error_title.clone(), series: "D slice".to_owned(), })?;
     for i in (period+1)..price_array_length {
         u_smma[i] = (u_smma[i-1]*(period as f64 - 1.0) + u[i]) / period as f64;
         d_smma[i] = (d_smma[i-1]*(period as f64 - 1.0) + d[i]) / period as f64;
@@ -278,6 +284,7 @@ pub fn rsi(price_array: &Array1<f64>, period: usize, oversold_band: f64, overbou
 }
 
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Average Directional Index (ADX) data.
 pub struct ADX {
@@ -320,12 +327,14 @@ pub struct ADX {
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Average_directional_movement_index>
 /// - Original Source: N/A
-pub fn adx(high_price: &Array1<f64>, low_price: &Array1<f64>, close_price: &Array1<f64>, period: usize, benchmark: f64) -> Result<ADX, Error> {
+pub fn adx(high_price: &Array1<f64>, low_price: &Array1<f64>, close_price: &Array1<f64>, period: usize, benchmark: f64) -> Result<ADX, DigiFiError> {
+    let error_title: String = String::from("ADX");
     compare_array_len(close_price, high_price, "close_price", "high_price")?;
     compare_array_len(close_price, low_price, "close_price", "low_price")?;
     let price_array_length = close_price.len();
     if price_array_length < (2*period + 1) {
-        return Err(data_error("ADX: The argument period must be defined such that the length of price array is smaller than (2*period + 1)."));
+        return Err(DigiFiError::ParameterConstraint { title: error_title.clone(),
+            constraint: "The argument period must be defined such that the length of price array is smaller than (2*period + 1).".to_owned(), });
     }
     let mut pdm: Vec<f64> = vec![0.0; price_array_length];
     let mut mdm: Vec<f64> = vec![0.0; price_array_length];
@@ -352,14 +361,17 @@ pub fn adx(high_price: &Array1<f64>, low_price: &Array1<f64>, close_price: &Arra
     let mdm: Array1<f64> = Array1::from_vec(mdm);
     let tr: Array1<f64> = Array1::from_vec(tr);
     // ATR
-    atr[period-1] = tr.slice(s![0..period]).mean().ok_or(other_error("ADX: Mean of TR slice is not computed."))?;
+    atr[period-1] = tr.slice(s![0..period]).mean()
+        .ok_or(DigiFiError::MeanCalculation { title: error_title.clone(), series: "TR slice".to_owned(), })?;
     for i in period..price_array_length {
         atr[i] = (atr[i-1] * (period as f64 - 1.0) + tr[i]) / period as f64;
     }
     let atr: Array1<f64> = Array1::from_vec(atr);
     // +DM SMMA and -DM SMMA
-    pdm_smma[period] = pdm.slice(s![1..period+1]).mean().ok_or(other_error("ADX: Mean of +DM slice is not computed."))?;
-    mdm_smma[period] = mdm.slice(s![1..period+1]).mean().ok_or(other_error("ADX: Mean of -DM slice is not computed."))?;
+    pdm_smma[period] = pdm.slice(s![1..period+1]).mean()
+        .ok_or(DigiFiError::MeanCalculation { title: error_title.clone(), series: "+DM slice".to_owned(), })?;
+    mdm_smma[period] = mdm.slice(s![1..period+1]).mean()
+        .ok_or(DigiFiError::MeanCalculation { title: error_title.clone(), series: "-DM slice".to_owned(), })?;
     for i in (period+1)..price_array_length {
         pdm_smma[i] = (pdm_smma[i-1] * (period as f64 - 1.0) + pdm[i]) / period as f64;
         mdm_smma[i] = (mdm_smma[i-1] * (period as f64 - 1.0) + mdm[i]) / period as f64;
@@ -372,7 +384,8 @@ pub fn adx(high_price: &Array1<f64>, low_price: &Array1<f64>, close_price: &Arra
     // |+DI - -DI|
     let abs_pdi_mdi: Array1<f64> = (&pdi - &mdi).map(| i | i.abs());
     // ADX
-    adx[2*period] = abs_pdi_mdi.slice(s![period..(2*period + 1)]).mean().ok_or(other_error("ADX: Mean of |+DI - -DI| slice is not computed."))?;
+    adx[2*period] = abs_pdi_mdi.slice(s![period..(2*period + 1)]).mean()
+        .ok_or(DigiFiError::MeanCalculation { title: error_title.clone(), series: "|+DI - -DI| slice".to_owned(), })?;
     for i in (2*period + 1)..price_array_length {
         adx[i] = (adx[i-1] * (period as f64 - 1.0) + abs_pdi_mdi[i]) / period as f64;
     }
@@ -397,7 +410,7 @@ pub fn adx(high_price: &Array1<f64>, low_price: &Array1<f64>, close_price: &Arra
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/On-balance_volume>
 /// - Original Source: N/A
-pub fn obv(close_price: &Array1<f64>, volume: &Array1<f64>) -> Result<Array1<f64>, Error> {
+pub fn obv(close_price: &Array1<f64>, volume: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
     compare_array_len(close_price, volume, "close_price", "volume")?;
     let price_array_len = close_price.len();
     let mut obv: Vec<f64> = vec![0.0; price_array_len];

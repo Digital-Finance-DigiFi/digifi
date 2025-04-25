@@ -1,8 +1,7 @@
-use std::io::Error;
 use ndarray::Array1;
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
-use crate::utilities::input_error;
+use crate::error::DigiFiError;
 use crate::random_generators::RandomGenerator;
 use crate::stochastic_processes::StochasticProcess;
 use crate::random_generators::{uniform_generators::FibonacciGenerator, standard_normal_generators::StandardNormalInverseTransform};
@@ -10,6 +9,7 @@ use crate::statistics::discrete_distributions::PoissonDistribution;
 use crate::random_generators::generator_algorithms::inverse_transform;
 
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 // # Description
 /// Model describes stock price with continuous movement that have rare large jumps.
@@ -135,7 +135,7 @@ impl StochasticProcess for MertonJumpDiffusionProcess {
     /// 
     /// # LaTeX Formula
     /// - S_{t} = (\\mu-0.5*\\sigma^2)*t + \\sigma*W_{t} + sum_{i=1}^{N(t)} Z_{i}
-    fn get_paths(&self) -> Result<Vec<Array1<f64>>, Error> {
+    fn get_paths(&self) -> Result<Vec<Array1<f64>>, DigiFiError> {
         let mut paths: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
         let poisson_dist: PoissonDistribution = PoissonDistribution::new(self.lambda_j * self.dt)?;
         for _ in 0..self.n_paths {
@@ -157,6 +157,7 @@ impl StochasticProcess for MertonJumpDiffusionProcess {
 }
 
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 // # Description
 /// Model describes stock price with continuous movement that have rare large jumps, with the jump sizes following a double exponential distribution.
@@ -238,9 +239,9 @@ impl KouJumpDiffusionProcess {
     ///
     /// # Errors
     /// - Returns an error if the argument `p` is not in the range \[0,1\].
-    pub fn new(mu: f64, sigma: f64, lambda_n: f64, eta_1: f64, eta_2: f64, p: f64, n_paths: usize, n_steps: usize, t_f: f64, s_0: f64) -> Result<Self, Error> {
+    pub fn new(mu: f64, sigma: f64, lambda_n: f64, eta_1: f64, eta_2: f64, p: f64, n_paths: usize, n_steps: usize, t_f: f64, s_0: f64) -> Result<Self, DigiFiError> {
         if (p < 0.0) || (1.0 < p) {
-            return Err(input_error("Kou Jump-Diffusion Process: The argument p must be in the range [0,1]."));
+            return Err(DigiFiError::ParameterConstraint { title: "Kou Jump-Diffusion Process".to_owned(), constraint: "The argument `p` must be in the range `[0,1]`.".to_owned(), });
         }
         let dt: f64 = t_f / (n_steps as f64);
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
@@ -295,7 +296,7 @@ impl StochasticProcess for KouJumpDiffusionProcess {
     /// - dS_{t} = \\mu*dt + \\sigma*dW_{t} + d(sum_{i=1}^{N(t)}(V_{i}-1))\n
     /// where V_{i} is i.i.d. non-negative random variables such that Y = log(V) is the assymetric double exponential distribution with density:\n
     /// - f_{Y}(y) = p*\\eta_{1}*e^{-\\eta_{1}y}\mathbb{1}_{0\\leq y} + (1-p)*\\eta_{2}*e^{\\eta_{2}y}\mathbb{1}_{y<0}
-    fn get_paths(&self) -> Result<Vec<Array1<f64>>, Error> {
+    fn get_paths(&self) -> Result<Vec<Array1<f64>>, DigiFiError> {
         let mut paths: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
         let poisson_dist: PoissonDistribution = PoissonDistribution::new(self.lambda_n * self.dt)?;
         for _ in 0..self.n_paths {
