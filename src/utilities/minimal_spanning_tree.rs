@@ -65,7 +65,7 @@ impl MSTDistance {
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize))]
 /// # Description
-/// Node of the minimal-spanning tree (MST).
+/// Node (vertex) of the minimal-spanning tree (MST).
 pub struct MSTNode<'x> {
     /// Name of the node.
     pub name: String,
@@ -79,7 +79,7 @@ pub struct MSTNode<'x> {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize))]
 /// # Description
-/// Vertice of the minimal-spanning tree (MST).
+/// Edge of the minimal-spanning tree (MST).
 pub struct MSTEdge<'a, 'b, 'x> {
     /// Node of the graph.
     pub node_1: &'a MSTNode<'x>,
