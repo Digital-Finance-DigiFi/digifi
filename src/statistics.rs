@@ -1,10 +1,12 @@
 // Re-Exports
 pub use self::discrete_distributions::{BernoulliDistribution, BinomialDistribution, DiscreteUniformDistribution, PoissonDistribution};
 pub use self::continuous_distributions::{ContinuousUniformDistribution, NormalDistribution, ExponentialDistribution, LaplaceDistribution, GammaDistribution};
+pub use self::stat_tests::{ADFConfidence, ADFType, ADFResult, adf};
 
 
 pub mod continuous_distributions;
 pub mod discrete_distributions;
+pub mod stat_tests;
 
 
 use std::ops::Rem;

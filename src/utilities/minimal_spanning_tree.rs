@@ -3,6 +3,7 @@ use std::cmp::Ordering;
 use serde::{Serialize, Deserialize};
 use ndarray::{Array1, Array2};
 use crate::error::DigiFiError;
+use crate::utilities::maths_utils::euclidean_distance;
 use crate::statistics::pearson_correlation;
 use crate::portfolio_applications::{prices_to_returns, ReturnsTransformation};
 
@@ -33,9 +34,6 @@ pub enum MSTDistance {
 }
 
 impl MSTDistance {
-    fn euclidean_distance(v_1: &Array1<f64>, v_2: &Array1<f64>) -> f64 {
-        (v_1 - v_2).map(|v| v.powi(2) ).sum().sqrt()
-    }
 
     fn mantegna_distance(v_1: &Array1<f64>, v_2: &Array1<f64>) -> Result<f64, DigiFiError>  {
         let returns_transformation: ReturnsTransformation = ReturnsTransformation::LogReturn;
@@ -55,7 +53,7 @@ impl MSTDistance {
     /// - Distance between the provided nodes
     pub fn distance(&self, v_1: &Array1<f64>, v_2: &Array1<f64>) -> Result<f64, DigiFiError> {
         match self {
-            MSTDistance::EuclideanDistance => Ok(MSTDistance::euclidean_distance(v_1, v_2)),
+            MSTDistance::EuclideanDistance => Ok(euclidean_distance(v_1, v_2)),
             MSTDistance::MantegnaDistance => MSTDistance::mantegna_distance(v_1, v_2),
         }
     }
@@ -94,6 +92,10 @@ pub struct MSTEdge<'a, 'b, 'x> {
 #[cfg_attr(feature = "serde", derive(Serialize))]
 /// # Description
 /// Minimal-spanning tree algorithm.
+/// 
+/// # Links
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Minimum_spanning_tree>
+/// - Original Source: <https://www.geeksforgeeks.org/kruskals-algorithm-in-python/>
 /// 
 /// # Examples
 ///
@@ -179,19 +181,26 @@ impl<'a, 'b, 'x> MST<'a, 'b, 'x> {
         Ok(())
     }
 
+    /// # Description
+    /// A utility function to find the set of an element `i` (uses path compression technique).
     fn find(&self, parent: &mut Vec<usize>, i: usize) -> usize {
         if parent[i] != i {
+            // Reassignment of node's parent to the root node as path compression requires
             parent[i] = self.find(parent, parent[i])
         }
         parent[i]
     }
 
+    /// # Description
+    /// A function that does the union of two sets of `x` and `y` (uses union by rank).
     fn union(&self, parent: &mut Vec<usize>, rank: &mut Vec<usize>, x: usize, y: usize) -> () {
+        // Attach smaller rank tree under the root of the high rank tree (union by rank)
         if rank[x] < rank[y] {
             parent[x] = y;
         } else if rank[x] > rank[y] {
             parent[y] = x;
         } else {
+            // If ranks are the same, then make one as the root and increment its rank by one
             parent[y] = x;
             rank[x] += 1;
         }
@@ -218,22 +227,25 @@ impl<'a, 'b, 'x> MST<'a, 'b, 'x> {
         } );
         let mut parent: Vec<usize> = Vec::<usize>::new();
         let mut rank: Vec<usize> = Vec::<usize>::new();
+        // Create `n_nodes`` subsets with single elements
         for node in 0..self.n_nodes {
             parent.push(node);
             rank.push(0);
         }
+        // Number of edges to be taken is less than `n_nodes - 1``
         while e < (self.n_nodes - 1) {
             // Picks the smallest edge and inccrements the index for next iteration
             let edge: &MSTEdge<'a, 'b, 'x> = &self.graph[i];
             i += 1;
             let x: usize = self.find(&mut parent, edge.node_1.index);
             let y: usize = self.find(&mut parent, edge.node_2.index);
-            //
+            // If including this edge doesn't cause a cycle, then include it in the result abd increment the index of result for the next edge
             if x != y {
                 e += 1;
                 result.push(edge.clone());
                 self.union(&mut parent, &mut rank, x, y);
             }
+            // Else discard the edge
         }
         self.result = result;
     }

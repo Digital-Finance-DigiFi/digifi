@@ -1,3 +1,6 @@
+use ndarray::{Array1, s};
+use crate::{error::DigiFiError, statistics::n_choose_r};
+
 /// # Description
 /// Method for computing the result of a function.
 pub enum FunctionEvalMethod {
@@ -142,6 +145,74 @@ pub fn erfinv(z: f64, n_terms: usize) -> f64 {
 
 
 /// # Description
+/// The distance between two points in a Euclidean space.
+/// 
+/// # Input
+/// - `v_1`: Coordinate of the first point.
+/// - `v_2`: Coordinate of the second point.
+/// 
+/// # LaTeX Formula
+/// - d(x,y) = \\sqrt{\\sum^{n}_{i=1}(x_{i} - y_{i})^{2}}
+/// 
+/// # Links
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Euclidean_distance>
+/// - Original Source: N/A
+pub fn euclidean_distance(v_1: &Array1<f64>, v_2: &Array1<f64>) -> f64 {
+    (v_1 - v_2).map(|v| v.powi(2) ).sum().sqrt()
+}
+
+
+/// # Description
+/// Differencing in statistics is a transformation applied to a non-stationary time-series in order to make
+/// it trend stationary (i.e., stationary in the mean sense), by removing or subtracting the trend or non-constant mean.
+/// 
+/// # Input
+/// - `v`: Time series to compute the differencing time series from.
+/// - `n`: Order of differencing
+/// 
+/// # LaTeX
+/// - y^{n}_{t} = \\sum^{n}_{i=0}(-1)^{i}{n\\choose i}y_{t-i}
+/// 
+/// # Links
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Autoregressive_integrated_moving_average#Differencing>
+/// - Original Source: N/A
+/// 
+/// # Example
+/// ```rust
+/// use ndarray::Array1;
+/// use digifi::utilities::maths_utils::differencing;
+/// 
+/// let v: Array1<f64> = Array1::from_vec(vec![1.0, 2.0, 3.0, 4.0, 5.0]);
+/// 
+/// assert_eq!(differencing(&v, 1).unwrap(), Array1::from_vec(vec![1.0, 1.0, 1.0, 1.0]));
+/// assert_eq!(differencing(&v, 2).unwrap(), Array1::from_vec(vec![0.0, 0.0, 0.0]));
+/// assert_eq!(differencing(&v, 3).unwrap(), Array1::from_vec(vec![0.0, 0.0]));
+/// ```
+pub fn differencing(v: &Array1<f64>, n: usize) -> Result<Array1<f64>, DigiFiError> {
+    let v_len: usize = v.len();
+    if v_len < n {
+        return Err(DigiFiError::Other { title: "Differencing".to_owned(), details: "The `n` must be smaller than the length of the array `v`.".to_owned(), })
+    }
+    let mut diff: Vec<f64> = Vec::<f64>::new();
+    // Iterate over slices of the time series to compute the time series of differenced values
+    for j in (n..v_len).rev() {
+        if (j as i32 - n as i32) < 0 {
+            continue;
+        }
+        // Cut array and reverse the order of elements so that they are in time descending order (i.e., t, t-1, etc.)
+        let x: Vec<f64> = v.slice(s![(j-n)..(j+1)]).into_iter().map(|v_| *v_ ).rev().collect();
+        let mut d: f64 = 0.0;
+        // Apply differencing (via Binomial expansions for the specific `n`)
+        for i in 0..(n+1) {
+            d += (-1.0_f64).powi(i as i32) * (n_choose_r(n as u128, i as u128)? as f64) * x[i];
+        }
+        diff.insert(0, d);
+    }
+    Ok(Array1::from_vec(diff))
+}
+
+
+/// # Description
 /// Numerical differentiation (symmetric difference quotient) of a function.
 ///
 /// # Input
@@ -254,6 +325,7 @@ pub fn definite_integral<F: Fn(f64) -> f64>(f: F, start: f64, end: f64, n_interv
 
 #[cfg(test)]
 mod tests {
+    use ndarray::Array1;
     use crate::utilities::TEST_ACCURACY;
     use crate::utilities::maths_utils::FunctionEvalMethod;
 
@@ -282,6 +354,15 @@ mod tests {
         use crate::utilities::maths_utils::erfinv;
         let approximation: f64 = erfinv(0.8427007929497149, 100);
         assert!((approximation - 1.0).abs() < TEST_ACCURACY);
+    }
+
+    #[test]
+    fn unit_test_differencing() -> () {
+        use crate::utilities::maths_utils::differencing;
+        let v: Array1<f64> = Array1::from_vec(vec![1.0, 2.0, 3.0, 4.0, 5.0]);
+        assert_eq!(differencing(&v, 1).unwrap(), Array1::from_vec(vec![1.0, 1.0, 1.0, 1.0]));
+        assert_eq!(differencing(&v, 2).unwrap(), Array1::from_vec(vec![0.0, 0.0, 0.0]));
+        assert_eq!(differencing(&v, 3).unwrap(), Array1::from_vec(vec![0.0, 0.0]));
     }
 
     #[test]

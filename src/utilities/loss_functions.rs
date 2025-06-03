@@ -98,7 +98,43 @@ impl LossFunction for MSE {
     /// - Returns an error if the lengths of `observed_values` and `predicted_values` do not coincide.
     fn loss_array(&self, observed_values: &Array1<f64>, predicted_values: &Array1<f64>) -> Result<f64, DigiFiError> {
         compare_array_len(observed_values, predicted_values, "observed_values", "predicted_values")?;
-    Ok((observed_values - predicted_values).map(|v| { v.powi(2) } ).sum() / (observed_values.len() as f64))
+        Ok((observed_values - predicted_values).map(|v| { v.powi(2) } ).sum() / (observed_values.len() as f64))
+    }
+}
+
+
+/// # Description
+/// Measures an error between paired observations (Usually, empirical observations vs simulated observations).
+///
+/// # LaTeX Formula
+/// - MSE = \\sum^{n}_{i=1}(y_{i}-x_{i})^{2}
+///
+/// # Links
+/// - Wikipedia: N/A
+/// - Original Source: N/A
+pub struct SSE;
+
+impl LossFunction for SSE {
+
+    fn loss(&self, observed_value: f64, predicted_value: f64) -> f64 {
+        (observed_value - predicted_value).powi(2)
+    }
+
+    /// # Description
+    /// Measures an error between observed and predicted values.
+    ///
+    /// # Input
+    /// - `observed_value`: An array of observed/empirical values
+    /// - `predicted_value`: An array of values predicted by the model
+    ///
+    /// # Output
+    /// - An array of errors/losses
+    ///
+    /// # Errors
+    /// - Returns an error if the lengths of `observed_values` and `predicted_values` do not coincide.
+    fn loss_array(&self, observed_values: &Array1<f64>, predicted_values: &Array1<f64>) -> Result<f64, DigiFiError> {
+        compare_array_len(observed_values, predicted_values, "observed_values", "predicted_values")?;
+        Ok((observed_values - predicted_values).map(|v| { v.powi(2) } ).sum())
     }
 }
 
