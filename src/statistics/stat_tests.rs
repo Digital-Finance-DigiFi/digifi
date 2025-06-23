@@ -342,7 +342,10 @@ pub fn adf(x: &Array1<f64>, lag: Option<usize>, adf_type: &ADFType, ci: &ADFConf
     // Compute standard error for estimated gamma
     let prediction: Array1<f64> = data_matrix.t().dot(&params);
     let loss_function: SSE = SSE;
-    let denominator: f64 = (lr_result.len() - params.len()) as f64; // Number of data points minus degrees of freedom
+    let denominator: f64 = match lr_result.len().checked_sub(params.len()) {
+        Some(v) => v as f64, // Number of data points minus degrees of freedom
+        None => return Err(DigiFiError::Other { title: error_title.clone(), details: "There are more degrees of freedom than there are values in difference data.".to_owned(), }),
+    };
     let estimated_var: f64 = loss_function.loss_array(&lr_result, &prediction)? / denominator;
     let mean_of_y_t_minus_1: f64 = data_matrix.slice(s![data_matrix.dim().0-1, ..]).mean()
         .ok_or(DigiFiError::MeanCalculation { title: error_title.clone(), series: "y_t_minus_1".to_owned(), })?;
