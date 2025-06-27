@@ -87,8 +87,8 @@ impl ProbabilityDistribution for BernoulliDistribution {
         (1.0 - 6.0 * (1.0 - self.p) * self.p) / ((1.0 - self.p) * self.p)
     }
 
-    fn entropy(&self) -> f64 {
-        -(1.0 - self.p) * (1.0 - self.p).ln() - self.p * self.p.ln()
+    fn entropy(&self) -> Result<f64, DigiFiError> {
+        Ok(-(1.0 - self.p) * (1.0 - self.p).ln() - self.p * self.p.ln())
     }
 
     /// # Description
@@ -240,8 +240,8 @@ impl ProbabilityDistribution for BinomialDistribution {
         (1.0 - 6.0 * (1.0 - self.p) * self.p) / ((self.n as f64) * (1.0 - self.p) * self.p)
     }
 
-    fn entropy(&self) -> f64 {
-        0.5 * (2.0 * std::f64::consts::PI  * std::f64::consts::E * (self.n as f64) * self.p * (1.0 - self.p)).ln()
+    fn entropy(&self) -> Result<f64, DigiFiError> {
+        Ok(0.5 * (2.0 * std::f64::consts::PI  * std::f64::consts::E * (self.n as f64) * self.p * (1.0 - self.p)).ln())
     }
 
 
@@ -412,8 +412,8 @@ impl ProbabilityDistribution for DiscreteUniformDistribution {
         -6.0 * (self.n.powi(2) + 1.0) / (5.0 * (self.n.powi(2) - 1.0))
     }
 
-    fn entropy(&self) -> f64 {
-        self.n.ln()
+    fn entropy(&self) -> Result<f64, DigiFiError> {
+        Ok(self.n.ln())
     }
 
     /// # Description
@@ -550,8 +550,8 @@ impl ProbabilityDistribution for PoissonDistribution {
         1.0 / self.lambda
     }
 
-    fn entropy(&self) -> f64 {
-        0.5*(2.0 * std::f64::consts::PI * std::f64::consts::E * self.lambda).ln() - 1.0/(12.0 * self.lambda) - 1.0/(24.0 * self.lambda.powi(2)) - 1.0/(360.0*self.lambda.powi(3))
+    fn entropy(&self) -> Result<f64, DigiFiError> {
+        Ok(0.5*(2.0 * std::f64::consts::PI * std::f64::consts::E * self.lambda).ln() - 1.0/(12.0 * self.lambda) - 1.0/(24.0 * self.lambda.powi(2)) - 1.0/(360.0*self.lambda.powi(3)))
     }
 
     /// # Description

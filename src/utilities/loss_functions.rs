@@ -35,7 +35,7 @@ pub trait LossFunction {
 /// Measures an error between paired observations (Usually, empirical observations vs simulated observations).
 ///
 /// # LaTeX Formula
-/// - MAE = \\frac{\\sum^{n}_{i=1}\\lvert y_{i}-x_{i}\\rvert}{n}
+/// - MAE = \\frac{\\sum^{n}\_{i=1}\\lvert y_{i}-x_{i}\\rvert}{n}
 ///
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Mean_absolute_error>
@@ -71,7 +71,7 @@ impl LossFunction for MAE {
 /// Measures an error between paired observations (Usually, empirical observations vs simulated observations).
 ///
 /// # LaTeX Formula
-/// - MSE = \\frac{1}{n}\\sum^{n}_{i=1}(y_{i}-x_{i})^{2}
+/// - MSE = \\frac{1}{n}\\sum^{n}\_{i=1}(y_{i}-x_{i})^{2}
 ///
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Mean_squared_error>
@@ -107,7 +107,7 @@ impl LossFunction for MSE {
 /// Measures an error between paired observations (Usually, empirical observations vs simulated observations).
 ///
 /// # LaTeX Formula
-/// - MSE = \\sum^{n}_{i=1}(y_{i}-x_{i})^{2}
+/// - MSE = \\sum^{n}\_{i=1}(y_{i}-x_{i})^{2}
 ///
 /// # Links
 /// - Wikipedia: N/A
@@ -143,7 +143,7 @@ impl LossFunction for SSE {
 /// Measures an error between paired observations (Usually, empirical observations vs simulated observations).
 ///
 /// # LaTeX Formula
-/// - Loss = \\frac{1}{n}\\sum^{n}_{i=1}(\\lvert\\frac{x_{i}}{y_{i}}-1\\rvert + \\lvert 1-\\frac{x_{i}}{y_{i}}\\rvert)
+/// - Loss = \\frac{1}{n}\\sum^{n}\_{i=1}(\\lvert\\frac{x_{i}}{y_{i}}-1\\rvert + \\lvert 1-\\frac{x_{i}}{y_{i}}\\rvert)
 ///
 /// # Links
 /// - Wikipedia: N/A

@@ -1,7 +1,9 @@
 // Re-Exports
 pub use self::discrete_distributions::{BernoulliDistribution, BinomialDistribution, DiscreteUniformDistribution, PoissonDistribution};
-pub use self::continuous_distributions::{ContinuousUniformDistribution, NormalDistribution, ExponentialDistribution, LaplaceDistribution, GammaDistribution};
-pub use self::stat_tests::{ADFConfidence, ADFType, ADFResult, adf};
+pub use self::continuous_distributions::{
+    ContinuousUniformDistribution, NormalDistribution, ExponentialDistribution, LaplaceDistribution, GammaDistribution, StudentsTDistribution,
+};
+pub use self::stat_tests::{ConfidenceLevel, ADFType, ADFResult, adf, TTestResult, t_test_two_sample, t_test_lr};
 
 
 pub mod continuous_distributions;
@@ -17,6 +19,7 @@ use serde::{Serialize, Deserialize};
 use crate::error::DigiFiError;
 use crate::utilities::{compare_array_len, MatrixConversion};
 use crate::utilities::maths_utils::{FunctionEvalMethod, factorial, definite_integral};
+use crate::utilities::loss_functions::{LossFunction, SSE};
 
 
 #[derive(Debug)]
@@ -56,7 +59,7 @@ pub trait ProbabilityDistribution {
 
     /// # Description
     /// Entropy.
-    fn entropy(&self) -> f64;
+    fn entropy(&self) -> Result<f64, DigiFiError>;
 
     /// # Description
     /// Probability density function.
@@ -84,6 +87,7 @@ pub trait ProbabilityDistribution {
 /// # Input
 /// - `array_1`: First array
 /// - `array_2`: Second array
+/// - `ddof`: Delta degrees of freedom (i.e., degrees of freedom = N - ddof)
 /// 
 /// # Output
 /// - Covariance of two arrays
@@ -338,6 +342,45 @@ pub fn linear_regression(x: &Array2<f64>, y: &Array1<f64>) -> Result<Array1<f64>
         .ok_or(DigiFiError::Other { title: "Linear Regression".to_owned(), details: "No matrix inverse exists to perform linear regression.".to_owned(), })?;
     let inv_matrix: Array2<f64> = MatrixConversion::nalgebra_to_ndarray(&n_inv_matrix)?;
     Ok(inv_matrix.dot(&x.t().dot(&y.t())))
+}
+
+
+/// # Description
+/// Standard error of linear regression coefficient, which is used for different statistical tests.
+/// 
+/// # Input
+/// - `y`: Observed response values
+/// - `y_prediction`: Values predicted by the linear regression
+/// - `x`: Feature in linear regression whose coefficient's standard error is being computed
+/// - `ddof`: Delta degrees of freedom (i.e., degrees of freedom = N - ddof)
+/// 
+/// # Output
+/// - Standard error of the linear regression coefficient
+/// 
+/// # Errors
+/// - Returns an error if the length of vector `x` does not match the length of vector `y_prediction`.
+/// - Returns an error if the length of vector `x` does not match the length of vector `y`.
+/// - Returns an error if there are fewed data points in `y` than `ddof`.
+/// 
+/// # LaTeX Formula
+/// - s_{\\hat{\\beta}} = sqrt{\\frc{\\frac{1}{n-ddof}\\sum^{n}\_{i=1}\\hat{epsilon}^{2}_{i}}{\\sum^{n}\_{i=1}(x_{i} - \\bar{x})^{2}}}
+/// 
+/// # Links
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Simple_linear_regression#Normality_assumption>
+/// - Original Source: N/A
+pub fn se_lr_coefficient(y: &Array1<f64>, y_prediction: &Array1<f64>, x: &Array1<f64>, ddof: usize) -> Result<f64, DigiFiError> {
+    let error_title: String = String::from("Standard Error of Linear Regression Coefficient");
+    compare_array_len(x, y_prediction, "x", "y_prediction")?;
+    compare_array_len(x, y, "x", "y")?;
+    let loss_function: SSE = SSE;
+    let denominator: f64 = match y.len().checked_sub(ddof) {
+        Some(v) => v as f64, // Number of data points (degrees of freedom) minus constrained degrees of freedom by the model (i.e., number of features)
+        None => return Err(DigiFiError::Other { title: error_title, details: "There are fewer data points in `y` array than `ddof`.".to_owned(), }),
+    };
+    let estimated_var: f64 = loss_function.loss_array(y, y_prediction)? / denominator;
+    let mean_of_x: f64 = x.mean().ok_or(DigiFiError::MeanCalculation { title: error_title, series: "x".to_owned(), })?;
+    let estimated_var_beta_denominator: f64 = x.map(|v| (v - mean_of_x).powi(2) ).sum();
+    Ok((estimated_var / estimated_var_beta_denominator).sqrt())
 }
 
 
@@ -633,6 +676,71 @@ pub fn lower_incomplete_gamma_function(z: f64, x: f64, method: &FunctionEvalMeth
 
 
 /// # Description
+/// Digamma function, which is the logarithmic derivative of the gamma function.
+///
+/// # Input
+/// - `z`: Positive real part of a complex number
+/// - `method`: Method for evaluationg the function
+///
+/// # Output
+/// - Evaluation of Digamma function
+///
+/// # Errors
+/// - Returns an error if the value of `z` is non-positive.
+///
+/// # LaTeX Formula
+/// - \\psi(z) = \\frac{d}{dz}ln\\Gamma(Z)
+///
+/// # Links
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Digamma_function>
+/// - Original Source: N/A
+/// 
+/// /// # Examples
+///
+/// ```rust
+/// use digifi::utilities::{TEST_ACCURACY, FunctionEvalMethod};
+/// use digifi::statistics::digamma_function;
+///
+/// const EULER_MASCHERONI_CONSTANT: f64 = 0.5772156649;
+/// 
+/// // Digamma(1) = -gamma
+/// assert!((digamma_function(1.0, &FunctionEvalMethod::Integral { n_intervals: 100_000 }).unwrap() + EULER_MASCHERONI_CONSTANT).abs() < 10_000.0 * TEST_ACCURACY);
+/// assert!((digamma_function(1.0, &FunctionEvalMethod::Approximation { n_terms: 1 }).unwrap() + EULER_MASCHERONI_CONSTANT).abs() < 1_000.0 * TEST_ACCURACY);
+/// 
+/// // Digamma(0.5) = -2ln(2) - gamma
+/// assert!((digamma_function(0.5, &FunctionEvalMethod::Approximation { n_terms: 1 }).unwrap() + (2.0 * 2.0_f64.ln() + EULER_MASCHERONI_CONSTANT)).abs() < 1_000.0 * TEST_ACCURACY);
+/// 
+/// // Digamma(1/3) = -Pi/(2 sqrt(3)) - 3 ln(3)/2 - gamma
+/// assert!((digamma_function(1.0/3.0, &FunctionEvalMethod::Approximation { n_terms: 1 }).unwrap() + (std::f64::consts::PI/(2.0 * 3.0_f64.sqrt()) + 3.0 * 3.0_f64.ln() / 2.0 + EULER_MASCHERONI_CONSTANT)).abs() < 1_000.0 * TEST_ACCURACY);
+/// ```
+pub fn digamma_function(z: f64, method: &FunctionEvalMethod) -> Result<f64, DigiFiError> {
+    if z <= 0.0 {
+        return Err(DigiFiError::ParameterConstraint { title: "Digamma Function".to_owned(), constraint: "The value of `z` must be positive.".to_owned(), });
+    }
+    match method {
+        FunctionEvalMethod::Integral { n_intervals } => {
+            // let f = |t: f64| { (-t).exp() / t - (-t * z).exp() / (1.0 - (-t).exp()) };
+            // let f = |t: f64| { (0.5 - 1.0/t + 1.0/(t.exp() - 1.0)) * (-t * z).exp() };
+            let f = |t: f64| { t.powf(z - 1.0) * t.ln() * (-t).exp() };
+            let denominator: f64 = gamma_function(z, method);
+            Ok(definite_integral(f, 0.0, f64::INFINITY, *n_intervals) / denominator)
+        },
+        FunctionEvalMethod::Approximation { .. } => {
+            let mut shifted_z: f64 = z;
+            let mut result: f64 = 0.0;
+            while shifted_z < 6.0 {
+                result -= 1.0 / shifted_z;
+                shifted_z += 1.0;
+            }
+            let z: f64 = shifted_z;
+            let proxy_result: f64 = z.ln() - 1.0/(2.0 * z) - 1.0/(12.0 * z.powi(2) + 1.0/(120.0 * z.powi(4)) - 1.0/(252.0 * z.powi(6)) + 1.0/(240.0 * z.powi(8)) - 1.0/(132.0 * z.powi(10)) + 691.0/(32760.0 * z.powi(12)) - 1.0/(12.0 * z.powi(14)));
+            Ok(proxy_result + result)
+        },
+    }
+}
+
+
+/// # Description
 /// Beta function (or Euler integral of the first kind) is a special function that is closely related to the gamma function and to
 /// binomial coefficients.
 ///
@@ -807,7 +915,6 @@ pub fn regularized_incomplete_beta_function(x: f64, a: f64, b: f64, method: &Fun
 }
 
 
-
 #[cfg(test)]
 mod tests {
     use ndarray::{Array1, array};
@@ -916,6 +1023,19 @@ mod tests {
         // Gamma_{lower}(1, x) = 1 - e^{-x}
         assert!((lower_incomplete_gamma_function(1.0, 3.0, &FunctionEvalMethod::Integral { n_intervals: 1_000_000 }).unwrap() - (1.0 - (-3.0_f64).exp())).abs() < 100.0 * TEST_ACCURACY);
         assert!((lower_incomplete_gamma_function(1.0, 3.0, &FunctionEvalMethod::Approximation { n_terms: 20 }).unwrap() - (1.0 - (-3.0_f64).exp())).abs() < TEST_ACCURACY);
+    }
+
+    #[test]
+    fn unit_test_digamma_function() -> () {
+        use crate::statistics::digamma_function;
+        const EULER_MASCHERONI_CONSTANT: f64 = 0.5772156649;
+        // Digamma(1) = -gamma
+        assert!((digamma_function(1.0, &FunctionEvalMethod::Integral { n_intervals: 100_000 }).unwrap() + EULER_MASCHERONI_CONSTANT).abs() < 10_000.0 * TEST_ACCURACY);
+        assert!((digamma_function(1.0, &FunctionEvalMethod::Approximation { n_terms: 1 }).unwrap() + EULER_MASCHERONI_CONSTANT).abs() < 1_000.0 * TEST_ACCURACY);
+        // Digamma(0.5) = -2ln(2) - gamma
+        assert!((digamma_function(0.5, &FunctionEvalMethod::Approximation { n_terms: 1 }).unwrap() + (2.0 * 2.0_f64.ln() + EULER_MASCHERONI_CONSTANT)).abs() < 1_000.0 * TEST_ACCURACY);
+        // Digamma(1/3) = -Pi/(2 sqrt(3)) - 3 ln(3)/2 - gamma
+        assert!((digamma_function(1.0/3.0, &FunctionEvalMethod::Approximation { n_terms: 1 }).unwrap() + (std::f64::consts::PI/(2.0 * 3.0_f64.sqrt()) + 3.0 * 3.0_f64.ln() / 2.0 + EULER_MASCHERONI_CONSTANT)).abs() < 1_000.0 * TEST_ACCURACY);
     }
 
     #[test]
