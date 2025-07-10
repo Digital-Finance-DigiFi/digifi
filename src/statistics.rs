@@ -11,7 +11,7 @@ pub mod discrete_distributions;
 pub mod stat_tests;
 
 
-use std::ops::Rem;
+use std::{ops::Rem, cmp::Ordering};
 use ndarray::{Array1, Array2, s};
 use nalgebra::DMatrix;
 #[cfg(feature = "serde")]
@@ -520,6 +520,46 @@ pub fn log_return_transformation(x: &Array1<f64>) -> Array1<f64> {
 
 
 /// # Description
+/// Data transformation where numerical values are replaced by their rank when the data is sorted.
+/// 
+/// # Input
+/// -`x`: Array of values
+/// 
+/// # Output
+/// - Array of ranks
+/// 
+/// # Links
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Ranking_(statistics)>
+/// - Original Source: N/A
+/// 
+/// # Examples
+/// 
+/// ```rust
+/// use ndarray::Array1;
+/// use digifi::statistics::rank_transformation;
+///
+/// let x: Array1<f64> = Array1::from_vec(vec![1.0, 3.0, 5.0, 2.0, 5.0, 6.0]);
+/// 
+/// let x_transformed: Array1<f64> = Array1::from_vec(vec![1.0, 3.0, 4.0, 2.0, 4.0, 5.0]);
+/// 
+/// assert_eq!(x_transformed, rank_transformation(&x));
+/// ```
+pub fn rank_transformation(x: &Array1<f64>) -> Array1<f64> {
+    let mut ranked: Vec<(usize, f64)> = x.iter().enumerate().map(|(i, val)| { (i, *val) } ).collect();
+    ranked.sort_by(|a, b| { a.1.partial_cmp(&b.1).unwrap_or(Ordering::Equal) } );
+    let mut result: Vec<f64> = vec![0.0; x.len()];
+    let mut current_rank: f64 = 1.0;
+    for (i, pair) in ranked.iter().enumerate() {
+        if 0 < i && ranked[i].1 != ranked[i-1].1 {
+            current_rank += 1.0;
+        }
+        result[pair.0] = current_rank;
+    }
+    Array1::from_vec(result)
+}
+
+
+/// # Description
 /// General form of the unit vector normalization using the p-norm.
 ///
 /// # Input
@@ -1024,6 +1064,14 @@ mod tests {
         let x: Array1<f64> = Array1::from_vec(vec![-10.0, -4.0, 5.0]);
         let x_norm: Array1<f64> = min_max_scaling(x, 0.0, 1.0);
         assert_eq!(x_norm, Array1::from_vec(vec![0.0, 0.4, 1.0]));
+    }
+
+    #[test]
+    fn unit_test_rank_transformation() -> () {
+        use crate::statistics::rank_transformation;
+        let x: Array1<f64> = Array1::from_vec(vec![1.0, 3.0, 5.0, 2.0, 5.0, 6.0]);
+        let x_transformed: Array1<f64> = Array1::from_vec(vec![1.0, 3.0, 4.0, 2.0, 4.0, 5.0]);
+        assert_eq!(x_transformed, rank_transformation(&x));
     }
 
     #[test]
