@@ -525,7 +525,6 @@ impl BrownianBridge {
     /// - `alpha`: Initial value of the process
     /// - `beta`: Final value of the process
     /// - `sigma`: Standard deviation of the process
-    /// - `alpha`: Drift scaling parameter
     /// - `n_paths`: Number of paths to generate
     /// - `n_steps`: Number of steps
     /// - `t_f`: Final time step

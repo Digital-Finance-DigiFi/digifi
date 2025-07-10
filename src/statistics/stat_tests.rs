@@ -10,7 +10,7 @@ use crate::statistics::{
 };
 
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Confidence interval for different tests.
@@ -285,11 +285,11 @@ impl ADFResult {
 /// use digifi::statistics::stat_tests::{ConfidenceLevel, ADFType, ADFResult, adf};
 ///
 /// let x: Array1<f64> = Array1::from_vec(vec![1.0, 2.0, 3.0, 6.0, 5.0, 6.0, 7.0, 8.0]);
-/// let result: ADFResult = adf(&x, Some(1), &ADFType::Simple, &ConfidenceLevel::One).unwrap();
+/// let result: ADFResult = adf(&x, Some(1), &ADFType::Simple, Some(ConfidenceLevel::One)).unwrap();
 /// 
 /// assert_eq!(result.unit_root_exists, false);
 /// ```
-pub fn adf(x: &Array1<f64>, lag: Option<usize>, adf_type: &ADFType, cl: &ConfidenceLevel) -> Result<ADFResult, DigiFiError> {
+pub fn adf(x: &Array1<f64>, lag: Option<usize>, adf_type: &ADFType, cl: Option<ConfidenceLevel>) -> Result<ADFResult, DigiFiError> {
     let error_title: String = String::from("ADF");
     let x_len: usize = x.len();
     let lag: usize = match lag {
@@ -354,7 +354,8 @@ pub fn adf(x: &Array1<f64>, lag: Option<usize>, adf_type: &ADFType, cl: &Confide
     let se_gamma: f64 = se_lr_coefficient(&lr_result, &prediction, &data_matrix.slice(s![data_matrix.dim().0-1, ..]).to_owned(), params.len())?;
     // Calculate Dickey-Fuller statistic (i.e., gamma / SE(gamma))
     let df_statistic: f64 = gamma / se_gamma;
-    let critical_value: f64 = adf_type.get_critical_value(x_len, cl);
+    let cl: ConfidenceLevel = match cl { Some(cl) => cl, None => ConfidenceLevel::default(), };
+    let critical_value: f64 = adf_type.get_critical_value(x_len, &cl);
     let unit_root_exists: bool = if df_statistic < critical_value { false } else { true };
     ADFResult::new(&params, unit_root_exists, Some(df_statistic), Some(critical_value), Some(se_gamma), adf_type)
 }
@@ -404,12 +405,12 @@ pub struct CointegrationResult {
 ///     let gs: Array1<f64> = sample_data.remove("GS").unwrap();
 ///     
 ///     // Cointegration test
-///     let cointegration_result: CointegrationResult = cointegration(&jpm, &gs, &ConfidenceLevel::One).unwrap();
+///     let cointegration_result: CointegrationResult = cointegration(&jpm, &gs, Some(ConfidenceLevel::One)).unwrap();
 ///     
 ///     assert_eq!(cointegration_result.cointegrated, true);
 /// }
 /// ```
-pub fn cointegration(x: &Array1<f64>, y: &Array1<f64>, cl: &ConfidenceLevel) -> Result<CointegrationResult, DigiFiError> {
+pub fn cointegration(x: &Array1<f64>, y: &Array1<f64>, cl: Option<ConfidenceLevel>) -> Result<CointegrationResult, DigiFiError> {
     compare_array_len(x, y, "x", "y")?;
     let data_matrix: Array2<f64> = Array2::from_shape_vec((x.len(), 1), x.to_vec())?;
     let params: Array1<f64> = linear_regression(&data_matrix, y)?;
@@ -420,7 +421,7 @@ pub fn cointegration(x: &Array1<f64>, y: &Array1<f64>, cl: &ConfidenceLevel) -> 
     let mut cointegrated: bool = false;
     let mut adf_results: Vec<ADFResult> = Vec::<ADFResult>::new();
     for adf_type in &adf_variations {
-        let adf_result: ADFResult = adf(&u_t, None, adf_type, cl)?;
+        let adf_result: ADFResult = adf(&u_t, None, adf_type, cl.clone())?;
         let stationary_u_t: bool = !adf_result.unit_root_exists;
         adf_results.push(adf_result);
         // If unit root does not exists then `u_t` is stationary, so the processes `x` and `y` are cointegrated
@@ -466,7 +467,7 @@ pub struct TTestResult {
 /// use digifi::statistics::{ConfidenceLevel, TTestResult, t_test_two_sample};
 ///
 /// #[cfg(feature = "sample_data")]
-/// fn test_capm() -> () {
+/// fn test_t_test_two_sample() -> () {
 ///     use digifi::utilities::SampleData;
 ///     
 ///     let sample: SampleData = SampleData::Portfolio; 
@@ -524,7 +525,7 @@ pub fn t_test_two_sample(sample_1: &Array1<f64>, sample_2: &Array1<f64>, cl: Opt
 /// use digifi::statistics::{ConfidenceLevel, TTestResult, t_test_lr};
 ///
 /// #[cfg(feature = "sample_data")]
-/// fn test_capm() -> () {
+/// fn test_t_test_lr() -> () {
 ///     use digifi::utilities::SampleData;
 ///     
 ///     // CAPM model
@@ -580,7 +581,7 @@ mod tests {
     fn unit_test_adf() -> () {
         use crate::statistics::stat_tests::{ConfidenceLevel, ADFType, ADFResult, adf};
         let x: Array1<f64> = Array1::from_vec(vec![1.0, 2.0, 3.0, 6.0, 5.0, 6.0, 7.0, 8.0]);
-        let result: ADFResult = adf(&x, Some(1), &ADFType::Simple, &ConfidenceLevel::One).unwrap();
+        let result: ADFResult = adf(&x, Some(1), &ADFType::Simple, Some(ConfidenceLevel::One)).unwrap();
         assert_eq!(result.unit_root_exists, false);
     }
 
@@ -593,10 +594,11 @@ mod tests {
         let (_, mut sample_data) = sample.load_sample_data();
         let jpm: Array1<f64> = sample_data.remove("JPM").unwrap();
         let gs: Array1<f64> = sample_data.remove("GS").unwrap();
-        let cointegration_result: CointegrationResult = cointegration(&jpm, &gs, &ConfidenceLevel::One).unwrap();
+        let cointegration_result: CointegrationResult = cointegration(&jpm, &gs, Some(ConfidenceLevel::One)).unwrap();
         assert_eq!(cointegration_result.cointegrated, true);
     }
 
+    #[cfg(all(test, feature = "sample_data"))]
     #[test]
     fn unit_test_t_test_two_sample() -> () {
         use crate::utilities::sample_data::SampleData;

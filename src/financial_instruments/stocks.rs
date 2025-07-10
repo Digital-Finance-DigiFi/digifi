@@ -5,8 +5,8 @@ use crate::error::DigiFiError;
 use crate::utilities::{compare_array_len, time_value_utils::{Compounding, CompoundingType, Perpetuity}};
 use crate::financial_instruments::{FinancialInstrument, FinancialInstrumentId};
 use crate::corporate_finance;
-use crate::portfolio_applications::{returns_average, prices_to_returns, ReturnsMethod, ReturnsTransformation, AssetHistData, PortfolioInstrument};
-use crate::statistics::{covariance, linear_regression};
+use crate::portfolio_applications::{returns_average, returns_std, ReturnsMethod, ReturnsTransformation, AssetHistData, PortfolioInstrument};
+use crate::statistics::linear_regression;
 use crate::stochastic_processes::{StochasticProcess, standard_stochastic_models::GeometricBrownianMotion};
 
 
@@ -236,9 +236,9 @@ impl Stock {
                 let end_index: usize = asset_historical_data.time_array.len() - 1;
                 let prices: Array1<f64> = asset_historical_data.get_price(end_index, None)?;
                 // Parameters estimated from log-returns
-                let mu: f64 = returns_average(&prices, &ReturnsMethod::EstimatedFromTotalReturn,&ReturnsTransformation::LogReturn, 252)?;
-                let returns: Array1<f64> = prices_to_returns(&prices, &ReturnsTransformation::LogReturn);
-                let sigma: f64 = covariance(&returns, &returns, 0)?.sqrt();
+                let returns_transformation: ReturnsTransformation = ReturnsTransformation::LogReturn;
+                let mu: f64 = returns_average(&prices, &ReturnsMethod::EstimatedFromTotalReturn, &returns_transformation, 252)?;
+                let sigma: f64 = returns_std(&prices, &returns_transformation, 252)?;
                 Box::new(GeometricBrownianMotion::new(mu, sigma, 1, asset_historical_data.time_array.len() - 1, t_f, initial_price))
             }
         };

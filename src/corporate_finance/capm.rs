@@ -206,7 +206,7 @@ impl CAPM {
         Ok(lin_reg)
     }
 
-    fn train(&self, risk_premium: &Array1<f64>) -> Result<CAPMParams, Box<dyn std::error::Error>> {
+    fn train(&self, risk_premium: &Array1<f64>) -> Result<CAPMParams, DigiFiError> {
         let mut reg_params: CAPMParams = CAPMParams { alpha: None, beta: 0.0, beta_s: None, beta_h: None, beta_r: None, beta_c: None };
         let mut data_vec: Vec<Vec<f64>> = vec![(&self.market_returns - &self.rf).to_vec()];
         data_vec.push(vec![1.0; data_vec[0].len()]);
@@ -253,7 +253,7 @@ impl CAPM {
     /// 
     /// # Output
     /// - Parameters of the chosen CAPM model
-    pub fn get_parameters(&self, risk_premium: &Array1<f64>) -> Result<CAPMParams, Box<dyn std::error::Error>> {
+    pub fn get_parameters(&self, risk_premium: &Array1<f64>) -> Result<CAPMParams, DigiFiError> {
         compare_array_len(risk_premium, &self.market_returns, "risk_premium", "market_returns")?;
         match self.solution_type {
             CAPMSolutionType::Covariance => {

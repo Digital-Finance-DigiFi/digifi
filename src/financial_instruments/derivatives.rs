@@ -6,8 +6,8 @@ use plotly::{Plot, Surface, Layout, layout::{Axis, LayoutScene}, common::Title};
 use crate::error::DigiFiError;
 use crate::utilities::time_value_utils::{Compounding, CompoundingType};
 use crate::financial_instruments::{FinancialInstrument, FinancialInstrumentId, Payoff};
-use crate::portfolio_applications::{returns_average, prices_to_returns, ReturnsMethod, ReturnsTransformation, AssetHistData, PortfolioInstrument};
-use crate::statistics::{covariance, ProbabilityDistribution, continuous_distributions::NormalDistribution};
+use crate::portfolio_applications::{returns_average, returns_std, ReturnsMethod, ReturnsTransformation, AssetHistData, PortfolioInstrument};
+use crate::statistics::{ProbabilityDistribution, continuous_distributions::NormalDistribution};
 use crate::lattice_models::LatticeModel;
 use crate::stochastic_processes::{StochasticProcess, standard_stochastic_models::GeometricBrownianMotion};
 use crate::lattice_models::{binomial_models::BrownianMotionBinomialModel, trinomial_models::BrownianMotionTrinomialModel};
@@ -213,9 +213,9 @@ impl Contract {
                 let end_index: usize = asset_historical_data.time_array.len() - 1;
                 let prices: Array1<f64> = asset_historical_data.get_price(end_index, None)?;
                 // Parameters estimated from log-returns
-                let mu: f64 = returns_average(&prices, &ReturnsMethod::EstimatedFromTotalReturn,&ReturnsTransformation::LogReturn, 252)?;
-                let returns: Array1<f64> = prices_to_returns(&prices, &ReturnsTransformation::LogReturn);
-                let sigma: f64 = covariance(&returns, &returns, 0)?.sqrt();
+                let returns_transformation: ReturnsTransformation = ReturnsTransformation::LogReturn;
+                let mu: f64 = returns_average(&prices, &ReturnsMethod::EstimatedFromTotalReturn, &returns_transformation, 252)?;
+                let sigma: f64 = returns_std(&prices, &returns_transformation, 252)?;
                 Box::new(GeometricBrownianMotion::new(mu, sigma, 1, asset_historical_data.time_array.len() - 1, time_to_maturity, current_contract_price))
             }
         };
@@ -497,9 +497,9 @@ impl OptionContract {
                 let end_index: usize = asset_historical_data.time_array.len() - 1;
                 let prices: Array1<f64> = asset_historical_data.get_price(end_index, None)?;
                 // Parameters estimated from log-returns
-                let mu: f64 = returns_average(&prices, &ReturnsMethod::EstimatedFromTotalReturn,&ReturnsTransformation::LogReturn, 252)?;
-                let returns: Array1<f64> = prices_to_returns(&prices, &ReturnsTransformation::LogReturn);
-                let sigma_: f64 = covariance(&returns, &returns, 0)?.sqrt();
+                let returns_transformation: ReturnsTransformation = ReturnsTransformation::LogReturn;
+                let mu: f64 = returns_average(&prices, &ReturnsMethod::EstimatedFromTotalReturn, &returns_transformation, 252)?;
+                let sigma_: f64 = returns_std(&prices, &returns_transformation, 252)?;
                 Box::new(GeometricBrownianMotion::new(mu, sigma_, 1, asset_historical_data.time_array.len() - 1, time_to_maturity, initial_option_price))
             }
         };

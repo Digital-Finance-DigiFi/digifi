@@ -13,12 +13,12 @@ pub mod utility_functions;
 pub mod portfolio_composition;
 
 
-use ndarray::{Array1, s, concatenate, Axis};
+use ndarray::{Array1, s};
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
 use crate::error::DigiFiError;
 use crate::utilities::compare_array_len;
-use crate::statistics::covariance;
+use crate::statistics::{covariance, percent_change, log_return_transformation};
 
 
 /// # Description
@@ -199,14 +199,11 @@ pub trait PortfolioInstrument {
 /// let price_array: Array1<f64> = Array1::from_vec(vec![100.0, 101.0, 102.0, 101.0, 103.0, 102.0]);
 /// let result: Array1<f64> = prices_to_returns(&price_array, &ReturnsTransformation::Arithmetic);
 ///
-/// assert!((result - Array1::from_vec(vec![0.0, 0.01, 1.0/101.0, -1.0/102.0, 2.0/101.0, -1.0/103.0])).sum().abs() < TEST_ACCURACY);
+/// assert!((result - Array1::from_vec(vec![0.01, 1.0/101.0, -1.0/102.0, 2.0/101.0, -1.0/103.0])).sum().abs() < TEST_ACCURACY);
 pub fn prices_to_returns(price_array: &Array1<f64>, returns_transformation: &ReturnsTransformation) -> Array1<f64> {
-    let price_diff: Array1<f64> = &price_array.slice(s![1..(price_array.len())]) - &price_array.slice(s![0..(price_array.len()-1)]);
-    let returns: Array1<f64> = price_diff / price_array.slice(s![0..(price_array.len()-1)]);
-    let arithmetic_returns: Array1<f64> = concatenate![Axis(0), Array1::from_vec(vec![0.0]), returns];
     match returns_transformation {
-        ReturnsTransformation::Arithmetic => arithmetic_returns,
-        ReturnsTransformation::LogReturn => arithmetic_returns.map(|v| (v + 1.0).ln() ),
+        ReturnsTransformation::Arithmetic => percent_change(price_array),
+        ReturnsTransformation::LogReturn => log_return_transformation(price_array),
     }
 }
 
@@ -276,6 +273,6 @@ mod tests {
         use crate::portfolio_applications::{prices_to_returns, ReturnsTransformation};
         let price_array: Array1<f64> = Array1::from_vec(vec![100.0, 101.0, 102.0, 101.0, 103.0, 102.0]);
         let result: Array1<f64> = prices_to_returns(&price_array, &ReturnsTransformation::Arithmetic);
-        assert!((result - Array1::from_vec(vec![0.0, 0.01, 1.0/101.0, -1.0/102.0, 2.0/101.0, -1.0/103.0])).sum().abs() < TEST_ACCURACY);
+        assert!((result - Array1::from_vec(vec![0.01, 1.0/101.0, -1.0/102.0, 2.0/101.0, -1.0/103.0])).sum().abs() < TEST_ACCURACY);
     }
 }

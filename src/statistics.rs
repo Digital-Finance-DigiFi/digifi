@@ -3,7 +3,7 @@ pub use self::discrete_distributions::{BernoulliDistribution, BinomialDistributi
 pub use self::continuous_distributions::{
     ContinuousUniformDistribution, NormalDistribution, ExponentialDistribution, LaplaceDistribution, GammaDistribution, StudentsTDistribution,
 };
-pub use self::stat_tests::{ConfidenceLevel, ADFType, ADFResult, adf, TTestResult, t_test_two_sample, t_test_lr};
+pub use self::stat_tests::{ConfidenceLevel, ADFType, ADFResult, adf, CointegrationResult, cointegration, TTestResult, t_test_two_sample, t_test_lr};
 
 
 pub mod continuous_distributions;
@@ -12,7 +12,7 @@ pub mod stat_tests;
 
 
 use std::ops::Rem;
-use ndarray::{Array1, Array2};
+use ndarray::{Array1, Array2, s};
 use nalgebra::DMatrix;
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
@@ -474,6 +474,48 @@ pub fn min_max_scaling(x: Array1<f64>, a: f64, b: f64) -> Array1<f64> {
     } else {
         a + ((x - min) * (b - a)) / (max - min)
     }
+}
+
+
+/// # Description
+/// Percent change of values in the time series compared to the previous values.
+/// 
+/// # Input
+/// - `x`: Time series of values
+/// 
+/// # Output
+/// - Percent change array
+/// 
+/// # LaTeX Formula
+/// - R_{t} = \\frac{S_{t} - S_{t-1}}{S_{t-1}}
+/// 
+/// # Links
+/// - Wikipedia: N/A
+/// - Original Source: N/A
+pub fn percent_change(x: &Array1<f64>) -> Array1<f64> {
+    let x_diff: Array1<f64> = &x.slice(s![1..(x.len())]) - &x.slice(s![0..(x.len()-1)]);
+    x_diff / x.slice(s![0..(x.len()-1)])
+}
+
+
+/// # Description
+/// Log-return transformation of values in the time series.
+/// 
+/// # Input
+/// -`x`: Time series of values
+/// 
+/// # Output
+/// - Log change array
+/// 
+/// # LaTeX Formula
+/// - r_{t} = ln(S_{t}) - ln(S_{t-1})
+/// 
+/// # Links
+/// - Wikipedia: N/A
+/// - Original Source: N/A
+pub fn log_return_transformation(x: &Array1<f64>) -> Array1<f64> {
+    let arithmetic_change: Array1<f64> = percent_change(x);
+    arithmetic_change.map(|v| (v + 1.0).ln() )
 }
 
 

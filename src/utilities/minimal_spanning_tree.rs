@@ -4,8 +4,7 @@ use serde::{Serialize, Deserialize};
 use ndarray::{Array1, Array2};
 use crate::error::DigiFiError;
 use crate::utilities::maths_utils::euclidean_distance;
-use crate::statistics::pearson_correlation;
-use crate::portfolio_applications::{prices_to_returns, ReturnsTransformation};
+use crate::statistics::{pearson_correlation, log_return_transformation};
 
 
 #[derive(Debug)]
@@ -36,9 +35,8 @@ pub enum MSTDistance {
 impl MSTDistance {
 
     fn mantegna_distance(v_1: &Array1<f64>, v_2: &Array1<f64>) -> Result<f64, DigiFiError>  {
-        let returns_transformation: ReturnsTransformation = ReturnsTransformation::LogReturn;
-        let returns_1: Array1<f64> = prices_to_returns(v_1, &returns_transformation);
-        let returns_2: Array1<f64> = prices_to_returns(v_2, &returns_transformation);
+        let returns_1: Array1<f64> = log_return_transformation(v_1);
+        let returns_2: Array1<f64> = log_return_transformation(v_2);
         pearson_correlation(&returns_1, &returns_2, 0)
     }
 

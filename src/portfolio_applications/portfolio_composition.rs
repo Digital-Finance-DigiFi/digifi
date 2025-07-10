@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use ndarray::{Array1, Array2, Axis, arr1};
+use ndarray::{Array1, Array2, Axis, arr1, concatenate};
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
 #[cfg(feature = "plotly")]
@@ -481,7 +481,10 @@ impl Portfolio {
         let mut returns: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
         for a in &self.assets {
             let extra_returns: Array1<f64> = Portfolio::predictable_income_to_return(&a.price_array, &a.predictable_income);
-            returns.push(prices_to_returns(&a.price_array, &ReturnsTransformation::Arithmetic) + extra_returns);
+            let returns_: Array1<f64> = prices_to_returns(&a.price_array, &ReturnsTransformation::Arithmetic);
+            // Append 0.0 to the front of the arithmetic returns array
+            let returns_: Array1<f64> = concatenate![Axis(0), Array1::from_vec(vec![0.0]), returns_];
+            returns.push(returns_ + extra_returns);
         }
         match asset_returns_type {
             AssetReturnsType::ReturnsOfAssets => (),
@@ -544,7 +547,6 @@ impl Portfolio {
         for i in 0..n_assets {
             for j in 0..n_assets {
                 if i <= j {
-
                     let cov: f64 = covariance(&asset_returns[i], &asset_returns[j], 0)? * n_periods;
                     cov_matrix[i][j] = cov;
                     cov_matrix[j][i] = cov;
