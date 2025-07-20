@@ -24,8 +24,20 @@ use crate::utilities::compare_array_len;
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Drawdown_(economics)>
 /// - Original Source: N/A
+/// 
+/// # Examples
+/// 
+/// ```rust
+/// use ndarray::Array1;
+/// use digifi::technical_indicators::maximum_drawdown;
+/// 
+/// let asset_price: Array1<f64> = Array1::from_vec(vec![100.0, 101.0, 104.0, 102.0, 103.0, 106.0]);
+/// let max_dd = maximum_drawdown(&asset_price);
+/// 
+/// assert_eq!(max_dd, 100.0*2.0/104.0);
+/// ```
 pub fn maximum_drawdown(asset_value: &Array1<f64>) -> f64 {
-    let mut maximum_drowdown: f64 = 0.0;
+    let mut maximum_drawdown: f64 = 0.0;
     let mut drawdowns: Vec<f64> = vec![0.0];
     let mut peak = asset_value[0];
     // Selection of maximum drawdown candidates
@@ -35,11 +47,11 @@ pub fn maximum_drawdown(asset_value: &Array1<f64>) -> f64 {
         }
         let last_drawdown: f64 = 100.0 * (peak - *i) / peak;
         drawdowns.push(last_drawdown);
-        if maximum_drowdown < last_drawdown {
-            maximum_drowdown = last_drawdown;
+        if maximum_drawdown < last_drawdown {
+            maximum_drawdown = last_drawdown;
         }
     }
-    maximum_drowdown
+    maximum_drawdown
 }
 
 
@@ -59,6 +71,19 @@ pub fn maximum_drawdown(asset_value: &Array1<f64>) -> f64 {
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Moving_average#Simple_moving_average>
 /// - Original Source: N/A
+/// 
+/// # Examples
+/// 
+/// ```rust
+/// use ndarray::{Array1, s};
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::technical_indicators::sma;
+/// 
+/// let price_array: Array1<f64> = Array1::from_vec(vec![10.0, 11.0, 12.0, 13.0, 11.0, 15.0]);
+/// let sma: Array1<f64> = sma(&price_array, 3).unwrap();
+/// 
+/// assert!((sma - Array1::from_vec(vec![f64::NAN, f64::NAN, 11.0, 12.0, 12.0, 13.0])).slice(s![2..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+/// ```
 pub fn sma(price_array: &Array1<f64>, period: usize) -> Result<Array1<f64>, DigiFiError> {
     let mut sma: Vec<f64> = vec![f64::NAN; period - 1];
     let windows = price_array.windows(period).to_owned();
@@ -87,6 +112,19 @@ pub fn sma(price_array: &Array1<f64>, period: usize) -> Result<Array1<f64>, Digi
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Moving_average#Exponential_moving_average>
 /// - Original Source: N/A
+/// 
+/// # Examples
+/// 
+/// ```rust
+/// use ndarray::{Array1, s};
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::technical_indicators::ema;
+/// 
+/// let price_array: Array1<f64> = Array1::from_vec(vec![10.0, 11.0, 12.0, 13.0, 11.0, 15.0]);
+/// let ema: Array1<f64> = ema(&price_array, 3, 2).unwrap();
+/// 
+/// assert!((ema - Array1::from_vec(vec![f64::NAN, f64::NAN, 11.0, 12.0, 11.5, 13.25])).slice(s![2..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+/// ```
 pub fn ema(price_array: &Array1<f64>, period: usize, smoothing: i32) -> Result<Array1<f64>, DigiFiError> {
     let multiplier: f64 = smoothing as f64 / (1.0 + period as f64);
     let mut ema: Vec<f64> = vec![f64::NAN; period - 1];
@@ -134,6 +172,20 @@ pub struct MACD {
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/MACD>
 /// - Original Source: N/A
+/// 
+/// # Examples
+/// 
+/// ```rust
+/// use ndarray::{Array1, s};
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::technical_indicators::{ema, macd, MACD};
+/// 
+/// let price_array: Array1<f64> = Array1::from_vec(vec![10.0, 11.0, 12.0, 13.0, 11.0, 15.0]);
+/// let macd_info: MACD = macd(&price_array, 3, 4, 2, 2).unwrap();
+/// 
+/// assert!((macd_info.macd - ema(&price_array, 3, 2).unwrap() + ema(&price_array, 4, 2).unwrap()).slice(s![3..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+/// assert!((macd_info.signal_line.slice(s![4..]).to_owned() - Array1::from_vec(vec![0.35, 0.43])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+/// ```
 pub fn macd(price_array: &Array1<f64>, small_ema_period: usize, large_ema_period: usize, signal_line: usize, smoothing: i32) -> Result<MACD, DigiFiError> {
     let error_title: String = String::from("MACD");
     if large_ema_period <= small_ema_period {
@@ -190,6 +242,20 @@ pub struct BollingerBands {
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Bollinger_Bands>
 /// - Original Source: N/A
+/// 
+/// # Examples
+/// 
+/// ```rust
+/// use ndarray::{Array1, s};
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::technical_indicators::{sma, bollinger_bands, BollingerBands};
+/// 
+/// let price_array: Array1<f64> = Array1::from_vec(vec![10.0, 11.0, 12.0, 13.0, 11.0, 15.0]);
+/// let deviations: Array1<f64> = 2.0 * Array1::from_vec(vec![f64::NAN, f64::NAN, (2.0/3.0_f64).sqrt(), (2.0/3.0_f64).sqrt(), (2.0/3.0_f64).sqrt(), (8.0/3.0_f64).sqrt()]);
+/// let bb_info: BollingerBands = bollinger_bands(&price_array, 3, 2).unwrap();
+/// 
+/// assert!((bb_info.upper_band - sma(&price_array, 3).unwrap() - &deviations).slice(s![2..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+/// ```
 pub fn bollinger_bands(price_array: &Array1<f64>, period: usize, n_std: i32) -> Result<BollingerBands, DigiFiError> {
     let sma: Array1<f64> = sma(price_array, period)?;
     let mut deviation:Vec<f64> = vec![f64::NAN; period - 1];
@@ -247,6 +313,24 @@ pub struct RSI {
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Relative_strength_index>
 /// - Original Source: N/A
+/// 
+/// # Examples
+/// 
+/// ```rust
+/// use ndarray::{Array1, s};
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::technical_indicators::{rsi, RSI};
+/// 
+/// let price_array: Array1<f64> = Array1::from_vec(vec![10.0, 11.0, 12.0, 13.0, 11.0, 15.0]);
+/// let rsi_info: RSI = rsi(&price_array, 3, 30.0, 70.0).unwrap();
+/// 
+/// assert!((rsi_info.u - Array1::from_vec(vec![0.0, 1.0, 1.0, 1.0, 0.0, 4.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+/// assert!((rsi_info.d - Array1::from_vec(vec![0.0, 0.0, 0.0, 0.0, 2.0, 0.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+/// assert!((rsi_info.u_smma - Array1::from_vec(vec![f64::NAN, f64::NAN, f64::NAN, 3.0/3.0, (1.0*2.0 + 0.0)/3.0, (2.0/3.0*2.0 + 4.0)/3.0])).slice(s![3..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+/// assert!((rsi_info.d_smma - Array1::from_vec(vec![f64::NAN, f64::NAN, f64::NAN, 0.0, (0.0*2.0 + 2.0)/3.0, (2.0/3.0*2.0 + 0.0)/3.0])).slice(s![3..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+/// assert!((rsi_info.rs - Array1::from_vec(vec![f64::NAN, f64::NAN, f64::NAN, f64::NAN, 1.0, 4.0])).slice(s![4..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+/// assert!((rsi_info.rsi - Array1::from_vec(vec![f64::NAN, f64::NAN, f64::NAN, f64::NAN, 50.0, 80.0])).slice(s![4..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+/// ```
 pub fn rsi(price_array: &Array1<f64>, period: usize, oversold_band: f64, overbought_band: f64) -> Result<RSI, DigiFiError> {
     let error_title: String = String::from("RSI");
     let price_array_length: usize = price_array.len();
@@ -327,6 +411,25 @@ pub struct ADX {
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Average_directional_movement_index>
 /// - Original Source: N/A
+/// 
+/// # Examples
+/// 
+/// ```rust
+/// use ndarray::{Array1, s};
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::technical_indicators::{adx, ADX};
+/// 
+/// let close_price: Array1<f64> = Array1::from_vec(vec![10.0, 11.0, 12.0, 13.0, 11.0, 15.0]);
+/// let low_price: Array1<f64> = Array1::from_vec(vec![9.5, 10.7, 11.8, 12.6, 10.7, 14.9]);
+/// let high_price: Array1<f64> = Array1::from_vec(vec![10.2, 11.4, 12.3, 13.4, 11.3, 15.2]);
+/// let adx_info: ADX = adx(&high_price, &low_price, &close_price, 2, 25.0).unwrap();
+/// 
+/// assert!((adx_info.pdm - Array1::from_vec(vec![0.0, 1.2, 0.9, 1.1, 0.0, 3.9])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+/// assert!((adx_info.mdm - Array1::from_vec(vec![0.0, 0.0, 0.0, 0.0, 1.9, 0.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+/// assert!((adx_info.pdi - Array1::from_vec(vec![f64::NAN, f64::NAN, 105.0, 89.58333333333331, 30.71428571428571, 74.57983193277309])).slice(s![2..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+/// assert!((adx_info.mdi - Array1::from_vec(vec![f64::NAN, f64::NAN, 0.0, 0.0, 54.28571428571428, 15.966386554621852])).slice(s![2..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+/// assert!((adx_info.adx - Array1::from_vec(vec![f64::NAN, f64::NAN, f64::NAN, f64::NAN, 85.55088702147526, 72.52191286414025])).slice(s![4..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+/// ```
 pub fn adx(high_price: &Array1<f64>, low_price: &Array1<f64>, close_price: &Array1<f64>, period: usize, benchmark: f64) -> Result<ADX, DigiFiError> {
     let error_title: String = String::from("ADX");
     compare_array_len(close_price, high_price, "close_price", "high_price")?;
@@ -410,6 +513,20 @@ pub fn adx(high_price: &Array1<f64>, low_price: &Array1<f64>, close_price: &Arra
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/On-balance_volume>
 /// - Original Source: N/A
+/// 
+/// # Examples
+/// 
+/// ```rust
+/// use ndarray::Array1;
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::technical_indicators::obv;
+/// 
+/// let close_price: Array1<f64> = Array1::from_vec(vec![10.0, 11.0, 12.0, 13.0, 11.0, 15.0]);
+/// let volume: Array1<f64> = Array1::from_vec(vec![1000.0, 1200.0, 1100.0, 1250.0, 1260.0, 1110.0]);
+/// let obv: Array1<f64> = obv(&close_price, &volume).unwrap();
+/// 
+/// assert!((obv - Array1::from_vec(vec![0.0, 1200.0, 2300.0, 3550.0, 2290.0, 3400.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+/// ```
 pub fn obv(close_price: &Array1<f64>, volume: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
     compare_array_len(close_price, volume, "close_price", "volume")?;
     let price_array_len = close_price.len();
@@ -789,7 +906,7 @@ mod tests {
         use crate::technical_indicators::sma;
         let price_array: Array1<f64> = Array1::from_vec(vec![10.0, 11.0, 12.0, 13.0, 11.0, 15.0]);
         let sma: Array1<f64> = sma(&price_array, 3).unwrap();
-        assert!((sma - Array1::from_vec(vec![f64::NAN, f64::NAN, 11.0, 12.0, 12.0, 13.0])).slice(s![2..]).sum().abs() < TEST_ACCURACY);
+        assert!((sma - Array1::from_vec(vec![f64::NAN, f64::NAN, 11.0, 12.0, 12.0, 13.0])).slice(s![2..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
@@ -797,7 +914,7 @@ mod tests {
         use crate::technical_indicators::ema;
         let price_array: Array1<f64> = Array1::from_vec(vec![10.0, 11.0, 12.0, 13.0, 11.0, 15.0]);
         let ema: Array1<f64> = ema(&price_array, 3, 2).unwrap();
-        assert!((ema - Array1::from_vec(vec![f64::NAN, f64::NAN, 11.0, 12.0, 11.5, 13.25])).slice(s![2..]).sum().abs() < TEST_ACCURACY);
+        assert!((ema - Array1::from_vec(vec![f64::NAN, f64::NAN, 11.0, 12.0, 11.5, 13.25])).slice(s![2..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
@@ -805,8 +922,8 @@ mod tests {
         use crate::technical_indicators::{ema, macd, MACD};
         let price_array: Array1<f64> = Array1::from_vec(vec![10.0, 11.0, 12.0, 13.0, 11.0, 15.0]);
         let macd_info: MACD = macd(&price_array, 3, 4, 2, 2).unwrap();
-        assert!((macd_info.macd - ema(&price_array, 3, 2).unwrap() + ema(&price_array, 4, 2).unwrap()).slice(s![3..]).sum().abs() < TEST_ACCURACY);
-        assert!((macd_info.signal_line.slice(s![4..]).to_owned() - Array1::from_vec(vec![0.35, 0.43])).sum().abs() < TEST_ACCURACY);
+        assert!((macd_info.macd - ema(&price_array, 3, 2).unwrap() + ema(&price_array, 4, 2).unwrap()).slice(s![3..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+        assert!((macd_info.signal_line.slice(s![4..]).to_owned() - Array1::from_vec(vec![0.35, 0.43])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
@@ -815,7 +932,7 @@ mod tests {
         let price_array: Array1<f64> = Array1::from_vec(vec![10.0, 11.0, 12.0, 13.0, 11.0, 15.0]);
         let deviations: Array1<f64> = 2.0 * Array1::from_vec(vec![f64::NAN, f64::NAN, (2.0/3.0_f64).sqrt(), (2.0/3.0_f64).sqrt(), (2.0/3.0_f64).sqrt(), (8.0/3.0_f64).sqrt()]);
         let bb_info: BollingerBands = bollinger_bands(&price_array, 3, 2).unwrap();
-        assert!((bb_info.upper_band - sma(&price_array, 3).unwrap() - &deviations).slice(s![2..]).sum().abs() < TEST_ACCURACY);
+        assert!((bb_info.upper_band - sma(&price_array, 3).unwrap() - &deviations).slice(s![2..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
@@ -823,12 +940,12 @@ mod tests {
         use crate::technical_indicators::{rsi, RSI};
         let price_array: Array1<f64> = Array1::from_vec(vec![10.0, 11.0, 12.0, 13.0, 11.0, 15.0]);
         let rsi_info: RSI = rsi(&price_array, 3, 30.0, 70.0).unwrap();
-        assert!((rsi_info.u - Array1::from_vec(vec![0.0, 1.0, 1.0, 1.0, 0.0, 4.0])).sum().abs() < TEST_ACCURACY);
-        assert!((rsi_info.d - Array1::from_vec(vec![0.0, 0.0, 0.0, 0.0, 2.0, 0.0])).sum().abs() < TEST_ACCURACY);
-        assert!((rsi_info.u_smma - Array1::from_vec(vec![f64::NAN, f64::NAN, f64::NAN, 3.0/3.0, (1.0*2.0 + 0.0)/3.0, (2.0/3.0*2.0 + 4.0)/3.0])).slice(s![3..]).sum().abs() < TEST_ACCURACY);
-        assert!((rsi_info.d_smma - Array1::from_vec(vec![f64::NAN, f64::NAN, f64::NAN, 0.0, (0.0*2.0 + 2.0)/3.0, (2.0/3.0*2.0 + 0.0)/3.0])).slice(s![3..]).sum().abs() < TEST_ACCURACY);
-        assert!((rsi_info.rs - Array1::from_vec(vec![f64::NAN, f64::NAN, f64::NAN, f64::NAN, 1.0, 4.0])).slice(s![4..]).sum().abs() < TEST_ACCURACY);
-        assert!((rsi_info.rsi - Array1::from_vec(vec![f64::NAN, f64::NAN, f64::NAN, f64::NAN, 50.0, 80.0])).slice(s![4..]).sum().abs() < TEST_ACCURACY);
+        assert!((rsi_info.u - Array1::from_vec(vec![0.0, 1.0, 1.0, 1.0, 0.0, 4.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+        assert!((rsi_info.d - Array1::from_vec(vec![0.0, 0.0, 0.0, 0.0, 2.0, 0.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+        assert!((rsi_info.u_smma - Array1::from_vec(vec![f64::NAN, f64::NAN, f64::NAN, 3.0/3.0, (1.0*2.0 + 0.0)/3.0, (2.0/3.0*2.0 + 4.0)/3.0])).slice(s![3..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+        assert!((rsi_info.d_smma - Array1::from_vec(vec![f64::NAN, f64::NAN, f64::NAN, 0.0, (0.0*2.0 + 2.0)/3.0, (2.0/3.0*2.0 + 0.0)/3.0])).slice(s![3..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+        assert!((rsi_info.rs - Array1::from_vec(vec![f64::NAN, f64::NAN, f64::NAN, f64::NAN, 1.0, 4.0])).slice(s![4..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+        assert!((rsi_info.rsi - Array1::from_vec(vec![f64::NAN, f64::NAN, f64::NAN, f64::NAN, 50.0, 80.0])).slice(s![4..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
@@ -838,11 +955,11 @@ mod tests {
         let low_price: Array1<f64> = Array1::from_vec(vec![9.5, 10.7, 11.8, 12.6, 10.7, 14.9]);
         let high_price: Array1<f64> = Array1::from_vec(vec![10.2, 11.4, 12.3, 13.4, 11.3, 15.2]);
         let adx_info: ADX = adx(&high_price, &low_price, &close_price, 2, 25.0).unwrap();
-        assert!((adx_info.pdm - Array1::from_vec(vec![0.0, 1.2, 0.9, 1.1, 0.0, 3.9])).sum().abs() < TEST_ACCURACY);
-        assert!((adx_info.mdm - Array1::from_vec(vec![0.0, 0.0, 0.0, 0.0, 1.9, 0.0])).sum().abs() < TEST_ACCURACY);
-        assert!((adx_info.pdi - Array1::from_vec(vec![f64::NAN, f64::NAN, 105.0, 89.58333333333331, 30.71428571428571, 74.57983193277309])).slice(s![2..]).sum().abs() < TEST_ACCURACY);
-        assert!((adx_info.mdi - Array1::from_vec(vec![f64::NAN, f64::NAN, 0.0, 0.0, 54.28571428571428, 15.966386554621852])).slice(s![2..]).sum().abs() < TEST_ACCURACY);
-        assert!((adx_info.adx - Array1::from_vec(vec![f64::NAN, f64::NAN, f64::NAN, f64::NAN, 85.55088702147526, 72.52191286414025])).slice(s![4..]).sum().abs() < TEST_ACCURACY);
+        assert!((adx_info.pdm - Array1::from_vec(vec![0.0, 1.2, 0.9, 1.1, 0.0, 3.9])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+        assert!((adx_info.mdm - Array1::from_vec(vec![0.0, 0.0, 0.0, 0.0, 1.9, 0.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+        assert!((adx_info.pdi - Array1::from_vec(vec![f64::NAN, f64::NAN, 105.0, 89.58333333333331, 30.71428571428571, 74.57983193277309])).slice(s![2..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+        assert!((adx_info.mdi - Array1::from_vec(vec![f64::NAN, f64::NAN, 0.0, 0.0, 54.28571428571428, 15.966386554621852])).slice(s![2..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+        assert!((adx_info.adx - Array1::from_vec(vec![f64::NAN, f64::NAN, f64::NAN, f64::NAN, 85.55088702147526, 72.52191286414025])).slice(s![4..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
@@ -851,7 +968,7 @@ mod tests {
         let close_price: Array1<f64> = Array1::from_vec(vec![10.0, 11.0, 12.0, 13.0, 11.0, 15.0]);
         let volume: Array1<f64> = Array1::from_vec(vec![1000.0, 1200.0, 1100.0, 1250.0, 1260.0, 1110.0]);
         let obv: Array1<f64> = obv(&close_price, &volume).unwrap();
-        assert!((obv - Array1::from_vec(vec![0.0, 1200.0, 2300.0, 3550.0, 2290.0, 3400.0])).sum().abs() < TEST_ACCURACY);
+        assert!((obv - Array1::from_vec(vec![0.0, 1200.0, 2300.0, 3550.0, 2290.0, 3400.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[cfg(feature = "plotly")]

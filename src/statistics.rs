@@ -17,7 +17,7 @@ use nalgebra::DMatrix;
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
 use crate::error::DigiFiError;
-use crate::utilities::{compare_array_len, MatrixConversion};
+use crate::utilities::{NUMERICAL_CORRECTION, compare_array_len, MatrixConversion};
 use crate::utilities::maths_utils::{FunctionEvalMethod, factorial, definite_integral};
 use crate::utilities::loss_functions::{LossFunction, SSE};
 
@@ -329,7 +329,7 @@ pub fn n_choose_r(n: u128, r: u128) -> Result<u128, DigiFiError> {
 ///
 /// // The results were found using LinearRegression from sklearn
 /// let results: Array1<f64> = Array1::from(vec![-2.49556592e-16, 1.0, -2.0]);
-/// assert!((&params - &results).sum().abs() < TEST_ACCURACY);
+/// assert!((&params - &results).map(|v| v.abs() ).sum() < TEST_ACCURACY);
 /// ```
 pub fn linear_regression(x: &Array2<f64>, y: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
     if x.dim().0 != y.len() {
@@ -492,9 +492,29 @@ pub fn min_max_scaling(x: Array1<f64>, a: f64, b: f64) -> Array1<f64> {
 /// # Links
 /// - Wikipedia: N/A
 /// - Original Source: N/A
+/// 
+/// # Examples
+/// 
+/// ```rust
+/// use ndarray::{Array1, array};
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::statistics::percent_change;
+///
+/// let x: Array1<f64> = array![1.0, 2.0, 1.6, 1.6, 0.0, 0.0];
+/// 
+/// assert!((percent_change(&x) - array![1.0, -0.2, 0.0, -1.0, 0.0]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+/// ```
 pub fn percent_change(x: &Array1<f64>) -> Array1<f64> {
-    let x_diff: Array1<f64> = &x.slice(s![1..(x.len())]) - &x.slice(s![0..(x.len()-1)]);
-    x_diff / x.slice(s![0..(x.len()-1)])
+    let result: Vec<f64> = x.slice(s![1..(x.len())]).iter().zip(x.slice(s![0..(x.len()-1)]).iter()).map(|(final_, initial)| {
+        if initial == &0.0 && final_ == &0.0 {
+            0.0
+        } else if initial != &0.0 && final_ != &0.0 {
+            (final_ / initial) - 1.0
+        } else {
+            if initial < final_ { 1.0 } else { -1.0 }
+        }
+    } ).collect();
+    Array1::from_vec(result)
 }
 
 
@@ -513,9 +533,24 @@ pub fn percent_change(x: &Array1<f64>) -> Array1<f64> {
 /// # Links
 /// - Wikipedia: N/A
 /// - Original Source: N/A
+/// 
+/// # Examples
+/// 
+/// ```rust
+/// use ndarray::{Array1, array};
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::statistics::log_return_transformation;
+///
+/// let x: Array1<f64> = array![1.0, 2.0, 1.6, 1.6, 0.0, 0.0];
+/// 
+/// assert!((log_return_transformation(&x) - array![0.6931471805599453, -0.2231435513142097, 0.0, -32.236990899346836, 0.0]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+/// ```
 pub fn log_return_transformation(x: &Array1<f64>) -> Array1<f64> {
     let arithmetic_change: Array1<f64> = percent_change(x);
-    arithmetic_change.map(|v| (v + 1.0).ln() )
+    arithmetic_change.map(|v| {
+        let v: f64 = match v { -1.0 => v + NUMERICAL_CORRECTION, _ => *v, };
+        (v + 1.0).ln()
+    } )
 }
 
 
@@ -1055,7 +1090,7 @@ mod tests {
         let params: Array1<f64> = linear_regression(&x, &y).unwrap();
         // The results were found using LinearRegression from sklearn
         let results: Array1<f64> = Array1::from(vec![-2.49556592e-16, 1.0, -2.0]);
-        assert!((&params - &results).sum().abs() < TEST_ACCURACY);
+        assert!((&params - &results).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
@@ -1064,6 +1099,20 @@ mod tests {
         let x: Array1<f64> = Array1::from_vec(vec![-10.0, -4.0, 5.0]);
         let x_norm: Array1<f64> = min_max_scaling(x, 0.0, 1.0);
         assert_eq!(x_norm, Array1::from_vec(vec![0.0, 0.4, 1.0]));
+    }
+
+    #[test]
+    fn unit_test_percent_change() -> () {
+        use crate::statistics::percent_change;
+        let x: Array1<f64> = array![1.0, 2.0, 1.6, 1.6, 0.0, 0.0];
+        assert!((percent_change(&x) - array![1.0, -0.2, 0.0, -1.0, 0.0]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+    }
+
+    #[test]
+    fn unit_test_log_return_transformation() -> () {
+        use crate::statistics::log_return_transformation;
+        let x: Array1<f64> = array![1.0, 2.0, 1.6, 1.6, 0.0, 0.0];
+        assert!((log_return_transformation(&x) - array![0.6931471805599453, -0.2231435513142097, 0.0, -32.236990899346836, 0.0]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]

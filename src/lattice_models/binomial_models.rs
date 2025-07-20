@@ -28,9 +28,9 @@ use crate::financial_instruments::Payoff;
 ///
 /// let tree: Vec<Array1<f64>> = binomial_tree_nodes(10.0, 1.2, 0.9, 2).unwrap();
 ///
-/// assert!((&tree[0] - Array1::from_vec(vec![10.0])).sum().abs() < TEST_ACCURACY);
-/// assert!((&tree[1] - Array1::from_vec(vec![9.0, 12.0])).sum().abs() < TEST_ACCURACY);
-/// assert!((&tree[2] - Array1::from_vec(vec![8.1, 10.8, 14.4])).sum().abs() < TEST_ACCURACY);
+/// assert!((&tree[0] - Array1::from_vec(vec![10.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+/// assert!((&tree[1] - Array1::from_vec(vec![9.0, 12.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+/// assert!((&tree[2] - Array1::from_vec(vec![8.1, 10.8, 14.4])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
 /// ```
 pub fn binomial_tree_nodes(s_0: f64, u: f64, d: f64, n_steps: usize) -> Result<Vec<Array1<f64>>, DigiFiError> {
     if (u <= 0.0) || (d <= 0.0) {
@@ -315,9 +315,9 @@ mod tests {
     fn unit_test_binomial_tree_nodes() -> () {
         use crate::lattice_models::binomial_models::binomial_tree_nodes;
         let tree: Vec<Array1<f64>> = binomial_tree_nodes(10.0, 1.2, 0.9, 2).unwrap();
-        assert!((&tree[0] - Array1::from_vec(vec![10.0])).sum().abs() < TEST_ACCURACY);
-        assert!((&tree[1] - Array1::from_vec(vec![9.0, 12.0])).sum().abs() < TEST_ACCURACY);
-        assert!((&tree[2] - Array1::from_vec(vec![8.1, 10.8, 14.4])).sum().abs() < TEST_ACCURACY);
+        assert!((&tree[0] - Array1::from_vec(vec![10.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+        assert!((&tree[1] - Array1::from_vec(vec![9.0, 12.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+        assert!((&tree[2] - Array1::from_vec(vec![8.1, 10.8, 14.4])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]

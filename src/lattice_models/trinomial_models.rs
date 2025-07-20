@@ -30,9 +30,9 @@ use crate::lattice_models::LatticeModel;
 /// // Sideways movement factor
 /// let s: f64 = 1.0392304845;
 ///
-/// assert!((&tree[0] - Array1::from_vec(vec![10.0])).sum().abs() < TEST_ACCURACY);
-/// assert!((&tree[1] - Array1::from_vec(vec![9.0, 10.0*s, 12.0])).sum().abs() < TEST_ACCURACY);
-/// assert!((&tree[2] - Array1::from_vec(vec![8.1, 9.0*s, 10.0*s*s, 12.0*s, 14.4])).sum().abs() < TEST_ACCURACY);
+/// assert!((&tree[0] - Array1::from_vec(vec![10.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+/// assert!((&tree[1] - Array1::from_vec(vec![9.0, 10.0*s, 12.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+/// assert!((&tree[2] - Array1::from_vec(vec![8.1, 9.0*s, 10.0*s*s, 12.0*s, 14.4])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
 /// ```
 pub fn trinomial_tree_nodes(s_0: f64, u: f64, d: f64, n_steps: usize) -> Result<Vec<Array1<f64>>, DigiFiError> {
     if (u <= 0.0) || (d <= 0.0) {
@@ -286,9 +286,9 @@ mod tests {
         let tree: Vec<Array1<f64>> = trinomial_tree_nodes(10.0, 1.2, 0.9, 2).unwrap();
         // Sideways movement factor
         let s: f64 = 1.0392304845;
-        assert!((&tree[0] - Array1::from_vec(vec![10.0])).sum().abs() < TEST_ACCURACY);
-        assert!((&tree[1] - Array1::from_vec(vec![9.0, 10.0*s, 12.0])).sum().abs() < TEST_ACCURACY);
-        assert!((&tree[2] - Array1::from_vec(vec![8.1, 9.0*s, 10.0*s*s, 12.0*s, 14.4])).sum().abs() < TEST_ACCURACY);
+        assert!((&tree[0] - Array1::from_vec(vec![10.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+        assert!((&tree[1] - Array1::from_vec(vec![9.0, 10.0*s, 12.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+        assert!((&tree[2] - Array1::from_vec(vec![8.1, 9.0*s, 10.0*s*s, 12.0*s, 14.4])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]

@@ -1,5 +1,5 @@
 use ndarray::{Array1, s};
-use crate::{error::DigiFiError, statistics::n_choose_r};
+use crate::{error::DigiFiError, utilities::NUMERICAL_CORRECTION, statistics::n_choose_r};
 
 /// # Description
 /// Method for computing the result of a function.
@@ -285,28 +285,28 @@ pub fn definite_integral<F: Fn(f64) -> f64>(f: F, start: f64, end: f64, n_interv
     // Transform the integral bounds from infinite to finite
     let g: Box<dyn Fn(f64) -> f64> = match (start, end) {
         (f64::NEG_INFINITY, f64::INFINITY) => {
-            a = -0.99999999999999;
-            b = 0.99999999999999;
+            a = -1.0 + NUMERICAL_CORRECTION;
+            b = 1.0 - NUMERICAL_CORRECTION;
             Box::new(move |t: f64| { f(t/(1.0 - t.powi(2))) * (1.0 + t.powi(2)) / (1.0 - t.powi(2)).powi(2) })
         },
         (f64::NEG_INFINITY, v) => {
-            a = 0.00000000000001;
-            b = 0.99999999999999;
+            a = NUMERICAL_CORRECTION;
+            b = 1.0 - NUMERICAL_CORRECTION;
             Box::new(move |t: f64| { f(v - (1.0 - t)/t) / t.powi(2) })
         },
         (v, f64::INFINITY) => {
-            a = 0.00000000000001;
-            b = 0.99999999999999;
+            a = NUMERICAL_CORRECTION;
+            b = 1.0 - NUMERICAL_CORRECTION;
             Box::new(move |t: f64| { f(v + t/(1.0 - t)) / (1.0 - t).powi(2) })
         },
         (a_, b_) => {
             if a_ == 0.0 {
-                a = 0.00000000000001;
+                a = NUMERICAL_CORRECTION;
             } else {
                 a = a_
             }
             if b_ == 0.0 {
-                b = 0.00000000000001;
+                b = NUMERICAL_CORRECTION;
             } else {
                 b = b_
             }

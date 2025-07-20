@@ -199,7 +199,7 @@ pub trait PortfolioInstrument {
 /// let price_array: Array1<f64> = Array1::from_vec(vec![100.0, 101.0, 102.0, 101.0, 103.0, 102.0]);
 /// let result: Array1<f64> = prices_to_returns(&price_array, &ReturnsTransformation::Arithmetic);
 ///
-/// assert!((result - Array1::from_vec(vec![0.01, 1.0/101.0, -1.0/102.0, 2.0/101.0, -1.0/103.0])).sum().abs() < TEST_ACCURACY);
+/// assert!((result - Array1::from_vec(vec![0.01, 1.0/101.0, -1.0/102.0, 2.0/101.0, -1.0/103.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
 pub fn prices_to_returns(price_array: &Array1<f64>, returns_transformation: &ReturnsTransformation) -> Array1<f64> {
     match returns_transformation {
         ReturnsTransformation::Arithmetic => percent_change(price_array),
@@ -273,6 +273,6 @@ mod tests {
         use crate::portfolio_applications::{prices_to_returns, ReturnsTransformation};
         let price_array: Array1<f64> = Array1::from_vec(vec![100.0, 101.0, 102.0, 101.0, 103.0, 102.0]);
         let result: Array1<f64> = prices_to_returns(&price_array, &ReturnsTransformation::Arithmetic);
-        assert!((result - Array1::from_vec(vec![0.01, 1.0/101.0, -1.0/102.0, 2.0/101.0, -1.0/103.0])).sum().abs() < TEST_ACCURACY);
+        assert!((result - Array1::from_vec(vec![0.01, 1.0/101.0, -1.0/102.0, 2.0/101.0, -1.0/103.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 }

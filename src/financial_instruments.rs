@@ -186,7 +186,7 @@ impl Payoff for LongCall {
     ///
     /// let long_call: LongCall = LongCall { k: 10.0, cost: 1.0 };
     ///
-    /// assert!((long_call.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, 3.0])).sum().abs() < TEST_ACCURACY);
+    /// assert!((long_call.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, 3.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     /// ```
     fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
         (s - self.k).map(| p | p.max(0.0))
@@ -248,7 +248,7 @@ impl Payoff for ShortCall {
     ///
     /// let short_call: ShortCall = ShortCall { k: 10.0, cost: 1.0 };
     ///
-    /// assert!((short_call.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, -3.0])).sum().abs() < TEST_ACCURACY);
+    /// assert!((short_call.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, -3.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     /// ```
     fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
         (self.k - s).map(| p | p.min(0.0))
@@ -310,7 +310,7 @@ impl Payoff for LongPut {
     ///
     /// let long_put: LongPut = LongPut { k: 10.0, cost: 1.0 };
     ///
-    /// assert!((long_put.payoff(&s) - Array1::from_vec(vec![0.0, 1.0, 0.0])).sum().abs() < TEST_ACCURACY);
+    /// assert!((long_put.payoff(&s) - Array1::from_vec(vec![0.0, 1.0, 0.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     /// ```
     fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
         (self.k - s).map(| p | p.max(0.0))
@@ -372,7 +372,7 @@ impl Payoff for ShortPut {
     ///
     /// let short_put: ShortPut = ShortPut { k: 10.0, cost: 1.0 };
     ///
-    /// assert!((short_put.payoff(&s) - Array1::from_vec(vec![0.0, -1.0, 0.0])).sum().abs() < TEST_ACCURACY);
+    /// assert!((short_put.payoff(&s) - Array1::from_vec(vec![0.0, -1.0, 0.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     /// ```
     fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
         (s - self.k).map(| p | p.min(0.0))
@@ -460,7 +460,7 @@ impl Payoff for BullCollar {
     ///
     /// let bull_collar: BullCollar = BullCollar::new(4.0, 6.0, 0.0, 5.0).unwrap();
     ///
-    /// assert!((bull_collar.payoff(&s) - Array1::from_vec(vec![-1.0, -1.0, -1.0, -0.5, 0.0, 0.5, 1.0, 1.0])).sum().abs() < TEST_ACCURACY);
+    /// assert!((bull_collar.payoff(&s) - Array1::from_vec(vec![-1.0, -1.0, -1.0, -0.5, 0.0, 0.5, 1.0, 1.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     /// ```
     fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
         s - self.cost_s + (self.k_p - s).map(| p | p.max(0.0)) + (self.k_c - s).map(| p | p.min(0.0))
@@ -548,7 +548,7 @@ impl Payoff for BearCollar {
     ///
     /// let bear_collar: BearCollar = BearCollar::new(4.0, 6.0, 0.0, 5.0).unwrap();
     ///
-    /// assert!((bear_collar.payoff(&s) - Array1::from_vec(vec![1.0, 1.0, 1.0, 0.5, 0.0, -0.5, -1.0, -1.0])).sum().abs() < TEST_ACCURACY);
+    /// assert!((bear_collar.payoff(&s) - Array1::from_vec(vec![1.0, 1.0, 1.0, 0.5, 0.0, -0.5, -1.0, -1.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     /// ```
     fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
         self.cost_s - s + (s - self.k_p).map(| p | p.min(0.0)) + (s - self.k_c).map(| p | p.max(0.0))
@@ -633,7 +633,7 @@ impl Payoff for BullSpread {
     ///
     /// let bull_spread: BullSpread = BullSpread::new(4.0, 6.0, 1.0).unwrap();
     ///
-    /// assert!((bull_spread.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, 1.0, 2.0, 2.0])).sum().abs() < TEST_ACCURACY);
+    /// assert!((bull_spread.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, 1.0, 2.0, 2.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     /// ```
     fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
         (s - self.k_l).map(| p | p.max(0.0)) + (self.k_s - s).map(| p | p.min(0.0))
@@ -718,7 +718,7 @@ impl Payoff for BearSpread {
     ///
     /// let bear_spread: BearSpread = BearSpread::new(6.0, 4.0, 1.0).unwrap();
     ///
-    /// assert!((bear_spread.payoff(&s) - Array1::from_vec(vec![2.0, 2.0, 1.0, 0.0, 0.0])).sum().abs() < TEST_ACCURACY);
+    /// assert!((bear_spread.payoff(&s) - Array1::from_vec(vec![2.0, 2.0, 1.0, 0.0, 0.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     /// ```
     fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
         (self.k_l - s).map(| p | p.max(0.0)) + (s - self.k_s).map(| p | p.min(0.0))
@@ -811,7 +811,7 @@ impl Payoff for LongButterfly {
     ///
     /// let long_butterfly: LongButterfly = LongButterfly::new(4.0, 6.0, 5.0, 1.0).unwrap();
     ///
-    /// assert!((long_butterfly.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, 1.0, 0.0, 0.0])).sum().abs() < TEST_ACCURACY);
+    /// assert!((long_butterfly.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, 1.0, 0.0, 0.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     /// ```
     fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
         (s - self.k1_c).map(| p | p.max(0.0)) + 2.0*(self.k_p - s).map(| p | p.min(0.0)) + (s - self.k2_c).map(| p | p.max(0.0))
@@ -896,7 +896,7 @@ impl Payoff for BoxSpread {
     ///
     /// let box_spread: BoxSpread = BoxSpread::new(4.0, 6.0, 1.0).unwrap();
     ///
-    /// assert!((box_spread.payoff(&s) - Array1::from_vec(vec![2.0, 2.0, 2.0, 2.0, 2.0])).sum().abs() < TEST_ACCURACY);
+    /// assert!((box_spread.payoff(&s) - Array1::from_vec(vec![2.0, 2.0, 2.0, 2.0, 2.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     /// ```
     fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
         (s - self.k_1).map(| p | p.max(0.0)) + (self.k_2 - s).map(| p | p.min(0.0)) + (self.k_2 - s).map(| p | p.max(0.0)) + (s - self.k_1).map(| p | p.min(0.0))
@@ -960,7 +960,7 @@ impl Payoff for Straddle {
     ///
     /// let straddle: Straddle = Straddle { k: 5.0, cost: 1.0 };
     ///
-    /// assert!((straddle.payoff(&s) - Array1::from_vec(vec![2.0, 1.0, 0.0, 1.0, 2.0])).sum().abs() < TEST_ACCURACY);
+    /// assert!((straddle.payoff(&s) - Array1::from_vec(vec![2.0, 1.0, 0.0, 1.0, 2.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     /// ```
     fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
         (s - self.k).map(| p | p.max(0.0)) + (self.k - s).map(| p | p.max(0.0))
@@ -1045,7 +1045,7 @@ impl Payoff for Strangle {
     ///
     /// let strangle: Strangle = Strangle::new(6.0, 4.0, 1.0).unwrap();
     ///
-    /// assert!((strangle.payoff(&s) - Array1::from_vec(vec![1.0, 0.0, 0.0, 0.0, 1.0])).sum().abs() < TEST_ACCURACY);
+    /// assert!((strangle.payoff(&s) - Array1::from_vec(vec![1.0, 0.0, 0.0, 0.0, 1.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     /// ```
     fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
         (s - self.k_c).map(| p | p.max(0.0)) + (self.k_p - s).map(| p | p.max(0.0))
@@ -1109,7 +1109,7 @@ impl Payoff for Strip {
     ///
     /// let strip: Strip = Strip { k: 5.0, cost: 1.0 };
     ///
-    /// assert!((strip.payoff(&s) - Array1::from_vec(vec![4.0, 2.0, 0.0, 1.0, 2.0])).sum().abs() < TEST_ACCURACY);
+    /// assert!((strip.payoff(&s) - Array1::from_vec(vec![4.0, 2.0, 0.0, 1.0, 2.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     /// ```
     fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
         (s - self.k).map(| p | p.max(0.0)) + 2.0*(self.k - s).map(| p | p.max(0.0))
@@ -1173,7 +1173,7 @@ impl Payoff for Strap {
     ///
     ///  let strap: Strap = Strap { k: 5.0, cost: 1.0 };
     ///
-    ///  assert!((strap.payoff(&s) - Array1::from_vec(vec![2.0, 1.0, 0.0, 2.0, 4.0])).sum().abs() < TEST_ACCURACY);
+    ///  assert!((strap.payoff(&s) - Array1::from_vec(vec![2.0, 1.0, 0.0, 2.0, 4.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     /// ```
     fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
         2.0*(s - self.k).map(| p | p.max(0.0)) + (self.k - s).map(| p | p.max(0.0))
@@ -1295,7 +1295,7 @@ mod tests {
         use crate::financial_instruments::LongCall;
         let s: Array1<f64> = array![10.0, 9.0, 13.0];
         let long_call: LongCall = LongCall { k: 10.0, cost: 1.0 };
-        assert!((long_call.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, 3.0])).sum().abs() < TEST_ACCURACY);
+        assert!((long_call.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, 3.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
@@ -1303,7 +1303,7 @@ mod tests {
         use crate::financial_instruments::ShortCall;
         let s: Array1<f64> = array![10.0, 9.0, 13.0];
         let short_call: ShortCall = ShortCall { k: 10.0, cost: 1.0 };
-        assert!((short_call.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, -3.0])).sum().abs() < TEST_ACCURACY);
+        assert!((short_call.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, -3.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
@@ -1311,7 +1311,7 @@ mod tests {
         use crate::financial_instruments::LongPut;
         let s: Array1<f64> = array![10.0, 9.0, 13.0];
         let long_put: LongPut = LongPut { k: 10.0, cost: 1.0 };
-        assert!((long_put.payoff(&s) - Array1::from_vec(vec![0.0, 1.0, 0.0])).sum().abs() < TEST_ACCURACY);
+        assert!((long_put.payoff(&s) - Array1::from_vec(vec![0.0, 1.0, 0.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
@@ -1319,7 +1319,7 @@ mod tests {
         use crate::financial_instruments::ShortPut;
         let s: Array1<f64> = array![10.0, 9.0, 13.0];
         let short_put: ShortPut = ShortPut { k: 10.0, cost: 1.0 };
-        assert!((short_put.payoff(&s) - Array1::from_vec(vec![0.0, -1.0, 0.0])).sum().abs() < TEST_ACCURACY);
+        assert!((short_put.payoff(&s) - Array1::from_vec(vec![0.0, -1.0, 0.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
@@ -1328,7 +1328,7 @@ mod tests {
         let s: Array1<f64> = Array1::range(3.0, 7.0, 0.5);
         let bull_collar: BullCollar = BullCollar::new(4.0, 6.0, 0.0, 5.0).unwrap();
         println!("{}", bull_collar.profit(&s));
-        assert!((bull_collar.payoff(&s) - Array1::from_vec(vec![-1.0, -1.0, -1.0, -0.5, 0.0, 0.5, 1.0, 1.0])).sum().abs() < TEST_ACCURACY);
+        assert!((bull_collar.payoff(&s) - Array1::from_vec(vec![-1.0, -1.0, -1.0, -0.5, 0.0, 0.5, 1.0, 1.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
@@ -1336,7 +1336,7 @@ mod tests {
         use crate::financial_instruments::BearCollar;
         let s: Array1<f64> = Array1::range(3.0, 7.0, 0.5);
         let bear_collar: BearCollar = BearCollar::new(4.0, 6.0, 0.0, 5.0).unwrap();
-        assert!((bear_collar.payoff(&s) - Array1::from_vec(vec![1.0, 1.0, 1.0, 0.5, 0.0, -0.5, -1.0, -1.0])).sum().abs() < TEST_ACCURACY);
+        assert!((bear_collar.payoff(&s) - Array1::from_vec(vec![1.0, 1.0, 1.0, 0.5, 0.0, -0.5, -1.0, -1.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
@@ -1344,7 +1344,7 @@ mod tests {
         use crate::financial_instruments::BullSpread;
         let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
         let bull_spread: BullSpread = BullSpread::new(4.0, 6.0, 1.0).unwrap();
-        assert!((bull_spread.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, 1.0, 2.0, 2.0])).sum().abs() < TEST_ACCURACY);
+        assert!((bull_spread.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, 1.0, 2.0, 2.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
@@ -1352,7 +1352,7 @@ mod tests {
         use crate::financial_instruments::BearSpread;
         let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
         let bear_spread: BearSpread = BearSpread::new(6.0, 4.0, 1.0).unwrap();
-        assert!((bear_spread.payoff(&s) - Array1::from_vec(vec![2.0, 2.0, 1.0, 0.0, 0.0])).sum().abs() < TEST_ACCURACY);
+        assert!((bear_spread.payoff(&s) - Array1::from_vec(vec![2.0, 2.0, 1.0, 0.0, 0.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
@@ -1360,7 +1360,7 @@ mod tests {
         use crate::financial_instruments::LongButterfly;
         let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
         let long_butterfly: LongButterfly = LongButterfly::new(4.0, 6.0, 5.0, 1.0).unwrap();
-        assert!((long_butterfly.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, 1.0, 0.0, 0.0])).sum().abs() < TEST_ACCURACY);
+        assert!((long_butterfly.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, 1.0, 0.0, 0.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
@@ -1368,7 +1368,7 @@ mod tests {
         use crate::financial_instruments::BoxSpread;
         let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
         let box_spread: BoxSpread = BoxSpread::new(4.0, 6.0, 1.0).unwrap();
-        assert!((box_spread.payoff(&s) - Array1::from_vec(vec![2.0, 2.0, 2.0, 2.0, 2.0])).sum().abs() < TEST_ACCURACY);
+        assert!((box_spread.payoff(&s) - Array1::from_vec(vec![2.0, 2.0, 2.0, 2.0, 2.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
@@ -1376,7 +1376,7 @@ mod tests {
         use crate::financial_instruments::Straddle;
         let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
         let straddle: Straddle = Straddle { k: 5.0, cost: 1.0 };
-        assert!((straddle.payoff(&s) - Array1::from_vec(vec![2.0, 1.0, 0.0, 1.0, 2.0])).sum().abs() < TEST_ACCURACY);
+        assert!((straddle.payoff(&s) - Array1::from_vec(vec![2.0, 1.0, 0.0, 1.0, 2.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
@@ -1384,7 +1384,7 @@ mod tests {
         use crate::financial_instruments::Strangle;
         let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
         let strangle: Strangle = Strangle::new(6.0, 4.0, 1.0).unwrap();
-        assert!((strangle.payoff(&s) - Array1::from_vec(vec![1.0, 0.0, 0.0, 0.0, 1.0])).sum().abs() < TEST_ACCURACY);
+        assert!((strangle.payoff(&s) - Array1::from_vec(vec![1.0, 0.0, 0.0, 0.0, 1.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
@@ -1392,7 +1392,7 @@ mod tests {
         use crate::financial_instruments::Strip;
         let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
         let strip: Strip = Strip { k: 5.0, cost: 1.0 };
-        assert!((strip.payoff(&s) - Array1::from_vec(vec![4.0, 2.0, 0.0, 1.0, 2.0])).sum().abs() < TEST_ACCURACY);
+        assert!((strip.payoff(&s) - Array1::from_vec(vec![4.0, 2.0, 0.0, 1.0, 2.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
@@ -1400,7 +1400,7 @@ mod tests {
         use crate::financial_instruments::Strap;
         let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
         let strap: Strap = Strap { k: 5.0, cost: 1.0 };
-        assert!((strap.payoff(&s) - Array1::from_vec(vec![2.0, 1.0, 0.0, 2.0, 4.0])).sum().abs() < TEST_ACCURACY);
+        assert!((strap.payoff(&s) - Array1::from_vec(vec![2.0, 1.0, 0.0, 2.0, 4.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[cfg(feature = "plotly")]

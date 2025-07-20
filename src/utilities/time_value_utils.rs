@@ -446,8 +446,8 @@ pub fn forward_rate(compounding_1: &Compounding, time_1: f64, compounding_2: &Co
 ///
 /// let cashflow: Cashflow = Cashflow::new(cashflow_, time, 0.02, 0.015).unwrap();
 ///
-/// assert!((cashflow.time_array() - Array1::from_vec(vec![0.0, 1.0, 2.0])).sum().abs() < TEST_ACCURACY);
-/// assert!((cashflow.cashflow() - Array1::from_vec(vec![10.0, 10.0*1.02/1.015, 10.0*(1.02/1.015_f64).powf(2.0)])).sum().abs() < TEST_ACCURACY);
+/// assert!((cashflow.time_array() - Array1::from_vec(vec![0.0, 1.0, 2.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+/// assert!((cashflow.cashflow() - Array1::from_vec(vec![10.0, 10.0*1.02/1.015, 10.0*(1.02/1.015_f64).powf(2.0)])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
 /// ```
 pub struct Cashflow {
     /// Series of cashflows
@@ -769,8 +769,8 @@ mod tests {
         let cashflow_: ParameterType = ParameterType::Value { value: 10.0 }; 
         let time: Time = Time::Range { initial_time: 0.0, final_time: 2.0, time_step: 1.0 };
         let cashflow: Cashflow = Cashflow::new(cashflow_, time, 0.02, 0.015).unwrap();
-        assert!((cashflow.time_array() - Array1::from_vec(vec![0.0, 1.0, 2.0])).sum().abs() < TEST_ACCURACY);
-        assert!((cashflow.cashflow() - Array1::from_vec(vec![10.0, 10.0*1.02/1.015, 10.0*(1.02/1.015_f64).powf(2.0)])).sum().abs() < TEST_ACCURACY);
+        assert!((cashflow.time_array() - Array1::from_vec(vec![0.0, 1.0, 2.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+        assert!((cashflow.cashflow() - Array1::from_vec(vec![10.0, 10.0*1.02/1.015, 10.0*(1.02/1.015_f64).powf(2.0)])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]

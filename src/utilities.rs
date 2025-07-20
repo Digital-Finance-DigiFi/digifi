@@ -29,6 +29,10 @@ use crate::error::DigiFiError;
 
 pub const TEST_ACCURACY: f64 = 0.00000001;
 
+/// Constant used for numerical corrections of values in order to make the numerical method well-defined
+/// (i.e., Numerical integration upper and lower bounds, log returns)
+pub const NUMERICAL_CORRECTION: f64 = 0.00000000000001;
+
 
 #[derive(Debug, Clone)]
 /// # Description
@@ -55,7 +59,7 @@ pub enum ParameterType {
 /// let time_array_1: Array1<f64> = time_1.get_time_array();
 /// let time_array_2: Array1<f64> = time_2.get_time_array();
 /// 
-/// assert!((time_array_1 - time_array_2).sum().abs() < TEST_ACCURACY);
+/// assert!((time_array_1 - time_array_2).map(|v| v.abs() ).sum() < TEST_ACCURACY);
 /// ```
 pub enum Time {
     /// Creates a range of time steps given the provided settings.
@@ -173,7 +177,7 @@ mod tests {
         let time_2: Time = Time::Sequence { times: Array1::from_vec(vec![0.0, 0.2, 0.4, 0.6, 0.8, 1.0]) };
         let time_array_1: Array1<f64> = time_1.get_time_array();
         let time_array_2: Array1<f64> = time_2.get_time_array();
-        assert!((time_array_1 - time_array_2).sum().abs() < TEST_ACCURACY);
+        assert!((time_array_1 - time_array_2).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
