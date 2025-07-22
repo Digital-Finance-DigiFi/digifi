@@ -2,10 +2,11 @@ use ndarray::{Array1, arr1};
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
 use crate::error::DigiFiError;
-use crate::utilities::{maths_utils::{FunctionEvalMethod, erf, erfinv, derivative}, numerical_engines::nelder_mead};
+use crate::utilities::{maths_utils::{erf, erfinv, derivative}, numerical_engines::nelder_mead};
 use crate::statistics::{
-    digamma_function, gamma_function, lower_incomplete_gamma_function, beta_function, regularized_incomplete_beta_function,
     ProbabilityDistribution, ProbabilityDistributionType,
+    gamma::{gamma, lower_incomplete_gamma, digamma},
+    beta::{beta, regularized_incomplete_beta},
 };
 
 
@@ -276,7 +277,7 @@ impl ProbabilityDistribution for NormalDistribution {
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Normal_distribution#Cumulative_distribution_function>
     /// - Original Source: N/A
     fn cdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
-        Ok((1.0 + ((x - self.mu) / (self.sigma * 2.0_f64.sqrt())).map(|x_| erf(*x_, FunctionEvalMethod::Approximation { n_terms: 20 }) )) / 2.0)
+        Ok((1.0 + ((x - self.mu) / (self.sigma * 2.0_f64.sqrt())).map(|x_| erf(*x_, None) )) / 2.0)
     }
 
     /// # Description
@@ -289,7 +290,7 @@ impl ProbabilityDistribution for NormalDistribution {
     /// - Inverse CDF values for the given probabilities
     fn inverse_cdf(&self, p: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
         let p: Array1<f64> = p.map(|p_| if (*p_ < 0.0) || (1.0 < *p_) { f64::NAN } else {*p_} );
-        Ok(self.mu + self.sigma * 2.0_f64.sqrt() * p.map(|p_| erfinv(2.0 * *p_ - 1.0, 30) ))
+        Ok(self.mu + self.sigma * 2.0_f64.sqrt() * p.map(|p_| erfinv(2.0 * *p_ - 1.0, Some(30)) ))
     }
 
     /// # Description
@@ -616,15 +617,15 @@ impl ProbabilityDistribution for LaplaceDistribution {
 ///
 /// // PDF test
 /// let pdf_v: f64 = dist.pdf(&x).unwrap()[0];
-/// assert!((pdf_v - 0.38154528938409304).abs() < 10_000_000.0 * TEST_ACCURACY);
+/// assert!((pdf_v - 0.38154528938409304).abs() < TEST_ACCURACY);
 ///
 /// // CDF test
 /// let cdf_v: f64 = dist.cdf(&x).unwrap()[0];
-/// assert!((cdf_v - 0.5614219739190003).abs() < 10_000_000.0 * TEST_ACCURACY);
+/// assert!((cdf_v - 0.5614219739190003).abs() < TEST_ACCURACY);
 ///
 /// // Inverse CDF test
 /// let icdf_v: f64 = dist.inverse_cdf(&arr1(&[0.5614219739190003])).unwrap()[0];
-/// assert!((icdf_v - x[0]).abs() < 10_000_000.0 * TEST_ACCURACY);
+/// assert!((icdf_v - x[0]).abs() < TEST_ACCURACY);
 /// ```
 pub struct GammaDistribution {
     /// Shape parameter, which controls the shape of the distribution
@@ -684,9 +685,8 @@ impl ProbabilityDistribution for GammaDistribution {
     }
 
     fn entropy(&self) -> Result<f64, DigiFiError> {
-        let method: FunctionEvalMethod = FunctionEvalMethod::Approximation { n_terms: 30 };
-        let f = |z: f64| { gamma_function(z.ln(), &method) };
-        Ok(self.k + self.theta.ln() + gamma_function(self.k, &method).ln() + (1.0 - self.k) * derivative(f, self.k, 0.00000001))
+        let f = |z: f64| { gamma(z.ln()) };
+        Ok(self.k + self.theta.ln() + gamma(self.k).ln() + (1.0 - self.k) * derivative(f, self.k, 0.00000001))
     }
 
     /// # Description
@@ -699,7 +699,7 @@ impl ProbabilityDistribution for GammaDistribution {
     /// - PDF values at the given `x`
     fn pdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
         let x_: Array1<f64> = x.map(|v| if *v < 0.0{ f64::NAN } else {*v});
-        Ok(x_.map(|v| v.powf(self.k - 1.0) * (-v / self.theta).exp() / (gamma_function(self.k, &FunctionEvalMethod::Approximation { n_terms: 50 }) * self.theta.powf(self.k)) ))
+        Ok(x_.map(|v| v.powf(self.k - 1.0) * (-v / self.theta).exp() / (gamma(self.k) * self.theta.powf(self.k)) ))
     }
 
     /// # Description
@@ -714,7 +714,7 @@ impl ProbabilityDistribution for GammaDistribution {
         let x_: Array1<f64> = x.map(|v| if *v < 0.0 { f64::NAN } else {*v});
         let mut y: Vec<f64> = Vec::<f64>::new();
         for v in x_ {
-            y.push(lower_incomplete_gamma_function(self.k, v/self.theta, &FunctionEvalMethod::Approximation { n_terms: 50 })? / gamma_function(self.k, &FunctionEvalMethod::Approximation { n_terms: 30 }));
+            y.push(lower_incomplete_gamma(self.k, v/self.theta, Some(50))? / gamma(self.k));
         }
         Ok(Array1::from_vec(y))
     }
@@ -776,16 +776,16 @@ impl ProbabilityDistribution for GammaDistribution {
 /// // PDF test (Values obtained using t.pdf() from SciPy)
 /// let pdf_v: Array1<f64> = dist.pdf(&x).unwrap();
 /// let tested_values: Array1<f64> = Array1::from(vec![0.06804138, 0.19245009, 0.35355339, 0.19245009, 0.06804138]);
-/// assert!((pdf_v - tested_values).fold(true, |test, i| if *i < 100_000.0 * TEST_ACCURACY && test { true } else { false } ));
+/// assert!((pdf_v - tested_values).fold(true, |test, i| if *i < TEST_ACCURACY && test { true } else { false } ));
 /// 
 /// // CDF test (Values obtained using t.cdf() from SciPy)
-/// let cdf_v: f64 = dist.cdf(&x).unwrap()[0];
+/// let cdf_v: Array1<f64> = dist.cdf(&x).unwrap();
 /// let tested_values: Array1<f64> = Array1::from_vec(vec![0.09175171, 0.21132487, 0.5, 0.78867513, 0.90824829]);
-/// assert!((cdf_v - &tested_values).fold(true, |test, i| if *i < 100_000.0 * TEST_ACCURACY && test { true } else { false } ));
+/// assert!((cdf_v - &tested_values).fold(true, |test, i| if *i < TEST_ACCURACY && test { true } else { false } ));
 /// 
 /// // Inverse CDF test
 /// let icdf_v: Array1<f64> = dist.inverse_cdf(&tested_values).unwrap();
-/// assert!((icdf_v - x).fold(true, |test, i| if *i < 1_000_000.0 * TEST_ACCURACY && test { true } else { false } ));
+/// assert!((icdf_v - x).fold(true, |test, i| if *i < 10.0 * TEST_ACCURACY && test { true } else { false } ));
 /// 
 /// 
 /// // Moderate degrees of freedom test (Central values)
@@ -793,13 +793,51 @@ impl ProbabilityDistribution for GammaDistribution {
 /// let x: Array1<f64> = Array1::from_vec(vec![0.75, 0.8, 0.85]);
 /// let tested_values: Array1<f64> = Array1::from_vec(vec![0.718, 0.906, 1.134]);
 /// let icdf_v: Array1<f64> = dist.inverse_cdf(&x).unwrap();
-/// assert!((icdf_v - &tested_values).fold(true, |test, i| if *i < 1_000_000.0 * TEST_ACCURACY && test { true } else { false } ));
+/// assert!((icdf_v - &tested_values).fold(true, |test, i| if *i < 100_000.0 * TEST_ACCURACY && test { true } else { false } ));
 /// 
 /// // Moderate degrees of freedom test (Tail values)
 /// let x: Array1<f64> = Array1::from_vec(vec![0.95, 0.975, 0.99]);
 /// let tested_values: Array1<f64> = Array1::from_vec(vec![1.943, 2.447, 3.143]);
 /// let icdf_v: Array1<f64> = dist.inverse_cdf(&x).unwrap();
 /// assert!((icdf_v - &tested_values).fold(true, |test, i| if *i < 1_000_000.0 * TEST_ACCURACY && test { true } else { false } ));
+/// 
+/// 
+/// // Large degrees of freedom (Approaching 30 degrees of freedom, df = 29)
+/// let dist: StudentsTDistribution = StudentsTDistribution::new(29.0).unwrap();
+/// let x: Array1<f64> = arr1(&[-2.0, -1.0, 0.0, 1.0, 2.0]);
+/// 
+/// // PDF test (Values obtained using t.pdf() from SciPy)
+/// let pdf_v: Array1<f64> = dist.pdf(&x).unwrap();
+/// let tested_values: Array1<f64> = Array1::from(vec![0.05694135, 0.23785815, 0.39551858, 0.23785815, 0.05694135]);
+/// assert!((pdf_v - tested_values).fold(true, |test, i| if *i < TEST_ACCURACY && test { true } else { false } ));
+/// 
+/// // CDF test (Values obtained using t.cdf() from SciPy)
+/// let cdf_v: Array1<f64> = dist.cdf(&x).unwrap();
+/// let tested_values: Array1<f64> = Array1::from_vec(vec![0.02747182, 0.16279099, 0.5, 0.83720901, 0.97252818]);
+/// assert!((cdf_v - &tested_values).fold(true, |test, i| if *i < TEST_ACCURACY && test { true } else { false } ));
+/// 
+/// // Inverse CDF test
+/// let icdf_v: Array1<f64> = dist.inverse_cdf(&tested_values).unwrap();
+/// assert!((icdf_v - x).fold(true, |test, i| if *i < 1_000_000.0 * TEST_ACCURACY && test { true } else { false } ));
+/// 
+/// 
+/// // Very large degrees of freedom (df = 124)
+/// let dist: StudentsTDistribution = StudentsTDistribution::new(124.0).unwrap();
+/// let x: Array1<f64> = arr1(&[-2.0, -1.0, 0.0, 1.0, 2.0]);
+/// 
+/// // PDF test (Values obtained using t.pdf() from SciPy)
+/// let pdf_v: Array1<f64> = dist.pdf(&x).unwrap();
+/// let tested_values: Array1<f64> = Array1::from(vec![0.0547352, 0.24099831, 0.39813878, 0.24099831, 0.0547352]);
+/// assert!((pdf_v - tested_values).fold(true, |test, i| if *i < TEST_ACCURACY && test { true } else { false } ));
+/// 
+/// // CDF test (Values obtained using t.cdf() from SciPy)
+/// let cdf_v: Array1<f64> = dist.cdf(&x).unwrap();
+/// let tested_values: Array1<f64> = Array1::from_vec(vec![0.02384271, 0.15962897, 0.5, 0.84037103, 0.97615729]);
+/// assert!((cdf_v - &tested_values).fold(true, |test, i| if *i < TEST_ACCURACY && test { true } else { false } ));
+/// 
+/// // Inverse CDF test
+/// let icdf_v: Array1<f64> = dist.inverse_cdf(&tested_values).unwrap();
+/// assert!((icdf_v - x).fold(true, |test, i| if *i < 10_000_000.0 * TEST_ACCURACY && test { true } else { false } ));
 /// ```
 pub struct StudentsTDistribution {
     /// Degrees of freedom
@@ -849,9 +887,8 @@ impl ProbabilityDistribution for StudentsTDistribution {
     }
 
     fn entropy(&self) -> Result<f64, DigiFiError> {
-        let method: FunctionEvalMethod = FunctionEvalMethod::Approximation { n_terms: 1 };
-        let part_1: f64 = (digamma_function((self.v + 1.0) / 2.0, &method)? - digamma_function(self.v / 2.0, &method)?) * (self.v + 1.0) / 2.0;
-        let part_2: f64 = (self.v.sqrt() * beta_function(self.v / 2.0, 0.5, &FunctionEvalMethod::Approximation { n_terms: 100 })?).ln();
+        let part_1: f64 = (digamma((self.v + 1.0) / 2.0)? - digamma(self.v / 2.0)?) * (self.v + 1.0) / 2.0;
+        let part_2: f64 = (self.v.sqrt() * beta(self.v / 2.0, 0.5)?).ln();
         Ok(part_1 + part_2)
     }
 
@@ -864,11 +901,10 @@ impl ProbabilityDistribution for StudentsTDistribution {
     /// # Output
     /// - PDF values at the given `x`
     fn pdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
-        let method: FunctionEvalMethod =  FunctionEvalMethod::Approximation { n_terms: 30 };
         Ok(x.map(|t| {
             let v_: f64 = (self.v + 1.0) / 2.0;
-            let num: f64 = gamma_function(v_, &method) * (1.0 + t.powi(2) / self.v).powf(-v_);
-            let denom: f64 = gamma_function(self.v / 2.0, &method) * (std::f64::consts::PI * self.v).sqrt();
+            let num: f64 = gamma(v_) * (1.0 + t.powi(2) / self.v).powf(-v_);
+            let denom: f64 = gamma(self.v / 2.0) * (std::f64::consts::PI * self.v).sqrt();
             num / denom
         } ))
     }
@@ -882,15 +918,16 @@ impl ProbabilityDistribution for StudentsTDistribution {
     /// # Output
     /// - CDF values at the given `x`
     fn cdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
-        let method: FunctionEvalMethod = FunctionEvalMethod::Integral { n_intervals: 1_000_000 };
         let mut y: Vec<f64> = Vec::<f64>::new();
         for t in x {
             if t == &0.0 {
                 y.push(0.5);
+            } else if t.is_infinite() {
+                if t.is_sign_negative() { y.push(0.0) } else { y.push(1.0) }
             } else if t < &0.0  {
-                y.push(0.5 * (1.0 - regularized_incomplete_beta_function(t.powi(2) / (self.v + t.powi(2)), 1.0, self.v, &method)?));
+                y.push(0.5 * regularized_incomplete_beta(self.v / (self.v + t.powi(2)), self.v / 2.0, 0.5)?);
             } else {
-                y.push(0.5 * (1.0 + regularized_incomplete_beta_function(t.powi(2) / (self.v + t.powi(2)), 1.0, self.v, &method)?));
+                y.push(1.0 - 0.5 * regularized_incomplete_beta(self.v / (self.v + t.powi(2)), self.v / 2.0, 0.5)?);
             }
         }
         Ok(Array1::from_vec(y))
@@ -1029,13 +1066,13 @@ mod tests {
         let x: Array1<f64> = arr1(&[0.6]);
         // PDF test
         let pdf_v: f64 = dist.pdf(&x).unwrap()[0];
-        assert!((pdf_v - 0.38154528938409304).abs() < 100_000.0 * TEST_ACCURACY);
+        assert!((pdf_v - 0.38154528938409304).abs() < TEST_ACCURACY);
         // CDF test
         let cdf_v: f64 = dist.cdf(&x).unwrap()[0];
-        assert!((cdf_v - 0.5614219739190003).abs() < 10_000_000.0 * TEST_ACCURACY);
+        assert!((cdf_v - 0.5614219739190003).abs() < TEST_ACCURACY);
         // Inverse CDF test
         let icdf_v: f64 = dist.inverse_cdf(&arr1(&[0.5614219739190003])).unwrap()[0];
-        assert!((icdf_v - x[0]).abs() < 10_000_000.0 * TEST_ACCURACY);
+        assert!((icdf_v - x[0]).abs() < TEST_ACCURACY);
     }
 
     #[test]
@@ -1046,24 +1083,55 @@ mod tests {
         // PDF test (Values obtained using t.pdf() from SciPy)
         let pdf_v: Array1<f64> = dist.pdf(&x).unwrap();
         let tested_values: Array1<f64> = Array1::from(vec![0.06804138, 0.19245009, 0.35355339, 0.19245009, 0.06804138]);
-        assert!((pdf_v - tested_values).fold(true, |test, i| if *i < 100_000.0 * TEST_ACCURACY && test { true } else { false } ));
+        assert!((pdf_v - tested_values).fold(true, |test, i| if *i < TEST_ACCURACY && test { true } else { false } ));
         // CDF test (Values obtained using t.cdf() from SciPy)
-        let cdf_v: f64 = dist.cdf(&x).unwrap()[0];
+        let cdf_v: Array1<f64> = dist.cdf(&x).unwrap();
         let tested_values: Array1<f64> = Array1::from_vec(vec![0.09175171, 0.21132487, 0.5, 0.78867513, 0.90824829]);
-        assert!((cdf_v - &tested_values).fold(true, |test, i| if *i < 100_000.0 * TEST_ACCURACY && test { true } else { false } ));
+        assert!((cdf_v - &tested_values).fold(true, |test, i| if *i < TEST_ACCURACY && test { true } else { false } ));
         // Inverse CDF test
         let icdf_v: Array1<f64> = dist.inverse_cdf(&tested_values).unwrap();
-        assert!((icdf_v - x).fold(true, |test, i| if *i < 1_000_000.0 * TEST_ACCURACY && test { true } else { false } ));
+        assert!((icdf_v - x).fold(true, |test, i| if *i < 10.0 * TEST_ACCURACY && test { true } else { false } ));
+
         // Moderate degrees of freedom test (Central values)
         let dist: StudentsTDistribution = StudentsTDistribution::new(6.0).unwrap();
         let x: Array1<f64> = Array1::from_vec(vec![0.75, 0.8, 0.85]);
         let tested_values: Array1<f64> = Array1::from_vec(vec![0.718, 0.906, 1.134]);
         let icdf_v: Array1<f64> = dist.inverse_cdf(&x).unwrap();
-        assert!((icdf_v - &tested_values).fold(true, |test, i| if *i < 1_000_000.0 * TEST_ACCURACY && test { true } else { false } ));
+        assert!((icdf_v - &tested_values).fold(true, |test, i| if *i < 100_000.0 * TEST_ACCURACY && test { true } else { false } ));
         // Moderate degrees of freedom test (Tail values)
         let x: Array1<f64> = Array1::from_vec(vec![0.95, 0.975, 0.99]);
         let tested_values: Array1<f64> = Array1::from_vec(vec![1.943, 2.447, 3.143]);
         let icdf_v: Array1<f64> = dist.inverse_cdf(&x).unwrap();
         assert!((icdf_v - &tested_values).fold(true, |test, i| if *i < 1_000_000.0 * TEST_ACCURACY && test { true } else { false } ));
+
+        // Large degrees of freedom (Approaching 30 degrees of freedom, df = 29)
+        let dist: StudentsTDistribution = StudentsTDistribution::new(29.0).unwrap();
+        let x: Array1<f64> = arr1(&[-2.0, -1.0, 0.0, 1.0, 2.0]);
+        // PDF test (Values obtained using t.pdf() from SciPy)
+        let pdf_v: Array1<f64> = dist.pdf(&x).unwrap();
+        let tested_values: Array1<f64> = Array1::from(vec![0.05694135, 0.23785815, 0.39551858, 0.23785815, 0.05694135]);
+        assert!((pdf_v - tested_values).fold(true, |test, i| if *i < TEST_ACCURACY && test { true } else { false } ));
+        // CDF test (Values obtained using t.cdf() from SciPy)
+        let cdf_v: Array1<f64> = dist.cdf(&x).unwrap();
+        let tested_values: Array1<f64> = Array1::from_vec(vec![0.02747182, 0.16279099, 0.5, 0.83720901, 0.97252818]);
+        assert!((cdf_v - &tested_values).fold(true, |test, i| if *i < TEST_ACCURACY && test { true } else { false } ));
+        // Inverse CDF test
+        let icdf_v: Array1<f64> = dist.inverse_cdf(&tested_values).unwrap();
+        assert!((icdf_v - x).fold(true, |test, i| if *i < 1_000_000.0 * TEST_ACCURACY && test { true } else { false } ));
+
+        // Very large degrees of freedom (df = 124)
+        let dist: StudentsTDistribution = StudentsTDistribution::new(124.0).unwrap();
+        let x: Array1<f64> = arr1(&[-2.0, -1.0, 0.0, 1.0, 2.0]);
+        // PDF test (Values obtained using t.pdf() from SciPy)
+        let pdf_v: Array1<f64> = dist.pdf(&x).unwrap();
+        let tested_values: Array1<f64> = Array1::from(vec![0.0547352, 0.24099831, 0.39813878, 0.24099831, 0.0547352]);
+        assert!((pdf_v - tested_values).fold(true, |test, i| if *i < TEST_ACCURACY && test { true } else { false } ));
+        // CDF test (Values obtained using t.cdf() from SciPy)
+        let cdf_v: Array1<f64> = dist.cdf(&x).unwrap();
+        let tested_values: Array1<f64> = Array1::from_vec(vec![0.02384271, 0.15962897, 0.5, 0.84037103, 0.97615729]);
+        assert!((cdf_v - &tested_values).fold(true, |test, i| if *i < TEST_ACCURACY && test { true } else { false } ));
+        // Inverse CDF test
+        let icdf_v: Array1<f64> = dist.inverse_cdf(&tested_values).unwrap();
+        assert!((icdf_v - x).fold(true, |test, i| if *i < 10_000_000.0 * TEST_ACCURACY && test { true } else { false } ));
     }
 }

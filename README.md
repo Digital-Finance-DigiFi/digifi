@@ -27,9 +27,9 @@ Note that the developers of this package do not accept any responsibility or lia
 
 The following optional features are provided by `digifi` (Note: none of these features are the enabled by default):
 
-- `sample_data`: Provides some sample data to test CAPM and portfolio optimization algorithms.
+- `sample_data`: Provides sample data to test CAPM and portfolio optimization algorithms.
 - `serde`: Provides serialization/deserialization for certain structs.
-- `plotly`: Plotting support.
+- `plotly`: Provides functions for plotting results using `plotly` library.
 
 # Errors
 
@@ -48,6 +48,7 @@ dependency to this library, but we have used an extract from its source code and
 Nonetheless, `optimize` is a great package and we hope there will be a renewed support for it.
 2. Inverse CDF of Poisson Distribution (<https://people.maths.ox.ac.uk/gilesm/codes/poissinv/paper.pdf>): This paper covers the implementation of the
 method for approximating the inverse CDF of the Poisson distribution.
+3. Algorithms for ln Gamma, ln Beta and Regularized Incomplete Beta functions (<https://github.com/statrs-dev/statrs>): The implementation of these functions were taken from `statrs`.
 
 # General information
 If you would like to add a commit or an issue, please do so using the GitHub link to the project:

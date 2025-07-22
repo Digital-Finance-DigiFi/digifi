@@ -1,19 +1,6 @@
 use ndarray::{Array1, s};
 use crate::{error::DigiFiError, utilities::NUMERICAL_CORRECTION, statistics::n_choose_r};
 
-/// # Description
-/// Method for computing the result of a function.
-pub enum FunctionEvalMethod {
-    Integral {
-        /// Number of intervals to use in the composite trapezoidal rule
-        n_intervals: usize,
-    },
-    Approximation {
-        /// Number of terms to use in an approximation series
-        n_terms: usize,
-    },
-}
-
 
 /// # Desciption
 /// Factorial of n.
@@ -70,7 +57,7 @@ pub fn rising_factorial(x: u128, n: u128) -> u128 {
 /// 
 /// Input
 /// - `x`: Input variable
-/// - `method`: Method for evaluationg the function
+/// - `n_terms`: Number of terms to use in the approximation (Default is 20)
 /// 
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Error_function>
@@ -79,30 +66,21 @@ pub fn rising_factorial(x: u128, n: u128) -> u128 {
 /// # Examples
 ///
 /// ```rust
-/// use digifi::utilities::{TEST_ACCURACY, FunctionEvalMethod, erf};
+/// use digifi::utilities::{TEST_ACCURACY, erf};
 ///
-/// assert!((erf(1.0, FunctionEvalMethod::Integral { n_intervals: 1_000_000 }) - 0.8427007929497149).abs() < 100.0 * TEST_ACCURACY);
-/// assert!((erf(1.0, FunctionEvalMethod::Approximation { n_terms: 20 }) - 0.8427007929497149).abs() < 10.0 * TEST_ACCURACY);
+/// assert!((erf(1.0, None) - 0.8427007929497149).abs() < 10.0 * TEST_ACCURACY);
 /// ```
-pub fn erf(x: f64, method: FunctionEvalMethod) -> f64 {
-    match method {
-        FunctionEvalMethod::Integral { n_intervals } => {
-            let f = |x: f64| { (-x.powi(2)).exp() };
-            2.0 * definite_integral(f, 0.0, x, n_intervals) / std::f64::consts::PI.sqrt()
-        },
-        FunctionEvalMethod::Approximation { n_terms } => {
-            let mut total: f64 = 0.0;
-            let mut sign: f64 = 1.0;
-            for n in 0..n_terms {
-                let exp: i32 = (2 * n + 1) as i32;
-                total += sign * x.powi(exp) / (factorial(n as u128) as f64 * (2 * n + 1) as f64);
-                // Flip the sign for the next term
-                sign *= -1.0;
-            }
-            (2.0 / f64::sqrt(std::f64::consts::PI)) * total
-        },
+pub fn erf(x: f64, n_terms: Option<usize>) -> f64 {
+    let n_terms: usize = n_terms.unwrap_or(20);
+    let mut total: f64 = 0.0;
+    let mut sign: f64 = 1.0;
+    for n in 0..n_terms {
+        let exp: i32 = (2 * n + 1) as i32;
+        total += sign * x.powi(exp) / (factorial(n as u128) as f64 * (2 * n + 1) as f64);
+        // Flip the sign for the next term
+        sign *= -1.0;
     }
-    
+    (2.0 / f64::sqrt(std::f64::consts::PI)) * total
 }
 
 
@@ -111,7 +89,7 @@ pub fn erf(x: f64, method: FunctionEvalMethod) -> f64 {
 /// 
 /// # Input
 /// - `z`: Input variable
-/// - `n_terms`: Number of terms to use in a Taylor's expansion of the error function
+/// - `n_terms`: Number of terms to use in the approximation (Default is 20)
 /// 
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Error_function#Inverse_functions>
@@ -122,10 +100,11 @@ pub fn erf(x: f64, method: FunctionEvalMethod) -> f64 {
 /// ```rust
 /// use digifi::utilities::{TEST_ACCURACY, erfinv};
 ///
-/// let approximation: f64 = erfinv(0.8427007929497149, 100);
+/// let approximation: f64 = erfinv(0.8427007929497149, Some(100));
 /// assert!((approximation - 1.0).abs() < TEST_ACCURACY);
 /// ```
-pub fn erfinv(z: f64, n_terms: usize) -> f64 {
+pub fn erfinv(z: f64, n_terms: Option<usize>) -> f64 {
+    let n_terms: usize = n_terms.unwrap_or(20);
     let mut total: f64 = 0.0;
     let mut c: Vec<f64> = Vec::<f64>::new();
     for k in 0..n_terms {
@@ -327,7 +306,6 @@ pub fn definite_integral<F: Fn(f64) -> f64>(f: F, start: f64, end: f64, n_interv
 mod tests {
     use ndarray::Array1;
     use crate::utilities::TEST_ACCURACY;
-    use crate::utilities::maths_utils::FunctionEvalMethod;
 
     #[test]
     fn unit_test_factorial() -> () {
@@ -345,14 +323,13 @@ mod tests {
     #[test]
     fn unit_test_erf() -> () {
         use crate::utilities::maths_utils::erf;
-        assert!((erf(1.0, FunctionEvalMethod::Integral { n_intervals: 1_000_000 }) - 0.8427007929497149).abs() < 100.0 * TEST_ACCURACY);
-        assert!((erf(1.0, FunctionEvalMethod::Approximation { n_terms: 20 }) - 0.8427007929497149).abs() < 10.0 * TEST_ACCURACY);
+        assert!((erf(1.0, None) - 0.8427007929497149).abs() < 10.0 * TEST_ACCURACY);
     }
 
     #[test]
     fn unit_test_erfinv() -> () {
         use crate::utilities::maths_utils::erfinv;
-        let approximation: f64 = erfinv(0.8427007929497149, 100);
+        let approximation: f64 = erfinv(0.8427007929497149, Some(100));
         assert!((approximation - 1.0).abs() < TEST_ACCURACY);
     }
 

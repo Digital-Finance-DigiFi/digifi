@@ -565,7 +565,9 @@ pub fn t_test_lr(beta: f64, beta_0: Option<f64>, y: &Array1<f64>, y_prediction: 
     let se_beta: f64 = se_lr_coefficient(y, y_prediction, x, ddof)?;
     let t_score: f64 = (beta - beta_0) / se_beta;
     // Obtain confidence interval value
-    let dist: StudentsTDistribution = StudentsTDistribution::new(ddof as f64)?;
+    let df: f64 = y.len().checked_sub(ddof)
+        .ok_or(DigiFiError::Other { title: "T-Test (Linear Regression)".to_owned(), details: "There are fewer data points in `y` array than `ddof`.".to_owned() })? as f64;
+    let dist: StudentsTDistribution = StudentsTDistribution::new(df)?;
     let p_value: f64 = 1.0 - dist.cdf(&arr1(&[t_score]))?[0];
     let p_cl: f64 = match cl { Some(v) => v.get_p(), None => ConfidenceLevel::default().get_p() };
     let reject_h0: bool = if p_value < p_cl { true } else { false };

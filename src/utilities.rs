@@ -1,6 +1,6 @@
 // Re-Exports
 pub use self::loss_functions::{LossFunction, MAE, MSE, SSE, StraddleLoss};
-pub use self::maths_utils::{FunctionEvalMethod, factorial, rising_factorial, erf, erfinv, euclidean_distance, differencing, derivative, definite_integral};
+pub use self::maths_utils::{factorial, rising_factorial, erf, erfinv, euclidean_distance, differencing, derivative, definite_integral};
 pub use self::minimal_spanning_tree::{MSTDistance, MSTNode, MSTEdge, MST};
 pub use self::numerical_engines::nelder_mead;
 #[cfg(feature = "sample_data")]

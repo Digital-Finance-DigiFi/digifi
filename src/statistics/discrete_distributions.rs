@@ -2,9 +2,12 @@ use ndarray::{Array1, arr1};
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
 use crate::error::DigiFiError;
-use crate::utilities::maths_utils::{FunctionEvalMethod, factorial};
-use crate::statistics::{ProbabilityDistribution, ProbabilityDistributionType, n_choose_r, regularized_incomplete_beta_function};
-use crate::statistics::continuous_distributions::NormalDistribution;
+use crate::utilities::maths_utils::factorial;
+use crate::statistics::{
+    ProbabilityDistribution, ProbabilityDistributionType, n_choose_r,
+    beta::regularized_incomplete_beta,
+    continuous_distributions::NormalDistribution,
+};
 
 
 #[derive(Debug)]
@@ -182,7 +185,7 @@ impl ProbabilityDistribution for BernoulliDistribution {
 ///
 /// // CDF test
 /// let cdf_v: f64 = dist.cdf(&x).unwrap()[0];
-/// assert!((cdf_v - 0.5247999999999999).abs() < 10_000.0 * TEST_ACCURACY);
+/// assert!((cdf_v - 0.5247999999999999).abs() < TEST_ACCURACY);
 ///
 /// // Inverse CDF test
 /// let icdf_v: f64 = dist.inverse_cdf(&arr1(&[0.5248])).unwrap()[0];
@@ -278,7 +281,7 @@ impl ProbabilityDistribution for BinomialDistribution {
         let upper_integral_limit: Array1<f64> = (1.0 - self.p) * Array1::from_vec(vec![1.0; x_floor.len()]);
         let mut cdf_: Vec<f64> = Vec::<f64>::new();
         for i in 0..x.len() {
-            cdf_.push(regularized_incomplete_beta_function(upper_integral_limit[i], a[i], b[i], &FunctionEvalMethod::Integral { n_intervals: 1_000_000 })?);
+            cdf_.push(regularized_incomplete_beta(upper_integral_limit[i], a[i], b[i])?);
         }
         Ok(Array1::from_vec(cdf_))
     }
@@ -700,7 +703,7 @@ mod tests {
         assert!((pdf_v - 0.3456).abs() < TEST_ACCURACY);
         // CDF test
         let cdf_v: f64 = dist.cdf(&x).unwrap()[0];
-        assert!((cdf_v - 0.5247999999999999).abs() < 10_000.0 * TEST_ACCURACY);
+        assert!((cdf_v - 0.5247999999999999).abs() < TEST_ACCURACY);
         // Inverse CDF test
         let icdf_v: f64 = dist.inverse_cdf(&arr1(&[0.5248])).unwrap()[0];
         assert!((icdf_v - x[0]).abs() < TEST_ACCURACY);
