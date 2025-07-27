@@ -145,7 +145,7 @@ pub fn trinomial_model(payoff_object: &dyn Payoff, s_0: f64, u: f64, d: f64, p_u
     for i in (0..(trinomial_tree.len()-1)).rev() {
         let mut layer: Vec<f64> = Vec::<f64>::new();
         for j in 1..(2 * (i+1)) {
-            let value: f64 = p_d * trinomial_tree[i+1][j-1] + p_s * trinomial_tree[i+1][j] + p_d * trinomial_tree[i+1][j+1];
+            let value: f64 = p_d * trinomial_tree[i+1][j-1] + p_s * trinomial_tree[i+1][j] + p_u * trinomial_tree[i+1][j+1];
             if exercise_time_steps_[i] {
                 let exercise: f64 = payoff_object.payoff(&Array1::from_vec(vec![trinomial_tree[i][layer.len()-1]]))[0];
                 layer.push(value.max(exercise));
@@ -171,11 +171,11 @@ pub fn trinomial_model(payoff_object: &dyn Payoff, s_0: f64, u: f64, d: f64, p_u
 /// use digifi::financial_instruments::LongCall;
 ///
 /// let long_call: LongCall = LongCall { k: 11.0, cost: 0.0 };
-/// let bmtm: BrownianMotionTrinomialModel = BrownianMotionTrinomialModel::new(Box::new(long_call), 10.0, 1.0, 0.02, 0.2, 0.0, 30).unwrap();
+/// let bmtm: BrownianMotionTrinomialModel = BrownianMotionTrinomialModel::new(Box::new(long_call), 10.0, 1.0, 0.02, 0.2, 0.0, 1_000).unwrap();
 /// let predicted_value = bmtm.european().unwrap();
 ///
 /// // Test accuracy depends on the conversion between Brownian-scaled binomial model and Black-Scholes analytic solution
-/// assert!((predicted_value - 0.49).abs() < 1_000_000.0 * TEST_ACCURACY);
+/// assert!((predicted_value - 0.49438669572304805).abs() < 10_000.0*TEST_ACCURACY);
 /// ```
 pub struct BrownianMotionTrinomialModel {
     /// Payoff function
@@ -241,11 +241,8 @@ impl LatticeModel for BrownianMotionTrinomialModel {
     /// # Output
     /// - The present value of an instrument with the European exercise style
     fn european(&self) -> Result<f64, DigiFiError> {
-        let mut exercise_time_steps: Vec<bool> = Vec::<bool>::new();
-        for _ in 0..self.n_steps {
-            exercise_time_steps.push(false);
-        }
-        Ok((-self.r*self.time_to_maturity).exp() * trinomial_model(self.payoff_object.as_ref(), self.s_0, self.u, self.d, self.p_u, self.p_d, self.n_steps, Some(exercise_time_steps))?)
+        let exercise_time_steps: Option<Vec<bool>> = Some(vec![false; self.n_steps]);
+        Ok((-self.r*self.time_to_maturity).exp() * trinomial_model(self.payoff_object.as_ref(), self.s_0, self.u, self.d, self.p_u, self.p_d, self.n_steps, exercise_time_steps)?)
     }
 
     /// # Description
@@ -254,11 +251,8 @@ impl LatticeModel for BrownianMotionTrinomialModel {
     /// # Output
     /// - The present value of an instrument with the American exercise style
     fn american(&self) -> Result<f64, DigiFiError> {
-        let mut exercise_time_steps: Vec<bool> = Vec::<bool>::new();
-        for _ in 0..self.n_steps {
-            exercise_time_steps.push(true);
-        }
-        Ok((-self.r*self.time_to_maturity).exp() * trinomial_model(self.payoff_object.as_ref(), self.s_0, self.u, self.d, self.p_u, self.p_d, self.n_steps, Some(exercise_time_steps))?)
+        let exercise_time_steps: Option<Vec<bool>> = Some(vec![true; self.n_steps]);
+        Ok((-self.r*self.time_to_maturity).exp() * trinomial_model(self.payoff_object.as_ref(), self.s_0, self.u, self.d, self.p_u, self.p_d, self.n_steps, exercise_time_steps)?)
     }
 
     /// # Description
@@ -321,9 +315,9 @@ mod tests {
         use crate::lattice_models::LatticeModel;
         use crate::financial_instruments::LongCall;
         let long_call: LongCall = LongCall { k: 11.0, cost: 0.0 };
-        let bmtm: BrownianMotionTrinomialModel = BrownianMotionTrinomialModel::new(Box::new(long_call), 10.0, 1.0, 0.02, 0.2, 0.0, 30).unwrap();
+        let bmtm: BrownianMotionTrinomialModel = BrownianMotionTrinomialModel::new(Box::new(long_call), 10.0, 1.0, 0.02, 0.2, 0.0, 1_000).unwrap();
         let predicted_value: f64 = bmtm.european().unwrap();
         // Test accuracy depends on the conversion between Brownian-scaled binomial model and Black-Scholes analytic solution
-        assert!((predicted_value - 0.49).abs() < 1_000_000.0*TEST_ACCURACY);
+        assert!((predicted_value - 0.49438669572304805).abs() < 10_000.0*TEST_ACCURACY);
     }
 }

@@ -177,11 +177,11 @@ pub fn binomial_model(payoff_object: &dyn Payoff, s_0: f64, u: f64, d: f64, p_u:
 /// use digifi::financial_instruments::LongCall;
 ///
 /// let long_call: LongCall = LongCall { k: 11.0, cost: 0.0 };
-/// let bmbm: BrownianMotionBinomialModel = BrownianMotionBinomialModel::new(Box::new(long_call), 10.0, 1.0, 0.02, 0.2, 0.0, 30).unwrap();
+/// let bmbm: BrownianMotionBinomialModel = BrownianMotionBinomialModel::new(Box::new(long_call), 10.0, 1.0, 0.02, 0.2, 0.0, 1_000).unwrap();
 /// let predicted_value: f64 = bmbm.european().unwrap();
 ///
 /// // Test accuracy depends on the conversion between Brownian-scaled binomial model and Black-Scholes analytic solution
-/// assert!((predicted_value - 0.49).abs() < 1_000_000.0*TEST_ACCURACY);
+/// assert!((predicted_value - 0.49438669572304805).abs() < 1_000_000.0*TEST_ACCURACY);
 /// ```
 pub struct BrownianMotionBinomialModel {
     /// Payoff function
@@ -346,9 +346,9 @@ mod tests {
         use crate::lattice_models::LatticeModel;
         use crate::financial_instruments::LongCall;
         let long_call: LongCall = LongCall { k: 11.0, cost: 0.0 };
-        let bmbm: BrownianMotionBinomialModel = BrownianMotionBinomialModel::new(Box::new(long_call), 10.0, 1.0, 0.02, 0.2, 0.0, 30).unwrap();
+        let bmbm: BrownianMotionBinomialModel = BrownianMotionBinomialModel::new(Box::new(long_call), 10.0, 1.0, 0.02, 0.2, 0.0, 1_000).unwrap();
         let predicted_value: f64 = bmbm.european().unwrap();
         // Test accuracy depends on the conversion between Brownian-scaled binomial model and Black-Scholes analytic solution
-        assert!((predicted_value - 0.49).abs() < 1_000_000.0*TEST_ACCURACY);
+        assert!((predicted_value - 0.49438669572304805).abs() < 1_000_000.0*TEST_ACCURACY);
     }
 }

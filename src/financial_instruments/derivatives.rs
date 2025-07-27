@@ -120,7 +120,7 @@ pub fn black_scholes_formula(s: f64, k: f64, sigma: f64, time_to_maturity: f64, 
         },
         BlackScholesType::Put => {
             let component_1: f64 = s * (-q * time_to_maturity).exp() * normal_dist.cdf(&Array1::from_vec(vec![-d_1]))?[0];
-            let component_2: f64 = k * (-r * time_to_maturity).exp() * normal_dist.cdf(&Array1::from_vec(vec![d_2]))?[0];
+            let component_2: f64 = k * (-r * time_to_maturity).exp() * normal_dist.cdf(&Array1::from_vec(vec![-d_2]))?[0];
             Ok(component_2 - component_1)
         },
     }
@@ -1107,6 +1107,34 @@ mod tests {
         let component_2: f64 = 100.0 * (-0.02 * 3.0_f64).exp() * normal_dist.cdf(&Array1::from_vec(vec![d_2])).unwrap()[0];
         let pv: f64 = component_1 - component_2;
         assert!((option.present_value().unwrap() - pv).abs() < TEST_ACCURACY);
+    }
+
+    #[test]
+    fn unit_test_option_pricing_all() -> () {
+        use crate::lattice_models::LatticeModel;
+        use crate::lattice_models::trinomial_models::BrownianMotionTrinomialModel;
+        use crate::lattice_models::binomial_models::BrownianMotionBinomialModel;
+        use crate::financial_instruments::derivatives::{BlackScholesType, black_scholes_formula};
+        use crate::stochastic_processes::standard_stochastic_models::GeometricBrownianMotion;
+        use crate::monte_carlo::monte_carlo_simulation;
+        use crate::financial_instruments::LongCall;
+        let payoff: LongCall = LongCall { k: 105.0, cost: 0.0, };
+        // Binomial model
+        let bmbm: BrownianMotionBinomialModel = BrownianMotionBinomialModel::new(Box::new(payoff.clone()), 100.0, 1.0, 0.02, 0.15, 0.0, 1000).unwrap();
+        let predicted_value: f64 = bmbm.european().unwrap();
+        println!("Binomial: {}", predicted_value);
+        // Trinomial model
+        let bmtm: BrownianMotionTrinomialModel = BrownianMotionTrinomialModel::new(Box::new(payoff.clone()), 100.0, 1.0, 0.02, 0.15, 0.0, 1000).unwrap();
+        let predicted_value: f64 = bmtm.european().unwrap();
+        println!("Trinomial: {}", predicted_value);
+        // Black-Scholes
+        let predicted_value: f64 = black_scholes_formula(100.0, 105.0, 0.15, 1.0, 0.02, 0.0, &BlackScholesType::Call).unwrap();
+        println!("Black-Scholes: {}", predicted_value);
+        // Monte-Carlo
+        // GBM definition (`mu` is set to the risk-free rate to account for the future value of assets's price)
+        let gbm: GeometricBrownianMotion = GeometricBrownianMotion::new(0.02, 0.15, 1_000, 200, 1.0, 100.0);
+        let predicted_value: f64 = monte_carlo_simulation(&gbm, &payoff, 0.02, &Some(vec![false; 200])).unwrap();
+        println!("Monte-Carlo: {}", predicted_value);
     }
 
     #[cfg(feature = "plotly")]
