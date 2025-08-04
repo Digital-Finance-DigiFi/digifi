@@ -6,6 +6,7 @@ pub use self::continuous_distributions::{
     ContinuousUniformDistribution, NormalDistribution, ExponentialDistribution, LaplaceDistribution, GammaDistribution, StudentsTDistribution,
 };
 pub use self::stat_tests::{ConfidenceLevel, ADFType, ADFResult, adf, CointegrationResult, cointegration, TTestResult, t_test_two_sample, t_test_lr};
+pub use self::linear_regression_analysis::{LinearRegressionFeatureResult, LinearRegressionResult, LinearRegressionSettings, LinearRegressionAnalysis};
 
 
 mod gamma;
@@ -13,6 +14,7 @@ mod beta;
 pub mod continuous_distributions;
 pub mod discrete_distributions;
 pub mod stat_tests;
+mod linear_regression_analysis;
 
 
 use std::cmp::Ordering;
@@ -389,14 +391,14 @@ pub fn se_lr_coefficient(y: &Array1<f64>, y_prediction: &Array1<f64>, x: &Array1
 
 
 /// # Description
-/// The ratio of the systematic variance to the total variance.
+/// Coefficient of determination, the ratio of the systematic variance to the total variance.
 /// 
 /// # Input
 /// - `real_values`: Array of observed or empirical data
 /// - `predicted_values`: Array data produced by the model
 /// 
 /// # Output
-/// - r_square: The ratio of exaplained variance to all variance
+/// - R-squared: Coefficient of determination, the ratio of exaplained variance to all variance
 /// 
 /// # LaTeX Formula
 /// - R^{2} = 1 - \\frac{\\sum_{i}(y_{i}-f_{i})^{2}}{\\sum_{i}(y_{i}-\\bar{y})^{2}}
@@ -405,7 +407,7 @@ pub fn se_lr_coefficient(y: &Array1<f64>, y_prediction: &Array1<f64>, x: &Array1
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Coefficient_of_determination>
 /// - Original Source: N/A
-pub fn r_square(real_values: &Array1<f64>, predicted_values: &Array1<f64>) -> Result<f64, DigiFiError> {
+pub fn r_squared(real_values: &Array1<f64>, predicted_values: &Array1<f64>) -> Result<f64, DigiFiError> {
     compare_array_len(&real_values, &predicted_values, "real_values", "predicted_values")?;
     let residual_sum: f64 = (real_values - predicted_values).map(|x| x.powi(2)).sum();
     let total_sum: f64 = (real_values - real_values.mean()
@@ -415,7 +417,7 @@ pub fn r_square(real_values: &Array1<f64>, predicted_values: &Array1<f64>) -> Re
 
 
 /// # Description
-/// Adjusted R-square for the upward bias in the R-square due to estimated values of the parameters used.
+/// Adjusted R-squared for the upward bias in the R-squared due to estimated values of the parameters used.
 /// 
 /// # Input
 /// - `real_values`: Array of observed or empirical data
@@ -424,7 +426,7 @@ pub fn r_square(real_values: &Array1<f64>, predicted_values: &Array1<f64>) -> Re
 /// - `k_variables`: Number of variables in the model
 /// 
 /// # Output
-/// - R-square adjusted for upward estimation bias
+/// - R-squared adjusted for upward estimation bias
 /// 
 /// # LaTeX Formula
 /// - R^{2}_{A} = 1 - (1-R^{2})\\frac{n-1}{n-k-1}
@@ -432,8 +434,40 @@ pub fn r_square(real_values: &Array1<f64>, predicted_values: &Array1<f64>) -> Re
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Coefficient_of_determination#Adjusted_R2>
 /// - Original Source: N/A
-pub fn adjusted_r_square(real_values: &Array1<f64>, predicted_values: &Array1<f64>, sample_size: usize, k_variables: usize) -> Result<f64, DigiFiError> {
-    Ok(1.0 - (1.0-r_square(real_values, predicted_values)?) * (sample_size as f64 - 1.0) / ((sample_size-k_variables) as f64 - 1.0))
+pub fn adjusted_r_squared(real_values: &Array1<f64>, predicted_values: &Array1<f64>, sample_size: usize, k_variables: usize) -> Result<f64, DigiFiError> {
+    Ok(1.0 - (1.0-r_squared(real_values, predicted_values)?) * (sample_size as f64 - 1.0) / ((sample_size-k_variables) as f64 - 1.0))
+}
+
+
+/// # Description
+/// Ratio (quotient) of the variance of a parameter estimate when fitting a full model that includes other parameters to the variance of the parameter estimate
+/// if the model is fit with only the parameter on its own.
+/// 
+/// # Input
+/// - `xi`: Feature of the model whose VIF is being computed
+/// - `xis`: Other features of the model, excluding `xi`
+/// 
+/// # Ouput
+/// - Variance inflation Factor (VIF)
+/// 
+/// # LaTeX Formula
+/// - VIF_{i} = \\frac{1}{1 - R^{2}_{i}}
+/// 
+/// # Links
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Variance_inflation_factor>
+/// - Original Source: N/A
+pub fn variance_inflation_factor(xis: &Vec<Array1<f64>>, xi: &Array1<f64>) -> Result<Option<f64>, DigiFiError> {
+    let mut settings: LinearRegressionSettings = LinearRegressionSettings::disable_all();
+    settings.add_constant = true;
+    settings.enable_r_squared = true;
+    let lr: LinearRegressionAnalysis = LinearRegressionAnalysis::new(settings);
+    let lr_result: LinearRegressionResult = lr.run(xis, xi)?;
+    match lr_result.r_squared {
+        Some(r) => {
+            if r == 1.0 { return Ok(None) } else { Ok(Some(1.0 / (1.0 - r))) }
+        },
+        None => Ok(None),
+    }
 }
 
 
