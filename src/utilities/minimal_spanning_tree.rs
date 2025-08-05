@@ -3,11 +3,11 @@ use std::cmp::Ordering;
 use serde::{Serialize, Deserialize};
 use ndarray::{Array1, Array2};
 use crate::error::DigiFiError;
-use crate::utilities::maths_utils::euclidean_distance;
-use crate::statistics::{pearson_correlation, log_return_transformation};
+use crate::utilities::{maths_utils::euclidean_distance, data_transformations::log_return_transformation};
+use crate::statistics::pearson_correlation;
 
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Type of distance function to apply when computing the distance between the nodes in the minimal spanning tree.
@@ -58,7 +58,7 @@ impl MSTDistance {
 }
 
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize))]
 /// # Description
 /// Node (vertex) of the minimal-spanning tree (MST).
@@ -72,7 +72,7 @@ pub struct MSTNode<'x> {
 }
 
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize))]
 /// # Description
 /// Edge of the minimal-spanning tree (MST).
@@ -86,7 +86,7 @@ pub struct MSTEdge<'a, 'b, 'x> {
 }
 
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize))]
 /// # Description
 /// Minimal-spanning tree algorithm.

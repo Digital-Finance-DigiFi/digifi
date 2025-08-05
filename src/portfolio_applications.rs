@@ -17,8 +17,8 @@ use ndarray::{Array1, s};
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
 use crate::error::DigiFiError;
-use crate::utilities::compare_array_len;
-use crate::statistics::{covariance, percent_change, log_return_transformation};
+use crate::utilities::{compare_array_len, data_transformations::{percent_change, log_return_transformation}};
+use crate::statistics::covariance;
 
 
 /// # Description

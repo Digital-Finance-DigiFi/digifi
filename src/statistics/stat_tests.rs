@@ -3,7 +3,7 @@ use ndarray::{Array1, Array2, arr1, s};
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
 use crate::error::DigiFiError;
-use crate::utilities::{compare_array_len, maths_utils::differencing};
+use crate::utilities::{compare_array_len, data_transformations::differencing};
 use crate::statistics::{
     ProbabilityDistribution, linear_regression, se_lr_coefficient,
     continuous_distributions::StudentsTDistribution,
@@ -202,7 +202,7 @@ impl ADFType {
 }
 
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Result of the augmented Dickey-Fuller test.
@@ -361,7 +361,7 @@ pub fn adf(x: &Array1<f64>, lag: Option<usize>, adf_type: &ADFType, cl: Option<C
 }
 
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Result of the cointegration test.
@@ -434,7 +434,7 @@ pub fn cointegration(x: &Array1<f64>, y: &Array1<f64>, cl: Option<ConfidenceLeve
 }
 
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Result of the t-test.

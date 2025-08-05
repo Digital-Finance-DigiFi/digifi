@@ -1,22 +1,27 @@
 // Re-Exports
-pub use self::loss_functions::{LossFunction, MAE, MSE, SSE, StraddleLoss};
-pub use self::maths_utils::{factorial, rising_factorial, erf, erfinv, euclidean_distance, differencing, derivative, definite_integral};
+pub use self::maths_utils::{factorial, rising_factorial, erf, erfinv, euclidean_distance, derivative, definite_integral};
 pub use self::minimal_spanning_tree::{MSTDistance, MSTNode, MSTEdge, MST};
 pub use self::numerical_engines::nelder_mead;
-#[cfg(feature = "sample_data")]
-pub use self::sample_data::SampleData;
-#[cfg(feature = "serde")]
-use serde::{Serialize, Deserialize};
+pub use self::loss_functions::{LossFunction, MAE, MSE, SSE, StraddleLoss};
+pub use self::data_transformations::{
+    min_max_scaling, percent_change, log_return_transformation, differencing, rank_transformation, unit_vector_normalization,
+    TransformationType, DataTransformations,
+};
 pub use self::time_value_utils::{
     CompoundingType, present_value, net_present_value, future_value, internal_rate_of_return, real_interest_rate,
     ptp_compounding_transformation, ptc_compounding_transformation, ctp_compounding_transformation, Compounding, forward_rate, Cashflow, Perpetuity, Annuity,
 };
+#[cfg(feature = "sample_data")]
+pub use self::sample_data::SampleData;
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
 
 
 pub mod maths_utils;
 pub mod minimal_spanning_tree;
 pub mod numerical_engines;
 pub mod loss_functions;
+pub mod data_transformations;
 pub mod time_value_utils;
 #[cfg(feature = "sample_data")]
 pub mod sample_data;
@@ -34,7 +39,7 @@ pub const TEST_ACCURACY: f64 = 0.00000001;
 pub const NUMERICAL_CORRECTION: f64 = 0.00000000000001;
 
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 /// # Description
 /// Type of parameter used in calculations.
 pub enum ParameterType {
@@ -43,7 +48,7 @@ pub enum ParameterType {
 }
 
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Struct for generating time array.

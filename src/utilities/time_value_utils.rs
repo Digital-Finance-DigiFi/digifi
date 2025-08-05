@@ -5,7 +5,7 @@ use crate::error::DigiFiError;
 use crate::utilities::{ParameterType, Time, compare_array_len, loss_functions::{LossFunction, MSE}, numerical_engines::nelder_mead};
 
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Type of discount rate compounding.
@@ -263,7 +263,7 @@ pub fn ctp_compounding_transformation(continuous_rate: f64, periodic_frequency: 
 }
 
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Different compounding techniques and methods.
@@ -430,7 +430,7 @@ pub fn forward_rate(compounding_1: &Compounding, time_1: f64, compounding_2: &Co
 }
 
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Base class for generating cashflow array with a base cashflow growth rate and inflation rate.
@@ -509,7 +509,7 @@ impl Cashflow {
 }
 
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// A series of fixed income cashflows paid out each time step forever.
@@ -608,7 +608,7 @@ impl Perpetuity {
 }
 
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// A series of fixed income cashflows paid out for a specified number of time periods periods.

@@ -6,10 +6,10 @@ use crate::utilities::loss_functions::{LossFunction, SSE};
 use crate::statistics::{self, stat_tests};
 
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
-/// Thw data relevant to the specific linear regression feature.
+/// The data relevant to the specific linear regression feature.
 pub struct LinearRegressionFeatureResult {
     /// Value of the coefficient
     pub coefficient: f64,
@@ -36,7 +36,7 @@ pub struct LinearRegressionFeatureResult {
 }
 
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// The data resulting from linear regression analysis.
@@ -58,7 +58,7 @@ pub struct LinearRegressionResult {
 }
 
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
 /// Settings of the linear regression analysis.
