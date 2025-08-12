@@ -158,7 +158,7 @@ impl LinearRegressionAnalysis {
                 return Err(DigiFiError::UnmatchingLength { array_1: "x".to_owned(), array_2: "y".to_owned(), });
             }
         }
-        if y_len < x_len || (self.settings.add_constant && y_len < x_len + 1) {
+        if (!self.settings.add_constant && y_len < x_len) || (self.settings.add_constant && y_len < x_len + 1) {
             return Err(DigiFiError::Other { title: error_title.clone(), details: "There are fewer data points in `y` array than `ddof`.".to_owned() });
         }
         if self.settings.enable_t_test {
@@ -187,7 +187,7 @@ impl LinearRegressionAnalysis {
         self.validate_input(x, y)?;
         // Linear regression model
         let (mut shape, mut x_matrix) = ((x_len, y_len), x.iter().fold(vec![], |mut prev, next| { prev.append(&mut next.to_vec()); prev } ));
-        let mut ddof: usize = y_len - x_len;
+        let mut ddof: usize = x_len;
         if self.settings.add_constant {
             shape.0 += 1;
             x_matrix.append(&mut vec![1.0; y.len()]);

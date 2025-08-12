@@ -5,7 +5,7 @@ pub use self::discrete_distributions::{BernoulliDistribution, BinomialDistributi
 pub use self::continuous_distributions::{
     ContinuousUniformDistribution, NormalDistribution, ExponentialDistribution, LaplaceDistribution, GammaDistribution, StudentsTDistribution,
 };
-pub use self::stat_tests::{ConfidenceLevel, ADFType, ADFResult, adf, CointegrationResult, cointegration, TTestResult, t_test_two_sample, t_test_lr};
+pub use self::stat_tests::{ConfidenceLevel, ADFType, ADFResult, adf, CointegrationResult, cointegration, TTestResult, TTestTwoSampleCase, t_test_two_sample, t_test_lr};
 pub use self::linear_regression_analysis::{LinearRegressionFeatureResult, LinearRegressionResult, LinearRegressionSettings, LinearRegressionAnalysis};
 
 

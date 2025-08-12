@@ -853,7 +853,7 @@ impl StudentsTDistribution {
     /// # Input
     /// - `v`: Degrees of freedom
     pub fn new(v: f64) -> Result<Self, DigiFiError> {
-        let error_title: String = String::from("Gamma Distribution");
+        let error_title: String = String::from("Student's T Distribution Distribution");
         if v <= 0.0 {
             return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument `v` must be positive.".to_owned(), });
         }

@@ -439,14 +439,101 @@ pub fn cointegration(x: &Array1<f64>, y: &Array1<f64>, cl: Option<ConfidenceLeve
 /// # Description
 /// Result of the t-test.
 pub struct TTestResult {
+    /// Whether to reject the null hypothesis
     pub reject_h0: bool,
+    /// t-score of the t-test
+    pub t_score: f64,
+    /// Degrees of freedom used in the test
+    pub dof: f64,
+    /// p-value of the t-test
     pub p_value: f64,
+    /// Conficdence level for t-test (Quoted as probability to compare `p_value` against)
     pub p_cl: f64,
 }
 
 
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// # Description
-/// Two sample t-test. It is used to test whether two samples have an equal mean. The null hypothesis is that the populations of both samp-les have equal mean.
+/// Variant of the two sample t-test.
+/// 
+/// Note: `EqualVariance` assumes that the samples are drawn from the distributions that have the same variance, but it does not explicitly check for that to hold.
+pub enum TTestTwoSampleCase {
+    #[default]
+    /// Equal sample sizes and variance - Assumed that the two distributions have the same variance
+    EqualVariance,
+    /// Equal or unequal sizes, similar variance (`0.5 < s^{2}_{1} / s^{2}_{2} < 2`)
+    SimilarVariance,
+    /// Equal or unequal sample sizes, unequal variances (`s_{1} > 2s_{2}` or `2s_{1} < s_{2}`) - Welch's t-test
+    UnequalVariance,
+}
+
+impl TTestTwoSampleCase {
+
+    /// Returns the ratio of unbiased estimators of standard deviations `s_{1} / s_{2}`.
+    fn unbiased_std_ratio(sample_1: &Array1<f64>, sample_2: &Array1<f64>) -> f64 {
+        sample_1.std(1.0) / sample_2.std(1.0)
+    }
+
+    /// # Description
+    /// Selects two sample t-test that best fits the data.
+    /// 
+    /// # Input
+    /// - `sample_1`: First sample
+    /// - `sample_2`: Second sample
+    /// 
+    /// # Output
+    /// - Two sample t-test case that best fits the data
+    pub fn select_case(sample_1: &Array1<f64>, sample_2: &Array1<f64>) -> Self {
+        if sample_1.len() == sample_2.len() {
+            TTestTwoSampleCase::EqualVariance
+        } else {
+            let unbiased_std_ratio: f64 = TTestTwoSampleCase::unbiased_std_ratio(sample_1, sample_2);
+            if 0.5 <= unbiased_std_ratio && unbiased_std_ratio <= 2.0 {
+                TTestTwoSampleCase::SimilarVariance
+            } else {
+                TTestTwoSampleCase::UnequalVariance
+            }
+        }
+    }
+
+    /// Validates the t-test case.
+    fn validate(&self, sample_1: &Array1<f64>, sample_2: &Array1<f64>) -> Result<(), DigiFiError> {
+        let error_title: String = String::from("T-test (Two Sample) Validation");
+        if sample_1.len() < 1 || sample_2.len() < 1 {
+            return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "Both samples must contain at least one data point.".to_owned(), })
+        }
+        let unbiased_std_ratio: f64 = TTestTwoSampleCase::unbiased_std_ratio(sample_1, sample_2);
+        match self {
+            TTestTwoSampleCase::EqualVariance => {
+                if sample_1.len() != sample_2.len() {
+                    return Err(DigiFiError::UnmatchingLength { array_1: "sample_1".to_owned(), array_2: "sample_2".to_owned(), })
+                }
+            },
+            TTestTwoSampleCase::SimilarVariance => {
+                if unbiased_std_ratio < 0.5 || 2.0 < unbiased_std_ratio {
+                    return Err(DigiFiError::ParameterConstraint {
+                        title: error_title.clone(),
+                        constraint: "The unbiased estimators of variance of `sample_1` and `sample_2` have to satisfy the unequality `0.5 < s^{2}_{1} / s^{2}_{2} < 2` to use `SimilarVariance` two sample t-test case.".to_owned(),
+                    })
+                }
+            },
+            TTestTwoSampleCase::UnequalVariance => {
+                if 0.5 <= unbiased_std_ratio && unbiased_std_ratio <= 2.0 {
+                    return Err(DigiFiError::ParameterConstraint {
+                        title: error_title.clone(),
+                        constraint: "The unbiased estimators of variance of `sample_1` and `sample_2` have to satisfy either the unequality `s_{1} > 2s_{2}` or `2s_{1} < s_{2}` to use `UnequalVariance` two sample t-test case.".to_owned(),
+                    })
+                }
+            },
+        }
+        Ok(())
+    }
+}
+
+
+/// # Description
+/// Two sample t-test. It is used to test whether two samples have an equal mean. The null hypothesis is that the populations of both samples have equal mean.
 /// 
 /// # Input
 /// - `sample_1`: Sample from the first population
@@ -464,7 +551,7 @@ pub struct TTestResult {
 /// 
 /// ```rust
 /// use ndarray::Array1;
-/// use digifi::statistics::{ConfidenceLevel, TTestResult, t_test_two_sample};
+/// use digifi::statistics::{ConfidenceLevel, TTestResult, TTestTwoSampleCase, t_test_two_sample};
 ///
 /// #[cfg(feature = "sample_data")]
 /// fn test_t_test_two_sample() -> () {
@@ -476,24 +563,53 @@ pub struct TTestResult {
 ///     let gs: Array1<f64> = sample_data.remove("GS").unwrap();
 /// 
 ///     // Test whether jpm and gs have equal mean
-///     let test_result: TTestResult = t_test_two_sample(&jpm, &gs, Some(ConfidenceLevel::Five)).unwrap();
+///     let test_result: TTestResult = t_test_two_sample(&jpm, &gs, Some(ConfidenceLevel::Five), Some(TTestTwoSampleCase::EqualVariance)).unwrap();
 ///     assert_eq!(test_result.reject_h0, true);
 /// }
 /// ```
-pub fn t_test_two_sample(sample_1: &Array1<f64>, sample_2: &Array1<f64>, cl: Option<ConfidenceLevel>) -> Result<TTestResult, DigiFiError> {
+pub fn t_test_two_sample(sample_1: &Array1<f64>, sample_2: &Array1<f64>, cl: Option<ConfidenceLevel>, case: Option<TTestTwoSampleCase>) -> Result<TTestResult, DigiFiError> {
     let error_title: String = String::from("T-test (Two Sample)");
-    // Compute t score
-    let dof: f64 = sample_1.len() as f64;
+    // Select the t-test case
+    let case: TTestTwoSampleCase = match case {
+        Some(v) => v,
+        None => TTestTwoSampleCase::select_case(sample_1, sample_2),
+    };
+    case.validate(sample_1, sample_2)?;
+    // Compute t-score and degrees of freedom
+    let sample_1_len: f64 = sample_1.len() as f64;
+    let sample_2_len: f64 = sample_2.len() as f64;
     let mean_1: f64 = sample_1.mean().ok_or(DigiFiError::MeanCalculation { title: error_title.clone(), series: "series_1".to_owned(), })?;
     let mean_2: f64 = sample_2.mean().ok_or(DigiFiError::MeanCalculation { title: error_title.clone(), series: "series_2".to_owned(), })?;
-    let pooled_std: f64 = ((sample_1.var(1.0) + sample_2.var(1.0)) / 2.0).sqrt();
-    let t_score: f64 = (mean_1 - mean_2) / (pooled_std * (2.0/dof).sqrt());
+    let unbiased_var_1: f64 = sample_1.var(1.0);
+    let unbiased_var_2: f64 = sample_2.var(1.0);
+    let (t_score, dof) = match case {
+        TTestTwoSampleCase::EqualVariance => {
+            let dof: f64 = sample_1_len;
+            let pooled_std: f64 = ((unbiased_var_1 + unbiased_var_2) / 2.0).sqrt();
+            let t_score: f64 = (mean_1 - mean_2) / (pooled_std * (2.0/dof).sqrt());
+            (t_score, dof)
+        },
+        TTestTwoSampleCase::SimilarVariance => {
+            let dof: f64 = sample_1_len + sample_2_len - 2.0;
+            let pooled_std: f64 = (((sample_1_len - 1.0) * unbiased_var_1 + (sample_2_len - 1.0) * unbiased_var_2) / dof).sqrt();
+            let t_score: f64 = (mean_1 - mean_2) / (pooled_std * (1.0/sample_1_len + 1.0/sample_2_len).sqrt());
+            (t_score, dof)
+        },
+        TTestTwoSampleCase::UnequalVariance => {
+            let scaled_unbiased_var_1: f64 = unbiased_var_1 / sample_1_len;
+            let scaled_unbiased_var_2: f64 = unbiased_var_2 / sample_2_len;
+            let dof: f64 = (scaled_unbiased_var_1 + scaled_unbiased_var_2).powi(2) / (scaled_unbiased_var_1.powi(2)/(sample_1_len - 1.0) + scaled_unbiased_var_2.powi(2)/(sample_2_len - 1.0));
+            let pooled_std: f64 = (scaled_unbiased_var_1 + scaled_unbiased_var_2).sqrt();
+            let t_score: f64 = (mean_1 - mean_2) / pooled_std;
+            (t_score, dof)
+        },
+    };
     // Obtain confidence interval value
     let dist: StudentsTDistribution = StudentsTDistribution::new(dof)?;
     let p_value: f64 = 1.0 - dist.cdf(&arr1(&[t_score]))?[0];
     let p_cl: f64 = match cl { Some(v) => 1.0 - v.get_p(), None => 1.0 - ConfidenceLevel::default().get_p() };
     let reject_h0: bool = if p_cl < p_value { true } else { false };
-    Ok(TTestResult { reject_h0, p_value, p_cl })
+    Ok(TTestResult { reject_h0, t_score, dof, p_value, p_cl })
 }
 
 
@@ -565,13 +681,13 @@ pub fn t_test_lr(beta: f64, beta_0: Option<f64>, y: &Array1<f64>, y_prediction: 
     let se_beta: f64 = se_lr_coefficient(y, y_prediction, x, ddof)?;
     let t_score: f64 = (beta - beta_0) / se_beta;
     // Obtain confidence interval value
-    let df: f64 = y.len().checked_sub(ddof)
-        .ok_or(DigiFiError::Other { title: "T-Test (Linear Regression)".to_owned(), details: "There are fewer data points in `y` array than `ddof`.".to_owned() })? as f64;
-    let dist: StudentsTDistribution = StudentsTDistribution::new(df)?;
+    let dof: f64 = y.len().checked_sub(ddof)
+        .ok_or(DigiFiError::Other { title: "T-test (Linear Regression)".to_owned(), details: "There are fewer data points in `y` array than `ddof`.".to_owned() })? as f64;
+    let dist: StudentsTDistribution = StudentsTDistribution::new(dof)?;
     let p_value: f64 = 1.0 - dist.cdf(&arr1(&[t_score]))?[0];
     let p_cl: f64 = match cl { Some(v) => v.get_p(), None => ConfidenceLevel::default().get_p() };
     let reject_h0: bool = if p_value < p_cl { true } else { false };
-    Ok(TTestResult { reject_h0, p_value, p_cl })
+    Ok(TTestResult { reject_h0, t_score, dof, p_value, p_cl })
 }
 
 
@@ -604,13 +720,13 @@ mod tests {
     #[test]
     fn unit_test_t_test_two_sample() -> () {
         use crate::utilities::sample_data::SampleData;
-        use crate::statistics::stat_tests::{ConfidenceLevel, TTestResult, t_test_two_sample};
+        use crate::statistics::stat_tests::{ConfidenceLevel, TTestResult, TTestTwoSampleCase, t_test_two_sample};
         let sample: SampleData = SampleData::Portfolio; 
         let (_, mut sample_data) = sample.load_sample_data();
         let jpm: Array1<f64> = sample_data.remove("JPM").unwrap();
         let gs: Array1<f64> = sample_data.remove("GS").unwrap();
         // Test whether jpm and gs have equal mean
-        let test_result: TTestResult = t_test_two_sample(&jpm, &gs, Some(ConfidenceLevel::Five)).unwrap();
+        let test_result: TTestResult = t_test_two_sample(&jpm, &gs, Some(ConfidenceLevel::Five), Some(TTestTwoSampleCase::EqualVariance)).unwrap();
         assert_eq!(test_result.reject_h0, true);
     }
 
