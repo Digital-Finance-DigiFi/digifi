@@ -1,6 +1,6 @@
 [package]
 name = "digifi"
-version = "2.1.13"
+version = "2.1.14"
 edition = "2021"
 description = "General purpose financial library and framework for financial modelling, portfolio optimization, and asset pricing."
 license = "MIT OR Apache-2.0"

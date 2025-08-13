@@ -23,6 +23,10 @@ pub struct LinearRegressionFeatureResult {
     pub t_test_h0: Option<f64>,
     /// T-test result
     pub t_test_reject_h0: Option<bool>,
+    /// t score of the t-test
+    pub t_test_t_score: Option<f64>,
+    /// Degrees of freedom used in the t-test
+    pub t_test_dof: Option<f64>,
     /// p-value of the t-test
     pub t_test_p_value: Option<f64>,
     /// Confidence level of the t-test
@@ -209,6 +213,8 @@ impl LinearRegressionAnalysis {
                 let t_test_result: stat_tests::TTestResult = stat_tests::t_test_lr(coefficient.coefficient, beta_0, y, &y_prediction, &x[i], ddof, self.settings.t_test_cl.clone())?;
                 coefficient.t_test_h0 = beta_0;
                 coefficient.t_test_reject_h0 = Some(t_test_result.reject_h0);
+                coefficient.t_test_t_score = Some(t_test_result.t_score);
+                coefficient.t_test_dof = Some(t_test_result.dof);
                 coefficient.t_test_p_value = Some(t_test_result.p_value);
                 coefficient.t_test_cl = Some(t_test_result.p_cl);
             }
