@@ -12,7 +12,6 @@ use crate::statistics::{
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Methods and properties of Bernoulli distribution.
 /// 
 /// # Links
@@ -26,7 +25,7 @@ use crate::statistics::{
 /// use digifi::utilities::TEST_ACCURACY;
 /// use digifi::statistics::{ProbabilityDistribution, BernoulliDistribution};
 ///
-/// let dist: BernoulliDistribution = BernoulliDistribution::new(0.4).unwrap();
+/// let dist: BernoulliDistribution = BernoulliDistribution::build(0.4).unwrap();
 /// let x: Array1<f64> = arr1(&[0.0]);
 ///
 /// // PDF test
@@ -49,7 +48,6 @@ pub struct BernoulliDistribution {
 }
 
 impl BernoulliDistribution {
-    /// # Description
     /// Creates a new `BernoulliDistribution` instance.
     /// 
     /// # Input
@@ -57,9 +55,12 @@ impl BernoulliDistribution {
     /// 
     /// # Errors
     /// - Returns an error if `p` is not in the \[0,1\] range
-    pub fn new(p: f64) -> Result<Self, DigiFiError> {
+    pub fn build(p: f64) -> Result<Self, DigiFiError> {
         if (p < 0.0) || (1.0 < p) {
-            return Err(DigiFiError::ParameterConstraint { title: "Bernoulli Distribution".to_owned(), constraint: "The argument `p` must be in the range `[0, 1]`.".to_owned(), });
+            return Err(DigiFiError::ParameterConstraint {
+                title: "Bernoulli Distribution".to_owned(),
+                constraint: "The argument `p` must be in the range `[0, 1]`.".to_owned(),
+            });
         }
         Ok(BernoulliDistribution { p, _distribution_type: ProbabilityDistributionType::Discrete })
     }
@@ -94,7 +95,6 @@ impl ProbabilityDistribution for BernoulliDistribution {
         Ok(-(1.0 - self.p) * (1.0 - self.p).ln() - self.p * self.p.ln())
     }
 
-    /// # Description
     /// Calculates the Probability Mass Function (PMF) for a Bernoulli distribution.
     /// 
     /// # Input
@@ -114,14 +114,16 @@ impl ProbabilityDistribution for BernoulliDistribution {
             } else if *i == 1.0 {
                 x_ = self.p
             } else {
-                return Err(DigiFiError::ParameterConstraint { title: "Bernoulli Distribution".to_owned(), constraint: "The argument `x` must be in the `{{0, 1}}` set.".to_owned(), });
+                return Err(DigiFiError::ParameterConstraint {
+                    title: "Bernoulli Distribution".to_owned(),
+                    constraint: "The argument `x` must be in the `{{0, 1}}` set.".to_owned(),
+                });
             }
             result.push(x_)
         }
         Ok(Array1::from_vec(result))
     }
 
-    /// # Description
     /// Computes the Cumulative Distribution Function (CDF) for a Bernoulli distribution.
     /// 
     /// # Input
@@ -133,7 +135,6 @@ impl ProbabilityDistribution for BernoulliDistribution {
         Ok(x.map(|x_| if *x_ < 0.0 { 0.0 } else if 1.0 <= *x_ { 1.0 } else { 1.0 - self.p } ))
     }
 
-    /// # Description
     /// Computes the Inverse Cumulative Distribution Function (Inverse CDF) for a Bernoulli distribution.
     /// 
     /// # Input
@@ -146,7 +147,6 @@ impl ProbabilityDistribution for BernoulliDistribution {
         Ok(p.map(|p_| if *p_ == 1.0 { 1.0 } else { 0.0 } ))
     }
 
-    /// # Description
     /// Calculates the Moment Generating Function (MGF) for a Bernoulli distribution.
     /// 
     /// # Input
@@ -162,7 +162,6 @@ impl ProbabilityDistribution for BernoulliDistribution {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Methods and properties of binomial distribution.
 /// 
 ///  Links
@@ -176,7 +175,7 @@ impl ProbabilityDistribution for BernoulliDistribution {
 /// use digifi::utilities::TEST_ACCURACY;
 /// use digifi::statistics::{ProbabilityDistribution, BinomialDistribution};
 ///
-/// let dist: BinomialDistribution = BinomialDistribution::new(4, 0.6).unwrap();
+/// let dist: BinomialDistribution = BinomialDistribution::build(4, 0.6).unwrap();
 /// let x: Array1<f64> = arr1(&[2.0]);
 ///
 /// // PDF test
@@ -201,7 +200,6 @@ pub struct BinomialDistribution {
 }
 
 impl BinomialDistribution {
-    /// # Description
     /// Creates a new `BinomialDistribution` instance.
     /// 
     /// # Input
@@ -210,9 +208,12 @@ impl BinomialDistribution {
     /// 
     /// # Errors
     /// - Returns an error if `p` is not in the \[0,1\] range
-    pub fn new(n: usize, p: f64) -> Result<Self, DigiFiError> {
+    pub fn build(n: usize, p: f64) -> Result<Self, DigiFiError> {
         if (p < 0.0) || (1.0 < p) {
-            return Err(DigiFiError::ParameterConstraint { title: "Binomial Distribution".to_owned(), constraint: "The argument `p` must be in the range `[0, 1]`.".to_owned(), });
+            return Err(DigiFiError::ParameterConstraint {
+                title: "Binomial Distribution".to_owned(),
+                constraint: "The argument `p` must be in the range `[0, 1]`.".to_owned(),
+            });
         }
         Ok(BinomialDistribution { n, p, _distribution_type: ProbabilityDistributionType::Discrete })
     }
@@ -248,7 +249,6 @@ impl ProbabilityDistribution for BinomialDistribution {
     }
 
 
-    /// # Description
     /// Calculates the Probability Mass Function (PMF) for a binomial distribution.
     /// 
     /// # Input
@@ -266,7 +266,6 @@ impl ProbabilityDistribution for BinomialDistribution {
     }
 
 
-    /// # Description
     /// Computes the Cumulative Distribution Function (CDF) for a binomial distribution.
     /// 
     /// # Input
@@ -286,7 +285,6 @@ impl ProbabilityDistribution for BinomialDistribution {
         Ok(Array1::from_vec(cdf_))
     }
 
-    /// # Description
     /// Computes the Inverse Cumulative Distribution Function (Inverse CDF) for a binomial distribution.
     /// 
     /// # Input
@@ -316,7 +314,6 @@ impl ProbabilityDistribution for BinomialDistribution {
         Ok(Array1::from_vec(result))
     }
 
-    /// # Description
     /// Calculates the Moment Generating Function (MGF) for a binomial distribution.
     /// 
     /// # Input
@@ -332,7 +329,6 @@ impl ProbabilityDistribution for BinomialDistribution {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Methods and properties of discrete uniform distribution.
 /// 
 /// # Links
@@ -346,7 +342,7 @@ impl ProbabilityDistribution for BinomialDistribution {
 /// use digifi::utilities::TEST_ACCURACY;
 /// use digifi::statistics::{ProbabilityDistribution, DiscreteUniformDistribution};
 ///
-/// let dist: DiscreteUniformDistribution = DiscreteUniformDistribution::new(1, 3).unwrap();
+/// let dist: DiscreteUniformDistribution = DiscreteUniformDistribution::build(1, 3).unwrap();
 /// let x: Array1<f64> = arr1(&[1.0]);
 ///
 /// // PDF test
@@ -382,9 +378,12 @@ impl DiscreteUniformDistribution {
     /// 
     /// # Errors
     /// - Returns an error if `b` is smaller than `a`
-    pub fn new(a: i32, b: i32) -> Result<Self, DigiFiError> {
+    pub fn build(a: i32, b: i32) -> Result<Self, DigiFiError> {
         if b < a {
-            return Err(DigiFiError::ParameterConstraint { title: "Discrete Uniform Distribution".to_owned(), constraint: "The argument `a` must be smaller or equal to the argument `b`.".to_owned(), });
+            return Err(DigiFiError::ParameterConstraint {
+                title: "Discrete Uniform Distribution".to_owned(),
+                constraint: "The argument `a` must be smaller or equal to the argument `b`.".to_owned(),
+            });
         }
         Ok(DiscreteUniformDistribution { a, b, n: ((b - a + 1) as f64), _distribution_type: ProbabilityDistributionType::Discrete })
     }
@@ -419,7 +418,6 @@ impl ProbabilityDistribution for DiscreteUniformDistribution {
         Ok(self.n.ln())
     }
 
-    /// # Description
     /// Calculates the Probability Mass Function (PMF) for a discrete uniform distribution.
     /// 
     /// # Input
@@ -431,7 +429,6 @@ impl ProbabilityDistribution for DiscreteUniformDistribution {
         Ok(Array1::from_vec(vec![1.0; x.len()]) / self.n)
     }
 
-    /// # Description
     /// Computes the Cumulative Distribution Function (CDF) for a discrete uniform distribution.
     /// 
     /// # Input
@@ -443,7 +440,6 @@ impl ProbabilityDistribution for DiscreteUniformDistribution {
         Ok(x.map(|x_| if ((self.a as f64) <= *x_) || (*x_ <= (self.b as f64)) { (x_.floor() - (self.a as f64) + 1.0) / self.n } else { f64::NAN } ))
     }
 
-    /// # Description
     /// Calculates the Inverse Cumulative Distribution Function (Inverse CDF) for a discrete uniform distribution.
     /// 
     /// # Input
@@ -456,7 +452,6 @@ impl ProbabilityDistribution for DiscreteUniformDistribution {
         Ok(p * self.n - 1.0 + (self.a as f64))
     }
 
-    /// # Description
     /// Computes the Moment Generating Function (MGF) for a discrete uniform distribution.
     /// 
     /// # Input
@@ -475,7 +470,6 @@ impl ProbabilityDistribution for DiscreteUniformDistribution {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Methods and properties of Poisson distribution.
 /// 
 /// # Links
@@ -489,7 +483,7 @@ impl ProbabilityDistribution for DiscreteUniformDistribution {
 /// use digifi::utilities::TEST_ACCURACY;
 /// use digifi::statistics::{ProbabilityDistribution, PoissonDistribution};
 ///
-/// let dist: PoissonDistribution = PoissonDistribution::new(1.5).unwrap();
+/// let dist: PoissonDistribution = PoissonDistribution::build(1.5).unwrap();
 /// let x: Array1<f64> = arr1(&[3.0]);
 ///
 /// // PDF test
@@ -512,7 +506,6 @@ pub struct PoissonDistribution {
 }
 
 impl PoissonDistribution {
-    /// # Description
     /// Creates a new `PoissonDistribution` instance.
     /// 
     /// # Input
@@ -520,9 +513,12 @@ impl PoissonDistribution {
     ///
     /// # Errors
     /// - Returns an error if `lambda` is not positive
-    pub fn new(lambda: f64) -> Result<Self, DigiFiError> {
+    pub fn build(lambda: f64) -> Result<Self, DigiFiError> {
         if lambda <= 0.0 {
-            return Err(DigiFiError::ParameterConstraint { title: "Poisson Distribution".to_owned(), constraint: "The argument `lambda` must be positive.".to_owned(), });
+            return Err(DigiFiError::ParameterConstraint {
+                title: "Poisson Distribution".to_owned(),
+                constraint: "The argument `lambda` must be positive.".to_owned(),
+            });
         }
         Ok(PoissonDistribution { lambda, _distribution_type: ProbabilityDistributionType::Discrete })
     }
@@ -557,7 +553,6 @@ impl ProbabilityDistribution for PoissonDistribution {
         Ok(0.5*(2.0 * std::f64::consts::PI * std::f64::consts::E * self.lambda).ln() - 1.0/(12.0 * self.lambda) - 1.0/(24.0 * self.lambda.powi(2)) - 1.0/(360.0*self.lambda.powi(3)))
     }
 
-    /// # Description
     /// Calculates the Probability Mass Function (PMF) for a Poisson distribution.
     /// 
     /// # Input
@@ -572,7 +567,10 @@ impl ProbabilityDistribution for PoissonDistribution {
         let mut result: Vec<f64> = Vec::<f64>::new();
         for i in x {
             if *i < 0.0 {
-                return Err(DigiFiError::ParameterConstraint { title: "Poisson Distribution".to_owned(), constraint: "The argument `x` must be positive.".to_owned(), });
+                return Err(DigiFiError::ParameterConstraint {
+                    title: "Poisson Distribution".to_owned(),
+                    constraint: "The argument `x` must be positive.".to_owned(),
+                });
             } else {
                 result.push((self.lambda.powi(*i as i32) * (-self.lambda).exp()) / factorial(*i as u128) as f64)
             }
@@ -580,7 +578,6 @@ impl ProbabilityDistribution for PoissonDistribution {
         Ok(Array1::from_vec(result))
     }
 
-    /// # Description
     /// Computes the Cumulative Distribution Function (CDF) for a Poisson distribution.
     /// 
     /// # Input
@@ -595,7 +592,10 @@ impl ProbabilityDistribution for PoissonDistribution {
         let mut result: Vec<f64> = Vec::<f64>::new();
         for i in x {
             if *i < 0.0 {
-                return Err(DigiFiError::ParameterConstraint { title: "Poisson Distribution".to_owned(), constraint: "The argument `x` must be positive.".to_owned(), });
+                return Err(DigiFiError::ParameterConstraint {
+                    title: "Poisson Distribution".to_owned(),
+                    constraint: "The argument `x` must be positive.".to_owned(),
+                });
             }
             let mut proxy: f64 = 0.0;
             for j in 0..(1 + i.floor() as i32) {
@@ -606,7 +606,6 @@ impl ProbabilityDistribution for PoissonDistribution {
         Ok(Array1::from_vec(result))
     }
 
-    /// # Description
     /// Computes the Inverse Cumulative Distribution Function (Inverse CDF) for a Poisson distribution.
     /// 
     /// # Input
@@ -616,7 +615,7 @@ impl ProbabilityDistribution for PoissonDistribution {
     /// - Inverse CDF values for the givenprobabilities
     fn inverse_cdf(&self, p: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
         let p: Array1<f64> = p.map(|p_| if (*p_ < 0.0) || (1.0 < *p_) { f64::NAN } else {*p_});
-        let normal_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0)?;
+        let normal_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
         // Helper functions
         let q_n2 = |w: f64| { self.lambda + self.lambda.sqrt()*w + (1.0/3.0 + w.powi(2)/6.0) + (-w/36.0 - w.powi(3)/72.0)/self.lambda.sqrt() };
         let f = |r: f64| { (2.0 * (1.0 - r + r*r.log(10.0))).sqrt() };
@@ -657,7 +656,6 @@ impl ProbabilityDistribution for PoissonDistribution {
         Ok(result)
     }
 
-    /// # Description
     /// Calculates the Moment Generating Function (MGF) for a Poisson distribution.
     /// 
     /// # Input
@@ -680,7 +678,7 @@ mod tests {
     #[test]
     fn unit_test_bernoulli_distribution() -> () {
         use crate::statistics::discrete_distributions::BernoulliDistribution;
-        let dist: BernoulliDistribution = BernoulliDistribution::new(0.4).unwrap();
+        let dist: BernoulliDistribution = BernoulliDistribution::build(0.4).unwrap();
         let x: Array1<f64> = arr1(&[0.0]);
         // PDF test
         let pdf_v: f64 = dist.pdf(&x).unwrap()[0];
@@ -696,7 +694,7 @@ mod tests {
     #[test]
     fn unit_test_binomial_distribution() -> () {
         use crate::statistics::discrete_distributions::BinomialDistribution;
-        let dist: BinomialDistribution = BinomialDistribution::new(4, 0.6).unwrap();
+        let dist: BinomialDistribution = BinomialDistribution::build(4, 0.6).unwrap();
         let x: Array1<f64> = arr1(&[2.0]);
         // PDF test
         let pdf_v: f64 = dist.pdf(&x).unwrap()[0];
@@ -712,7 +710,7 @@ mod tests {
     #[test]
     fn unit_test_discrete_uniform_distribution() -> () {
         use crate::statistics::discrete_distributions::DiscreteUniformDistribution;
-        let dist: DiscreteUniformDistribution = DiscreteUniformDistribution::new(1, 3).unwrap();
+        let dist: DiscreteUniformDistribution = DiscreteUniformDistribution::build(1, 3).unwrap();
         let x: Array1<f64> = arr1(&[1.0]);
         // PDF test
         let pdf_v: f64 = dist.pdf(&x).unwrap()[0];
@@ -728,7 +726,7 @@ mod tests {
     #[test]
     fn unit_test_poisson_distribution() -> () {
         use crate::statistics::discrete_distributions::PoissonDistribution;
-        let dist: PoissonDistribution = PoissonDistribution::new(1.5).unwrap();
+        let dist: PoissonDistribution = PoissonDistribution::build(1.5).unwrap();
         let x: Array1<f64> = arr1(&[3.0]);
         // PDF test
         let pdf_v: f64 = dist.pdf(&x).unwrap()[0];

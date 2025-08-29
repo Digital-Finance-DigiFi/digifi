@@ -8,7 +8,6 @@ use crate::statistics::{covariance, linear_regression};
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Parameters of CAPM model.
 pub struct CAPMParams {
     /// y-axis intersection of the CAPM model
@@ -50,7 +49,6 @@ pub enum CAPMType {
 
 impl CAPMType {
 
-    /// # Description
     /// Validates data inside each of the variants.
     ///
     /// # Errors
@@ -73,7 +71,6 @@ impl CAPMType {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Type of solution used for computing the parameters of the CAPM.
 ///
 /// Note: `Covariance` solution type is only available for the `Standard` CAPM.
@@ -85,7 +82,6 @@ pub enum CAPMSolutionType {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// CAPM, three-factor and five-factor Famma-French models.
 /// 
 /// Contains methods for finding asset beta and predicting expected asset returns with the given beta.
@@ -112,7 +108,7 @@ pub enum CAPMSolutionType {
 ///     };
 ///     let solution_type: CAPMSolutionType = CAPMSolutionType::LinearRegression;
 ///
-///     let capm: CAPM = CAPM::new(sample_data.remove("Market").unwrap(), sample_data.remove("RF").unwrap(), capm_type, solution_type).unwrap();
+///     let capm: CAPM = CAPM::build(sample_data.remove("Market").unwrap(), sample_data.remove("RF").unwrap(), capm_type, solution_type).unwrap();
 ///     let params: CAPMParams = capm.get_parameters(&sample_data.remove("Stock Returns").unwrap()).unwrap();
 ///
 ///     // The results were found using LinearRegression from sklearn
@@ -136,7 +132,6 @@ pub struct CAPM {
 }
 
 impl CAPM {
-    /// # Description
     /// Creates a new `CAPM` instance.
     /// 
     /// # Input
@@ -148,7 +143,7 @@ impl CAPM {
     /// # Errors
     /// - Returns an error if the length of the market_returns array does not match any other array (i.e., `rf`, `smb`, `hml`, `rmw`, `cma`).
     /// - Returns an error if covariance solution type used with non-standard CAPM.
-    pub fn new(market_returns: Array1<f64>, rf: Array1<f64>, capm_type: CAPMType, solution_type: CAPMSolutionType) -> Result<Self, DigiFiError> {
+    pub fn build(market_returns: Array1<f64>, rf: Array1<f64>, capm_type: CAPMType, solution_type: CAPMSolutionType) -> Result<Self, DigiFiError> {
         // Cross-validate the lengths of all arrays
         compare_array_len(&market_returns, &rf, "market_returns", "rf")?;
         capm_type.self_validate()?;
@@ -176,7 +171,6 @@ impl CAPM {
         Ok(CAPM { market_returns, rf, capm_type, solution_type })
     }
 
-    /// # Description
     /// Computes the expected return premium of an asset/project given the risk-free rate, expected market return, SMB, HML, RMW, CMA and their betas.
     /// 
     /// # Input
@@ -245,7 +239,6 @@ impl CAPM {
         Ok(reg_params)
     }
 
-    /// # Description
     /// Finds the values of parameters alpha and betas (if `Covariance` solution type is used, only beta is returned).
     /// 
     /// # Input
@@ -283,7 +276,7 @@ mod tests {
             rmw: sample_data.remove("RMW").unwrap(), cma: sample_data.remove("CMA").unwrap(),
         };
         let solution_type: CAPMSolutionType = CAPMSolutionType::LinearRegression;
-        let capm: CAPM = CAPM::new(sample_data.remove("Market").unwrap(), sample_data.remove("RF").unwrap(), capm_type, solution_type).unwrap();
+        let capm: CAPM = CAPM::build(sample_data.remove("Market").unwrap(), sample_data.remove("RF").unwrap(), capm_type, solution_type).unwrap();
         let params: CAPMParams = capm.get_parameters(&sample_data.remove("Stock Returns").unwrap()).unwrap();
         // The results were found using LinearRegression from sklearn
         assert!((params.alpha.unwrap() - 0.01353015).abs() < TEST_ACCURACY);

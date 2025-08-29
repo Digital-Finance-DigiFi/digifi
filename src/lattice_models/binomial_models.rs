@@ -4,7 +4,6 @@ use crate::lattice_models::LatticeModel;
 use crate::financial_instruments::Payoff;
 
 
-/// # Description
 /// Binomial tree with the defined parameters presented as an array of layers.
 /// 
 /// # Input
@@ -34,7 +33,10 @@ use crate::financial_instruments::Payoff;
 /// ```
 pub fn binomial_tree_nodes(s_0: f64, u: f64, d: f64, n_steps: usize) -> Result<Vec<Array1<f64>>, DigiFiError> {
     if (u <= 0.0) || (d <= 0.0) {
-        return Err(DigiFiError::ParameterConstraint { title: "Binomial Tree Nodes".to_owned(), constraint: "The arguments `u` and `d` must be positive multiplicative factors of the binomial model.".to_owned(), });
+        return Err(DigiFiError::ParameterConstraint {
+            title: "Binomial Tree Nodes".to_owned(),
+            constraint: "The arguments `u` and `d` must be positive multiplicative factors of the binomial model.".to_owned(),
+        });
     }
     let mut binomial_tree: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
     for layer in 0..(n_steps as i32 + 1) {
@@ -49,7 +51,6 @@ pub fn binomial_tree_nodes(s_0: f64, u: f64, d: f64, n_steps: usize) -> Result<V
 }
 
 
-/// # Description
 /// General binomial model with custom payoff. It constructs a binomial tree with given parameters;
 /// calculates the value at each node considering the custom payoff and probability; 
 /// and aggregates these values to determine the final fair value of the option.
@@ -111,16 +112,25 @@ pub fn binomial_model(payoff_object: &dyn Payoff, s_0: f64, u: f64, d: f64, p_u:
     // Data validation
     payoff_object.validate_payoff(5)?;
     if (u < 0.0) || (d < 0.0) {
-        return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The arguments `u` and `d` must be non-negative.".to_owned(), });
+        return Err(DigiFiError::ParameterConstraint {
+            title: error_title,
+            constraint: "The arguments `u` and `d` must be non-negative.".to_owned(),
+        });
     }
     if (p_u <= 0.0) || (1.0 <= p_u) {
-        return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument `p_u` must be a defined over a range `[0,1]`.".to_owned(), });
+        return Err(DigiFiError::ParameterConstraint {
+            title: error_title,
+            constraint: "The argument `p_u` must be a defined over a range `[0,1]`.".to_owned(),
+        });
     }
     let exercise_time_steps_: Vec<bool>;
     match exercise_time_steps {
         Some(exercise_time_steps_vec) => {
             if exercise_time_steps_vec.len() != n_steps {
-                return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument `exercise_time_steps` should be of length `n_steps`.".to_owned(), });
+                return Err(DigiFiError::ParameterConstraint {
+                    title: error_title,
+                    constraint: "The argument `exercise_time_steps` should be of length `n_steps`.".to_owned(),
+                });
             }
             exercise_time_steps_ = exercise_time_steps_vec
         },
@@ -153,7 +163,6 @@ pub fn binomial_model(payoff_object: &dyn Payoff, s_0: f64, u: f64, d: f64, p_u:
 }
 
 
-/// # Description
 /// Binomial models that are scaled to emulate Brownian motion. This model uses a binomial lattice
 /// approach to approximate the continuous path of Brownian motion, specifically for option pricing.
 /// 
@@ -177,7 +186,7 @@ pub fn binomial_model(payoff_object: &dyn Payoff, s_0: f64, u: f64, d: f64, p_u:
 /// use digifi::financial_instruments::LongCall;
 ///
 /// let long_call: LongCall = LongCall { k: 11.0, cost: 0.0 };
-/// let bmbm: BrownianMotionBinomialModel = BrownianMotionBinomialModel::new(Box::new(long_call), 10.0, 1.0, 0.02, 0.2, 0.0, 1_000).unwrap();
+/// let bmbm: BrownianMotionBinomialModel = BrownianMotionBinomialModel::build(Box::new(long_call), 10.0, 1.0, 0.02, 0.2, 0.0, 1_000).unwrap();
 /// let predicted_value: f64 = bmbm.european().unwrap();
 ///
 /// // Test accuracy depends on the conversion between Brownian-scaled binomial model and Black-Scholes analytic solution
@@ -207,7 +216,6 @@ pub struct BrownianMotionBinomialModel {
 }
 
 impl BrownianMotionBinomialModel {
-    /// # Description
     /// Creates a new `BrownianMotionBinomialModel` instance.
     /// 
     /// # Input
@@ -218,16 +226,16 @@ impl BrownianMotionBinomialModel {
     /// - `sigma`: Volatility of the underlying asset
     /// - `q`: Dividend yield
     /// - `n_steps`: Number of steps in the binomial model
-    pub fn new(payoff_object: Box<dyn Payoff>, s_0: f64, time_to_maturity: f64, r: f64, sigma: f64, q: f64, n_steps: usize) -> Result<Self, DigiFiError> {
+    pub fn build(payoff_object: Box<dyn Payoff>, s_0: f64, time_to_maturity: f64, r: f64, sigma: f64, q: f64, n_steps: usize) -> Result<Self, DigiFiError> {
         payoff_object.validate_payoff(5)?;
         let dt: f64 = time_to_maturity / (n_steps as f64);
-        Ok(BrownianMotionBinomialModel { payoff_object, s_0, time_to_maturity, r, _sigma: sigma, q, n_steps, dt,
-                                      u: (sigma*dt.sqrt()).exp(), d: (-sigma*dt.sqrt()).exp() })
+        Ok(BrownianMotionBinomialModel {
+            payoff_object, s_0, time_to_maturity, r, _sigma: sigma, q, n_steps, dt, u: (sigma*dt.sqrt()).exp(), d: (-sigma*dt.sqrt()).exp(),
+        })
     }
 }
 
 impl LatticeModel for BrownianMotionBinomialModel {
-    /// # Description
     /// Binomial model that computes the payoffs for each path and computes the weighted average of paths based on probability.
     /// 
     /// # Output
@@ -252,7 +260,6 @@ impl LatticeModel for BrownianMotionBinomialModel {
         Ok(binomial_tree[binomial_tree.len()-1][0] * (-self.r * self.time_to_maturity).exp())
     }
 
-    /// # Description
     /// Binomial model that computes the payoffs for each node in the binomial tree to determine the initial payoff value.
     /// 
     /// # Output
@@ -265,7 +272,6 @@ impl LatticeModel for BrownianMotionBinomialModel {
         self.bermudan(&exercise_time_steps)
     }
 
-    /// # Description
     /// Binomial model that computes the payoffs for each node in the binomial tree to determine the initial payoff value.
     /// 
     /// # Input
@@ -278,7 +284,10 @@ impl LatticeModel for BrownianMotionBinomialModel {
     /// - Returns an error if the length of `exercise_time_steps` is not of length `n_steps`
     fn bermudan(&self, exercise_time_steps: &Vec<bool>) -> Result<f64, DigiFiError> {
         if exercise_time_steps.len() != self.n_steps {
-            return Err(DigiFiError::ParameterConstraint { title: "Brownian Motion Binomial Model".to_owned(), constraint: "The argument `exercise_time_steps` should be of length `n_steps`.".to_owned() });
+            return Err(DigiFiError::ParameterConstraint {
+                title: "Brownian Motion Binomial Model".to_owned(),
+                constraint: "The argument `exercise_time_steps` should be of length `n_steps`.".to_owned(),
+            });
         }
         let p_u: f64 = ((-self.q*self.dt).exp() - (-self.r*self.dt).exp()*self.d) / (self.u - self.d);
         let p_d: f64 = (-self.r*self.dt).exp() - p_u;
@@ -346,7 +355,7 @@ mod tests {
         use crate::lattice_models::LatticeModel;
         use crate::financial_instruments::LongCall;
         let long_call: LongCall = LongCall { k: 11.0, cost: 0.0 };
-        let bmbm: BrownianMotionBinomialModel = BrownianMotionBinomialModel::new(Box::new(long_call), 10.0, 1.0, 0.02, 0.2, 0.0, 1_000).unwrap();
+        let bmbm: BrownianMotionBinomialModel = BrownianMotionBinomialModel::build(Box::new(long_call), 10.0, 1.0, 0.02, 0.2, 0.0, 1_000).unwrap();
         let predicted_value: f64 = bmbm.european().unwrap();
         // Test accuracy depends on the conversion between Brownian-scaled binomial model and Black-Scholes analytic solution
         assert!((predicted_value - 0.49438669572304805).abs() < 1_000_000.0*TEST_ACCURACY);

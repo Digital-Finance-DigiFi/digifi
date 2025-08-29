@@ -9,7 +9,6 @@ use crate::statistics::pearson_correlation;
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Type of distance function to apply when computing the distance between the nodes in the minimal spanning tree.
 pub enum MSTDistance {
     /// Euclidean distance measuring the distance between two points in an Euclidean space.
@@ -40,7 +39,6 @@ impl MSTDistance {
         pearson_correlation(&returns_1, &returns_2, 0)
     }
 
-    /// # Description
     /// Computes the distance between points (or vectors) to measure the distance between the nodes of the minimal-spanning tree (MST).
     /// 
     /// # Input
@@ -60,7 +58,6 @@ impl MSTDistance {
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize))]
-/// # Description
 /// Node (vertex) of the minimal-spanning tree (MST).
 pub struct MSTNode<'x> {
     /// Name of the node.
@@ -74,7 +71,6 @@ pub struct MSTNode<'x> {
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize))]
-/// # Description
 /// Edge of the minimal-spanning tree (MST).
 pub struct MSTEdge<'a, 'b, 'x> {
     /// Node of the graph.
@@ -88,7 +84,6 @@ pub struct MSTEdge<'a, 'b, 'x> {
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize))]
-/// # Description
 /// Minimal-spanning tree algorithm.
 /// 
 /// # Links
@@ -146,7 +141,6 @@ pub struct MST<'a, 'b, 'x> {
 
 impl<'a, 'b, 'x> MST<'a, 'b, 'x> {
 
-    /// # Description
     /// Creates a new instance of MST struct.
     /// 
     /// # Input
@@ -156,13 +150,11 @@ impl<'a, 'b, 'x> MST<'a, 'b, 'x> {
         MST { n_nodes, graph: edges, result: Vec::<MSTEdge>::new(), }
     }
 
-    /// # Description
     /// Adds an edge to the existing graph.
     pub fn add_edge(&mut self, edge: MSTEdge<'a, 'b, 'x>) -> () {
         self.graph.push(edge);
     }
 
-    /// # Description
     /// Adds multiple edges to the existing graph.
     pub fn add_edges(&mut self, edges: Vec<MSTEdge<'a, 'b, 'x>>) -> () {
         for edge in edges {
@@ -170,7 +162,6 @@ impl<'a, 'b, 'x> MST<'a, 'b, 'x> {
         }
     }
 
-    /// # Description
     /// Computes the weights of the existing edges in the graph.
     pub fn compute_edge_weights(&mut self, distance_type: &MSTDistance) -> Result<(), DigiFiError> {
         for edge in &mut self.graph {
@@ -179,7 +170,6 @@ impl<'a, 'b, 'x> MST<'a, 'b, 'x> {
         Ok(())
     }
 
-    /// # Description
     /// A utility function to find the set of an element `i` (uses path compression technique).
     fn find(&self, parent: &mut Vec<usize>, i: usize) -> usize {
         if parent[i] != i {
@@ -189,7 +179,6 @@ impl<'a, 'b, 'x> MST<'a, 'b, 'x> {
         parent[i]
     }
 
-    /// # Description
     /// A function that does the union of two sets of `x` and `y` (uses union by rank).
     fn union(&self, parent: &mut Vec<usize>, rank: &mut Vec<usize>, x: usize, y: usize) -> () {
         // Attach smaller rank tree under the root of the high rank tree (union by rank)
@@ -204,7 +193,6 @@ impl<'a, 'b, 'x> MST<'a, 'b, 'x> {
         }
     }
 
-    /// # Description
     /// Finds minimal-spanning tree using the Kruskal's algorithm.
     pub fn kruskal_mst(&mut self) -> () {
         // Result of the MST
@@ -248,7 +236,6 @@ impl<'a, 'b, 'x> MST<'a, 'b, 'x> {
         self.result = result;
     }
 
-    /// # Description
     /// Calculates the minimum cost of the minimal-spanning tree.
     pub fn minimum_cost(&self) -> f64 {
         let mut minimum_cost: f64 = 0.0;
@@ -258,7 +245,6 @@ impl<'a, 'b, 'x> MST<'a, 'b, 'x> {
         minimum_cost
     }
 
-    /// # Description
     /// Extracts the distance matrix from the resulting MST.
     pub fn distance_matrix(&self, nodes: &Vec<MSTNode>) -> Result<(Vec<String>, Array2<Option<f64>>), DigiFiError> {
         let error_title: String = String::from("Minimal-Spanning Tree Distance Matrix");

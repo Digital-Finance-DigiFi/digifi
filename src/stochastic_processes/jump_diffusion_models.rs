@@ -70,7 +70,6 @@ pub struct MertonJumpDiffusionProcess {
 }
 
 impl MertonJumpDiffusionProcess {
-    /// # Description
     /// Creates a new `MertonJumpDiffusionProcess` instance.
     /// 
     /// # Input
@@ -89,7 +88,6 @@ impl MertonJumpDiffusionProcess {
         MertonJumpDiffusionProcess { mu_s, sigma_s, mu_j, sigma_j, lambda_j, n_paths, n_steps, t_f, s_0, dt, t }
     }
 
-    /// # Description
     /// Calculates the expected path of the Merton Jump-Diffusion process.
     /// 
     /// # Output
@@ -101,7 +99,6 @@ impl MertonJumpDiffusionProcess {
         self.s_0 + &self.t*(self.mu_s + self.lambda_j*self.mu_j)
     }
 
-    /// # Description
     /// Calculates the variance of the Merton Jump-Diffusion process at each time step.
     /// 
     /// # Output
@@ -127,7 +124,6 @@ impl StochasticProcess for MertonJumpDiffusionProcess {
         self.t_f
     }
 
-    /// # Description
     /// Generates simulation paths for the Merton Jump-Diffusion process.
     /// 
     /// # Output
@@ -137,7 +133,7 @@ impl StochasticProcess for MertonJumpDiffusionProcess {
     /// - S_{t} = (\\mu-0.5*\\sigma^2)*t + \\sigma*W_{t} + sum_{i=1}^{N(t)} Z_{i}
     fn get_paths(&self) -> Result<Vec<Array1<f64>>, DigiFiError> {
         let mut paths: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
-        let poisson_dist: PoissonDistribution = PoissonDistribution::new(self.lambda_j * self.dt)?;
+        let poisson_dist: PoissonDistribution = PoissonDistribution::build(self.lambda_j * self.dt)?;
         for _ in 0..self.n_paths {
             // Jump process
             let n_j: Array1<f64> = StandardNormalInverseTransform::new_shuffle(self.t.len())?.generate()?;
@@ -181,7 +177,7 @@ impl StochasticProcess for MertonJumpDiffusionProcess {
 /// let n_paths: usize = 100;
 /// let n_steps: usize = 200;
 ///
-/// let kjd: KouJumpDiffusionProcess = KouJumpDiffusionProcess::new(0.2, 0.3, 0.5, 9.0, 5.0, 0.5, n_paths, n_steps, 1.0, 100.0).unwrap();
+/// let kjd: KouJumpDiffusionProcess = KouJumpDiffusionProcess::build(0.2, 0.3, 0.5, 9.0, 5.0, 0.5, n_paths, n_steps, 1.0, 100.0).unwrap();
 /// let paths: Vec<Array1<f64>> = kjd.get_paths().unwrap();
 ///
 /// assert_eq!(paths.len(), n_paths);
@@ -222,7 +218,6 @@ pub struct KouJumpDiffusionProcess {
 }
 
 impl KouJumpDiffusionProcess {
-    /// # Description
     /// Creates a new `KouJumpDiffusionProcess` instance.
     /// 
     /// # Input
@@ -239,16 +234,18 @@ impl KouJumpDiffusionProcess {
     ///
     /// # Errors
     /// - Returns an error if the argument `p` is not in the range \[0,1\].
-    pub fn new(mu: f64, sigma: f64, lambda_n: f64, eta_1: f64, eta_2: f64, p: f64, n_paths: usize, n_steps: usize, t_f: f64, s_0: f64) -> Result<Self, DigiFiError> {
+    pub fn build(mu: f64, sigma: f64, lambda_n: f64, eta_1: f64, eta_2: f64, p: f64, n_paths: usize, n_steps: usize, t_f: f64, s_0: f64) -> Result<Self, DigiFiError> {
         if (p < 0.0) || (1.0 < p) {
-            return Err(DigiFiError::ParameterConstraint { title: "Kou Jump-Diffusion Process".to_owned(), constraint: "The argument `p` must be in the range `[0,1]`.".to_owned(), });
+            return Err(DigiFiError::ParameterConstraint {
+                title: "Kou Jump-Diffusion Process".to_owned(),
+                constraint: "The argument `p` must be in the range `[0,1]`.".to_owned(),
+            });
         }
         let dt: f64 = t_f / (n_steps as f64);
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
         Ok(KouJumpDiffusionProcess { mu, sigma, lambda_n, eta_1, eta_2, p, n_paths, n_steps, t_f, s_0, dt, t })
     }
 
-    /// # Description
     /// Calculates the expected path of the Kou Jump-Diffusion process
     /// 
     /// # Output
@@ -260,7 +257,6 @@ impl KouJumpDiffusionProcess {
         self.s_0 + &self.t*(self.mu + self.lambda_n*(self.p/self.eta_1 - (1.0-self.p)/self.eta_2))
     }
 
-    /// # Description
     /// Calculates the variance of the Kou Jump-Diffusion process.
     /// 
     /// # Output
@@ -286,7 +282,6 @@ impl StochasticProcess for KouJumpDiffusionProcess {
         self.t_f
     }
 
-    /// # Description
     /// Generates simulation paths for the Kou Jump-Diffusion process.
     /// 
     /// # Output
@@ -298,7 +293,7 @@ impl StochasticProcess for KouJumpDiffusionProcess {
     /// - f_{Y}(y) = p*\\eta_{1}*e^{-\\eta_{1}y}\mathbb{1}_{0\\leq y} + (1-p)*\\eta_{2}*e^{\\eta_{2}y}\mathbb{1}_{y<0}
     fn get_paths(&self) -> Result<Vec<Array1<f64>>, DigiFiError> {
         let mut paths: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
-        let poisson_dist: PoissonDistribution = PoissonDistribution::new(self.lambda_n * self.dt)?;
+        let poisson_dist: PoissonDistribution = PoissonDistribution::build(self.lambda_n * self.dt)?;
         for _ in 0..self.n_paths {
             // Assymetric double exponential random variable
             let dp: Array1<f64> = inverse_transform(&poisson_dist, self.t.len())?;
@@ -338,7 +333,9 @@ mod tests {
         use crate::stochastic_processes::jump_diffusion_models::MertonJumpDiffusionProcess;
         let n_paths: usize = 100;
         let n_steps: usize = 200;
-        let mjd: MertonJumpDiffusionProcess = MertonJumpDiffusionProcess::new(0.03, 0.2, -0.03, 0.1, 1.5, n_paths, n_steps, 1.0, 100.0);
+        let mjd: MertonJumpDiffusionProcess = MertonJumpDiffusionProcess::new(
+            0.03, 0.2, -0.03, 0.1, 1.5, n_paths, n_steps, 1.0, 100.0
+        );
         let paths: Vec<Array1<f64>> = mjd.get_paths().unwrap();
         assert_eq!(paths.len(), n_paths);
         assert_eq!(paths[0].len(), n_steps+1);
@@ -356,7 +353,9 @@ mod tests {
         use crate::stochastic_processes::jump_diffusion_models::KouJumpDiffusionProcess;
         let n_paths: usize = 100;
         let n_steps: usize = 200;
-        let kjd: KouJumpDiffusionProcess = KouJumpDiffusionProcess::new(0.2, 0.3, 0.5, 9.0, 5.0, 0.5, n_paths, n_steps, 1.0, 100.0).unwrap();
+        let kjd: KouJumpDiffusionProcess = KouJumpDiffusionProcess::build(
+            0.2, 0.3, 0.5, 9.0, 5.0, 0.5, n_paths, n_steps, 1.0, 100.0
+        ).unwrap();
         let paths: Vec<Array1<f64>> = kjd.get_paths().unwrap();
         assert_eq!(paths.len(), n_paths);
         assert_eq!(paths[0].len(), n_steps+1);

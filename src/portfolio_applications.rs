@@ -1,3 +1,9 @@
+//! # Portfolio Applications
+//! 
+//! Provides functionality for portfolio selection and optimization. The module contains functionality for performing portfolio selection,
+//! measuring portfolio performance and risk.
+
+
 // Re-Exports
 pub use self::portfolio_performance::{PortfolioPerformanceMetric, SharpeRatio, InformationRatio, TreynorRatio, JensensAlpha, SortinoRatio};
 pub use self::portfolio_taxonomy::PortfolioTaxonomy;
@@ -21,7 +27,6 @@ use crate::utilities::{compare_array_len, data_transformations::{percent_change,
 use crate::statistics::covariance;
 
 
-/// # Description
 /// Type of returns calculation.
 pub enum ReturnsMethod {
     /// Computes returns of the mean returns per interval of the time series (e.g., average daily returns) and then extrapolates it over a specified period
@@ -31,7 +36,6 @@ pub enum ReturnsMethod {
 }
 
 
-/// # Description
 /// Transformation applied when computing returns from price series.
 pub enum ReturnsTransformation {
     /// No transformation is applied and returns are just the percent return from previous period.
@@ -43,7 +47,6 @@ pub enum ReturnsTransformation {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Struct with data to be used inside the InstumentsPortfolio.
 pub struct AssetHistData {
     /// Historical price series of the instrument
@@ -55,7 +58,6 @@ pub struct AssetHistData {
 }
 
 impl AssetHistData {
-    /// # Description
     /// Creates a new `AssetHistData` instance.
     /// 
     /// # Input
@@ -65,13 +67,12 @@ impl AssetHistData {
     /// 
     /// # Errors
     /// - Returns an error if the length of `price_array`, `predictable_income` and/or `time_array` do not match.
-    pub fn new(price_array: Array1<f64>, predictable_income: Array1<f64>, time_array: Array1<f64>) -> Result<Self, DigiFiError> {
+    pub fn build(price_array: Array1<f64>, predictable_income: Array1<f64>, time_array: Array1<f64>) -> Result<Self, DigiFiError> {
         compare_array_len(&price_array, &predictable_income, "price_array", "predictable_income")?;
         compare_array_len(&price_array, &time_array, "price_array", "time_array")?;
         Ok(AssetHistData { price_array, predictable_income, time_array })
     }
 
-    /// # Description
     /// Validation method for an index.
     /// 
     /// # Input
@@ -87,7 +88,6 @@ impl AssetHistData {
         Ok(())
     }
 
-    /// # Description
     /// Returns the number of datapoints in the price time series.
     ///
     /// Note: Predictable income and time arrays will have the same length as the price array.
@@ -95,7 +95,6 @@ impl AssetHistData {
         self.price_array.len()
     }
 
-    /// # Description
     /// Safe method for working with historical price data.
     /// 
     /// This method prevents the user from using the future prices based on the indices value provided.
@@ -116,7 +115,10 @@ impl AssetHistData {
             Some(index) => {
                 self.validate_index(index, "start_index")?;
                 if end_index <= index {
-                    return Err(DigiFiError::ParameterConstraint { title: "AssetHistData".to_owned(), constraint: "The argument `start_index` must be smaller than the `end_index`.".to_owned(), });
+                    return Err(DigiFiError::ParameterConstraint {
+                        title: "AssetHistData".to_owned(),
+                        constraint: "The argument `start_index` must be smaller than the `end_index`.".to_owned(),
+                    });
                 }
                 start_index_ = index;
             },
@@ -125,13 +127,11 @@ impl AssetHistData {
         Ok(self.price_array.slice(s![start_index_..end_index]).to_owned())
     }
 
-    /// # Description
-    /// Returns the entire price time series.
-    pub fn get_price_all(&self) -> Array1<f64> {
+    /// Returns the clone of the entire price time series.
+    pub fn price_clone(&self) -> Array1<f64> {
         self.price_array.clone()
     }
 
-    /// # Description
     /// Safe method for working with historical predictable income data.
     /// 
     /// This method prevents the user from using the future predictable incomes based on the indices value provided.
@@ -149,7 +149,10 @@ impl AssetHistData {
             Some(index) => {
                 self.validate_index(index, "start_index")?;
                 if end_index <= index {
-                    return Err(DigiFiError::ParameterConstraint { title: "AssetHistData".to_owned(), constraint: "The argument `start_index` must be smaller than the `end_index`.".to_owned(), });
+                    return Err(DigiFiError::ParameterConstraint {
+                        title: "AssetHistData".to_owned(),
+                        constraint: "The argument `start_index` must be smaller than the `end_index`.".to_owned(),
+                    });
                 }
                 start_index_ = index;
             },
@@ -158,29 +161,24 @@ impl AssetHistData {
         Ok(self.predictable_income.slice(s![start_index_..end_index]).to_owned())
     }
 
-    /// # Description
-    /// Returns the entire predictable income time series.
-    pub fn get_predictable_income_all(&self) -> Array1<f64> {
+    /// Returns the clone of the entire predictable income time series.
+    pub fn predictable_income_clone(&self) -> Array1<f64> {
         self.predictable_income.clone()
     }
 }
 
 
-/// # Description
 /// Provides access to the historical data of the financial instrument.
 pub trait PortfolioInstrument {
 
-    /// # Description
     /// Returns asset name/label.
     fn asset_name(&self) -> String;
 
-    /// # Description
     /// Returns the historical data about the financial instrument.
     fn historical_data(&self) -> &AssetHistData;
 }
 
 
-/// # Description
 /// Convert an array of prices to an array of returns.
 /// 
 /// # Input
@@ -208,7 +206,6 @@ pub fn prices_to_returns(price_array: &Array1<f64>, returns_transformation: &Ret
 }
 
 
-/// # Description
 /// Calculate the average return of a price array.
 /// 
 /// # Input
@@ -232,7 +229,6 @@ pub fn returns_average(price_array: &Array1<f64>, method: &ReturnsMethod, return
 }
 
 
-/// # Description
 /// Calculate the standard deviation of the returns of a price array.
 /// 
 /// # Input
@@ -248,7 +244,6 @@ pub fn returns_std(price_array: &Array1<f64>, returns_transformation: &ReturnsTr
 }
 
 
-/// # Description
 /// Calculate the variance of the returns of a price array.
 /// 
 /// # Input

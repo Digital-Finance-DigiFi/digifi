@@ -25,7 +25,6 @@ pub fn factorial(n: u128) -> u128 {
 }
 
 
-/// # Description
 /// Rising factorial (Pochhammer function) of x.
 ///
 /// # Input
@@ -52,7 +51,6 @@ pub fn rising_factorial(x: u128, n: u128) -> u128 {
 }
 
 
-/// # Description
 /// Error function computed with the Taylor expansion.
 /// 
 /// Input
@@ -84,7 +82,6 @@ pub fn erf(x: f64, n_terms: Option<usize>) -> f64 {
 }
 
 
-/// # Description
 /// Inverse error function computed with the Taylor expansion.
 /// 
 /// # Input
@@ -123,7 +120,6 @@ pub fn erfinv(z: f64, n_terms: Option<usize>) -> f64 {
 }
 
 
-/// # Description
 /// The distance between two points in a Euclidean space.
 /// 
 /// # Input
@@ -141,7 +137,6 @@ pub fn euclidean_distance(v_1: &Array1<f64>, v_2: &Array1<f64>) -> f64 {
 }
 
 
-/// # Description
 /// Numerical differentiation (symmetric difference quotient) of a function.
 ///
 /// # Input
@@ -169,7 +164,6 @@ pub fn derivative<F: Fn(f64) -> f64>(f: F, x: f64, h: f64) -> f64 {
 }
 
 
-/// # Description
 /// Numerical solution (composite trapezoidal rule) of a definite integral of a function.
 ///
 /// # Input

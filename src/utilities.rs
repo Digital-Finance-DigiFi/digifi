@@ -1,3 +1,9 @@
+//! # Utilities
+//! 
+//! Contains general utility tools such as different data transformation functions, loss functions, numerical optimization engine, minimal spanning tree,
+//! and utilities for doing time-value of money calculations.
+
+
 // Re-Exports
 pub use self::maths_utils::{factorial, rising_factorial, erf, erfinv, euclidean_distance, derivative, definite_integral};
 pub use self::minimal_spanning_tree::{MSTDistance, MSTNode, MSTEdge, MST};
@@ -40,7 +46,6 @@ pub const NUMERICAL_CORRECTION: f64 = 0.00000000000001;
 
 
 #[derive(Clone, Debug)]
-/// # Description
 /// Type of parameter used in calculations.
 pub enum ParameterType {
     Value { value: f64 },
@@ -50,7 +55,6 @@ pub enum ParameterType {
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Struct for generating time array.
 ///
 /// # Examples
@@ -74,7 +78,6 @@ pub enum Time {
 }
 
 impl Time {
-    /// # Description
     /// Generates the time array from the provided settings.
     pub fn get_time_array(&self) -> Array1<f64> {
         match self {
@@ -89,7 +92,6 @@ impl Time {
 }
 
 
-/// # Description
 /// Asserts that the two arrays provided are of the same length, while also verifying that both arrays are of np.ndarray type.
 /// 
 /// # Input
@@ -120,13 +122,11 @@ pub fn compare_array_len<T>(array_1: &Array1<T>, array_2: &Array1<T>, array_1_na
 }
 
 
-/// # Description
 /// Methods for converting matrices from ndarray to nalgebra and vice versa.
 pub struct MatrixConversion;
 
 impl MatrixConversion {
 
-    /// # Description
     /// Converts ndarray matrix to nalgebra matrix
     /// 
     /// # Input
@@ -154,7 +154,6 @@ impl MatrixConversion {
         n_matrix.transpose()
     }
 
-    /// # Description
     /// Converts nalgebra matrix to ndarray matrix
     /// 
     /// # Input

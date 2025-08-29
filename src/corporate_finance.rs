@@ -1,3 +1,8 @@
+//! # Corporate Finance
+//! 
+//! Provides a set of basic functions commonly used in corporate finance and tools for constructing Captial Asset Pricing Model (CAPM).
+
+
 // Re-Exports
 pub use self::capm::{CAPMParams, CAPMType, CAPMSolutionType, CAPM};
 
@@ -5,7 +10,6 @@ pub use self::capm::{CAPMParams, CAPMType, CAPMSolutionType, CAPM};
 pub mod capm;
 
 
-/// # Description
 /// Measure of how revenue growth translates to growth of income.
 /// 
 /// Degree of Operating Leverage = (% Change in Profits) / (% Change in Sales) = 1 + Total Fixed Cost / (Quantity of Goods Sold * (Price per Unit - Variable Cost per Unit) - Total Fixed Cost)
@@ -35,7 +39,6 @@ pub fn dol(quantity_of_goods: f64, price_per_unit: f64, variable_cost_per_unit: 
 }
 
 
-/// # Description
 /// Monetary value of earnings per outstanding share of common stock for a company during a defined period of time.
 /// 
 /// EPS = (Net Income - Preferred Dividends) / Number of Common Shares Outstanding
@@ -63,7 +66,6 @@ pub fn earnings_per_share(net_income: f64, preferred_dividends: f64, n_common_sh
 }
 
 
-/// # Description
 /// The ratio of market price to earnings.
 /// 
 /// Price-to-Earnings Ratio = Share Price / Earnings per Share
@@ -117,7 +119,6 @@ pub fn pb_ratio(market_cap: f64, book_value: f64) -> Option<f64> {
 }
 
 
-/// # Description
 /// The ratio of dividend issued by the company to share price.
 /// 
 /// Dividend Yield = 100 * Dividend / Share Price
@@ -144,7 +145,6 @@ pub fn dividend_yield(share_price: f64, dividend: f64) -> Option<f64> {
 }
 
 
-/// # Description
 /// Enterprise value is the sum of a company's market capitalization and any debts, minus cash or cash equivalents on hand.
 /// 
 /// EV = Maarket Cap - Total Debt + Cash & Cash Equivalents
@@ -167,7 +167,6 @@ pub fn enterprise_value(market_cap: f64, total_debt: f64, cash: f64) -> f64 {
     market_cap + total_debt - cash
 }
 
-/// # Description
 /// Measure of the value of a stock that compares a company's enterprise value to its revenue.
 /// EV/R is one of several fundamental indicators that investors use to determine whether a stock is priced fairly.
 /// The EV/R multiple is also often used to determine a company's valuation in the case of a potential acquisition.
@@ -197,7 +196,6 @@ pub fn ev_to_revenue(market_cap: f64, total_debt: f64, cash: f64, revenue: f64) 
 }
 
 
-/// # Description
 /// Valuation multiple used to determine the fair market value of a company.
 /// By contrast to the more widely available P/E ratio (price-earnings ratio) it includes debt as part of the value of the
 /// company in the numerator and excludes costs such as the need to replace depreciating plant, interest on debt,
@@ -227,7 +225,6 @@ pub fn ev_to_ebitda(market_cap: f64, total_debt: f64, cash: f64, ebitda: f64) ->
 }
 
 
-/// # Description
 /// Value of assets of the company minus its liabilities.
 /// 
 /// Book Value = Assets - Liabilities
@@ -250,7 +247,6 @@ pub fn book_value(assets: f64, liabilities: f64) -> f64 {
 }
 
 
-/// # Description
 /// Cost of equity capital (Market capitalization rate).
 /// 
 /// Cost of Equity Capital = (Expected Dividend + Expected Share Price - Share Price) / Share Price
@@ -278,7 +274,6 @@ pub fn cost_of_equity_capital(share_price: f64, expected_dividend: f64, expected
 }
 
 
-/// # Description
 /// Ratio of dividends to earnings per share.
 /// 
 /// Payout Ratio = Dividend per Share / Earnings per Share
@@ -305,7 +300,6 @@ pub fn payout_ratio(dividend_per_share: f64, earnings_per_share: f64) -> Option<
 }
 
 
-/// # Description
 /// One minus payout ratio.
 /// 
 /// Plowback Ratio = 1 - (Dividend per Share / Earnings per Share)
@@ -332,7 +326,6 @@ pub fn plowback_ratio(dividend_per_share: f64, earnings_per_share: f64) -> Optio
 }
 
 
-/// # Description
 /// Measure for predicting the likelihood of bankrupcy of a company.
 /// 
 /// # Input
@@ -364,7 +357,6 @@ pub fn altman_z_score(ebit: f64, total_assets: f64, sales: f64, equity: f64, tot
 }
 
 
-/// # Description
 /// Computes the weighted average cost of capital (WACC), which is the expected return on the company's assets.
 /// 
 /// WACC = (Debt / (Debt+Equity) * (1 - Corporate Tax Rate) * Return on Debt) + (Equity / (Debt+Equity) * Return on Equity)
@@ -395,7 +387,6 @@ pub fn weighted_average_cost_of_capital(equity: f64, debt: f64, return_on_equity
 }
 
 
-/// # Description
 /// Computes expected return on the equity (ROE) portion of the company.
 /// 
 /// ROE = Return on Assets + (Return on Assets - Return on Debt * (1 - Corporate Tax Rate)) * Debt / Equity
@@ -454,7 +445,6 @@ pub fn return_on_equity(net_income: f64, equity: f64) -> Option<f64> {
 }
 
 
-/// # Description
 /// Measure of a company's performance, but the ROE is split into multiple components.
 /// 
 /// ROE = Net Profit Margin * Total Asset Turnover * Financial Leverage
@@ -484,7 +474,6 @@ pub fn return_on_equity_dupont(net_profit_margin: f64, total_asset_turnover: f64
 }
 
 
-/// # Description
 /// Financial ratio that indicates how profitable a company is relative to its total assets.
 /// It can used to determine how efficiently a company uses its resources to generate a profit.
 /// 
@@ -512,7 +501,6 @@ pub fn return_on_assets(net_income: f64, total_assets: f64) -> Option<f64> {
 }
 
 
-/// # Description
 /// Performance measure used to evaluate the efficiency or profitability of an investment or compare the efficiency
 /// of a number of different investments. ROI tries to directly measure the amount of return on a particular investment,
 /// relative to the investment’s cost.
@@ -541,7 +529,6 @@ pub fn return_on_investment(gain_from_investment: f64, cost_of_investment: f64) 
 }
 
 
-/// # Description
 /// Ratio indicating the relative proportion of shareholders' equity and debt used to finance the company's assets.
 /// 
 /// D/E = Debt / Equity
@@ -565,7 +552,6 @@ pub fn debt_to_equity(debt: f64, equity: f64) -> Option<f64> {
 }
 
 
-/// # Description
 /// Unlevered beta, which is the systematic risk of the company's assets.
 /// 
 /// Unlevered Beta = (Debt / (Debt+Equity) * Beta of Debt) + (Equity / (Debt+Equity) * Beta of Equity)
@@ -591,7 +577,6 @@ pub fn unlevered_beta(equity: f64, debt: f64, beta_equity: f64, beta_debt: f64) 
 }
 
 
-/// # Description
 /// Levered beta, which is the equity-only beta of the company.
 /// 
 /// Levered Beta = Beta of Assets + (Beta of Assets - Beta of Debt) * (Debt / Equity)
@@ -616,7 +601,6 @@ pub fn levered_beta(equity: f64, debt: f64, beta_assets: f64, beta_debt: f64) ->
 }
 
 
-/// # Description
 /// Calculates an advantage of debt financing for a company as opposed to equity financing from perspective of tax optimization.
 /// 
 /// Relative Tax Advantage of Debt = (1 - Personal Tax on Interest Income) / ((1 - Effective Personal Tax) * (1 - Corporate Tax))

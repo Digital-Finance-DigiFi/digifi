@@ -4,7 +4,6 @@ use crate::financial_instruments::Payoff;
 use crate::lattice_models::LatticeModel;
 
 
-/// # Description
 /// Binomial tree with the defined parameters presented as an array of layers.
 /// 
 /// # Input
@@ -36,7 +35,10 @@ use crate::lattice_models::LatticeModel;
 /// ```
 pub fn trinomial_tree_nodes(s_0: f64, u: f64, d: f64, n_steps: usize) -> Result<Vec<Array1<f64>>, DigiFiError> {
     if (u <= 0.0) || (d <= 0.0) {
-        return Err(DigiFiError::ParameterConstraint { title: "Trinomial Tree Nodes".to_owned(), constraint: "The arguments `u` and `d` must be positive multiplicative factors of the trinomial model.".to_owned(), });
+        return Err(DigiFiError::ParameterConstraint {
+            title: "Trinomial Tree Nodes".to_owned(),
+            constraint: "The arguments `u` and `d` must be positive multiplicative factors of the trinomial model.".to_owned(),
+        });
     }
     let s: f64 = (u * d).sqrt();
     let mut trinomial_tree: Vec<Array1<f64>> = vec![Array1::from_vec(vec![s_0])];
@@ -53,7 +55,6 @@ pub fn trinomial_tree_nodes(s_0: f64, u: f64, d: f64, n_steps: usize) -> Result<
 }
 
 
-/// # Description
 /// General trinomial model with custom payoff.
 /// 
 /// The function assumes that there is a payoff at the final time step.
@@ -119,20 +120,32 @@ pub fn trinomial_model(payoff_object: &dyn Payoff, s_0: f64, u: f64, d: f64, p_u
     // Data validation
     payoff_object.validate_payoff(5)?;
     if (u <= 0.0) || (d <= 0.0) {
-        return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The arguments `u` and `d` must be positive multiplicative factors of the trinomial model.".to_owned(), });
+        return Err(DigiFiError::ParameterConstraint {
+            title: error_title,
+            constraint: "The arguments `u` and `d` must be positive multiplicative factors of the trinomial model.".to_owned(),
+        });
     }
     if (p_u <= 0.0) || (1.0 <= p_u) || (p_d <= 0.0) || (1.0 <= p_d) {
-        return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The arguments `p_u` and `p_d` must be a defined over a range `[0,1]`.".to_owned(), });
+        return Err(DigiFiError::ParameterConstraint {
+            title: error_title,
+            constraint: "The arguments `p_u` and `p_d` must be a defined over a range `[0,1]`.".to_owned(),
+        });
     }
     if 1.0 < (p_u + p_d) {
-        return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The probabilities `p_u`, `p_d` and `1 - p_u - p_d` must add up to `1`.".to_owned(), });
+        return Err(DigiFiError::ParameterConstraint {
+            title: error_title,
+            constraint: "The probabilities `p_u`, `p_d` and `1 - p_u - p_d` must add up to `1`.".to_owned(),
+        });
     }
     let p_s: f64 = 1.0 - p_u - p_d;
     let exercise_time_steps_: Vec<bool>;
     match exercise_time_steps {
         Some(exercise_time_steps_vec) => {
             if exercise_time_steps_vec.len() != n_steps {
-                return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument `exercise_time_steps` should be of length `n_steps`.".to_owned(), });
+                return Err(DigiFiError::ParameterConstraint {
+                    title: error_title,
+                    constraint: "The argument `exercise_time_steps` should be of length `n_steps`.".to_owned(),
+                });
             }
             exercise_time_steps_ = exercise_time_steps_vec
         },
@@ -159,7 +172,6 @@ pub fn trinomial_model(payoff_object: &dyn Payoff, s_0: f64, u: f64, d: f64, p_u
 }
 
 
-/// # Description
 /// Trinomial models that are scaled to emulate Brownian motion.
 ///
 /// # Examples
@@ -171,7 +183,7 @@ pub fn trinomial_model(payoff_object: &dyn Payoff, s_0: f64, u: f64, d: f64, p_u
 /// use digifi::financial_instruments::LongCall;
 ///
 /// let long_call: LongCall = LongCall { k: 11.0, cost: 0.0 };
-/// let bmtm: BrownianMotionTrinomialModel = BrownianMotionTrinomialModel::new(Box::new(long_call), 10.0, 1.0, 0.02, 0.2, 0.0, 1_000).unwrap();
+/// let bmtm: BrownianMotionTrinomialModel = BrownianMotionTrinomialModel::build(Box::new(long_call), 10.0, 1.0, 0.02, 0.2, 0.0, 1_000).unwrap();
 /// let predicted_value = bmtm.european().unwrap();
 ///
 /// // Test accuracy depends on the conversion between Brownian-scaled binomial model and Black-Scholes analytic solution
@@ -205,7 +217,6 @@ pub struct BrownianMotionTrinomialModel {
 }
 
 impl BrownianMotionTrinomialModel {
-    /// # Description
     /// Creates a new `BrownianMotionTrinomialModel` instance.
     /// 
     /// # Input
@@ -219,12 +230,14 @@ impl BrownianMotionTrinomialModel {
     ///
     /// # Errors
     /// - Returns an error if the condition \\Delta t<\\frac{{\\sigma^{{2}}}}{{(r-q)^{{2}}}} is not satisfied
-    pub fn new(payoff_object: Box<dyn Payoff>, s_0: f64, time_to_maturity: f64, r: f64, sigma: f64, q: f64, n_steps: usize) -> Result<Self, DigiFiError> {
+    pub fn build(payoff_object: Box<dyn Payoff>, s_0: f64, time_to_maturity: f64, r: f64, sigma: f64, q: f64, n_steps: usize) -> Result<Self, DigiFiError> {
         payoff_object.validate_payoff(5)?;
         let dt: f64 = time_to_maturity / (n_steps as f64);
         if (2.0 * sigma.powi(2) / (r-q).powi(2)) <= dt {
-            return Err(DigiFiError::ParameterConstraint { title: "Brownian Motion Trinomial Model".to_owned(),
-                constraint: "With the given arguments, the condition \\Delta t<\\frac{{\\sigma^{{2}}}}{{(r-q)^{{2}}}} is not satisfied.".to_owned(), });
+            return Err(DigiFiError::ParameterConstraint {
+                title: "Brownian Motion Trinomial Model".to_owned(),
+                constraint: "With the given arguments, the condition \\Delta t<\\frac{{\\sigma^{{2}}}}{{(r-q)^{{2}}}} is not satisfied.".to_owned(),
+            });
         }
         let u: f64 = (sigma * (2.0*dt).sqrt()).exp();
         let d: f64 = (-sigma * (2.0*dt).sqrt()).exp();
@@ -235,7 +248,6 @@ impl BrownianMotionTrinomialModel {
 }
 
 impl LatticeModel for BrownianMotionTrinomialModel {
-    /// # Description
     /// Trinomial model that computes the payoffs for each node in the trinomial tree to determine the initial payoff value.
     /// 
     /// # Output
@@ -245,7 +257,6 @@ impl LatticeModel for BrownianMotionTrinomialModel {
         Ok((-self.r*self.time_to_maturity).exp() * trinomial_model(self.payoff_object.as_ref(), self.s_0, self.u, self.d, self.p_u, self.p_d, self.n_steps, exercise_time_steps)?)
     }
 
-    /// # Description
     /// Trinomial model that computes the payoffs for each node in the trinomial tree to determine the initial payoff value.
     /// 
     /// # Output
@@ -255,7 +266,6 @@ impl LatticeModel for BrownianMotionTrinomialModel {
         Ok((-self.r*self.time_to_maturity).exp() * trinomial_model(self.payoff_object.as_ref(), self.s_0, self.u, self.d, self.p_u, self.p_d, self.n_steps, exercise_time_steps)?)
     }
 
-    /// # Description
     /// Trinomial model that computes the payoffs for each node in the trinomial tree to determine the initial payoff value.
     /// 
     /// # Input
@@ -315,7 +325,7 @@ mod tests {
         use crate::lattice_models::LatticeModel;
         use crate::financial_instruments::LongCall;
         let long_call: LongCall = LongCall { k: 11.0, cost: 0.0 };
-        let bmtm: BrownianMotionTrinomialModel = BrownianMotionTrinomialModel::new(Box::new(long_call), 10.0, 1.0, 0.02, 0.2, 0.0, 1_000).unwrap();
+        let bmtm: BrownianMotionTrinomialModel = BrownianMotionTrinomialModel::build(Box::new(long_call), 10.0, 1.0, 0.02, 0.2, 0.0, 1_000).unwrap();
         let predicted_value: f64 = bmtm.european().unwrap();
         // Test accuracy depends on the conversion between Brownian-scaled binomial model and Black-Scholes analytic solution
         assert!((predicted_value - 0.49438669572304805).abs() < 10_000.0*TEST_ACCURACY);

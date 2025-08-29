@@ -2,7 +2,6 @@ use crate::error::DigiFiError;
 use crate::consts::{GAMMA_DK, GAMMA_R};
 
 
-/// # Description
 /// Natural logarithm of the Gamma function.
 ///
 /// # Input
@@ -30,7 +29,6 @@ pub fn ln_gamma(z: f64) -> f64 {
 }
 
 
-/// # Description
 /// Gamma function is the most common extension of the factorial function to complex numbers.
 ///
 /// # Input
@@ -64,7 +62,6 @@ pub fn gamma(z: f64) -> f64 {
 }
 
 
-/// # Description
 /// Gamma function with an integral limit defined over the range `(0, x)`.
 ///
 /// # Input
@@ -96,7 +93,10 @@ pub fn gamma(z: f64) -> f64 {
 /// ```
 pub fn lower_incomplete_gamma(z: f64, x: f64, n_terms: Option<usize>) -> Result<f64, DigiFiError> {
     if x < 0.0 {
-        return Err(DigiFiError::ParameterConstraint { title: "Lower Incomplete Gamma Function".to_owned(), constraint: "The value of `x` must be non-negative.".to_owned(), });
+        return Err(DigiFiError::ParameterConstraint {
+            title: "Lower Incomplete Gamma Function".to_owned(),
+            constraint: "The value of `x` must be non-negative.".to_owned(),
+        });
     }
     let n_terms: usize = n_terms.unwrap_or(20);
     let mut result: f64 = 0.0;
@@ -115,7 +115,6 @@ pub fn lower_incomplete_gamma(z: f64, x: f64, n_terms: Option<usize>) -> Result<
 }
 
 
-/// # Description
 /// Gamma function with an integral limit defined over the range `(x, infinity)`.
 ///
 /// # Input
@@ -150,13 +149,15 @@ pub fn lower_incomplete_gamma(z: f64, x: f64, n_terms: Option<usize>) -> Result<
 /// ```
 pub fn upper_incomplete_gamma(z: f64, x: f64, n_terms: Option<usize>) -> Result<f64, DigiFiError> {
     if x < 0.0 {
-        return Err(DigiFiError::ParameterConstraint { title: "Upper Incomplete Gamma Function".to_owned(), constraint: "The value of `x` must be non-negative.".to_owned(), });
+        return Err(DigiFiError::ParameterConstraint {
+            title: "Upper Incomplete Gamma Function".to_owned(),
+            constraint: "The value of `x` must be non-negative.".to_owned(),
+        });
     }
     Ok(gamma(z) - lower_incomplete_gamma(z, x, n_terms)?)
 }
 
 
-/// # Description
 /// Digamma function, which is the logarithmic derivative of the gamma function.
 ///
 /// # Input

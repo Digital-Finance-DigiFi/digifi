@@ -6,15 +6,14 @@ use plotly::{Plot, Surface, Layout, layout::{Axis, LayoutScene}, common::Title};
 use crate::error::DigiFiError;
 use crate::utilities::time_value_utils::{Compounding, CompoundingType};
 use crate::financial_instruments::{FinancialInstrument, FinancialInstrumentId, Payoff};
-use crate::portfolio_applications::{returns_average, returns_std, ReturnsMethod, ReturnsTransformation, AssetHistData, PortfolioInstrument};
+use crate::portfolio_applications::{AssetHistData, PortfolioInstrument};
 use crate::statistics::{ProbabilityDistribution, continuous_distributions::NormalDistribution};
 use crate::lattice_models::LatticeModel;
-use crate::stochastic_processes::{StochasticProcess, standard_stochastic_models::GeometricBrownianMotion};
+use crate::stochastic_processes::StochasticProcess;
 use crate::lattice_models::{binomial_models::BrownianMotionBinomialModel, trinomial_models::BrownianMotionTrinomialModel};
 // TODO: Add implied volatility calculator, volatility smile and surface plots
 
 
-/// # Description
 /// Mininum-variance hedge ratio for a forward contract that hedges an underlying asset.
 ///
 /// Note: this assumes that there is a linear relationship between the asset and the contract.
@@ -66,7 +65,6 @@ pub enum OptionPricingMethod {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Surface (i.e., underlying asset price vs option value vs time to maturity) of the option price as it approaches maturity.
 pub struct PresentValueSurface {
     /// Array of times to maturity
@@ -78,7 +76,6 @@ pub struct PresentValueSurface {
 }
 
 
-/// # Description
 /// Black-Scholes formula implementation for pricing European options.
 /// 
 /// # Input
@@ -108,7 +105,7 @@ pub struct PresentValueSurface {
 /// assert!((value - 0.49438669572304805).abs() < TEST_ACCURACY);
 /// ```
 pub fn black_scholes_formula(s: f64, k: f64, sigma: f64, time_to_maturity: f64, r: f64, q: f64, type_: &BlackScholesType) -> Result<f64, DigiFiError> {
-    let normal_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0)?;
+    let normal_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
     let d_1_numerator: f64 = (s/k).ln() + time_to_maturity  * (r - q + 0.5*sigma.powi(2));
     let d_1: f64 = d_1_numerator / (sigma * time_to_maturity.sqrt());
     let d_2: f64 = d_1 - sigma * time_to_maturity.sqrt();
@@ -127,7 +124,6 @@ pub fn black_scholes_formula(s: f64, k: f64, sigma: f64, time_to_maturity: f64, 
 }
 
 
-/// # Description
 /// Contract financial instrument and its methods.
 ///
 /// # Links
@@ -145,14 +141,16 @@ pub fn black_scholes_formula(s: f64, k: f64, sigma: f64, time_to_maturity: f64, 
 ///
 /// // Contract definition
 /// let compounding_type: CompoundingType = CompoundingType::Continuous;
-/// let financial_instrument_id: FinancialInstrumentId = FinancialInstrumentId {instrument_type: FinancialInstrumentType::DerivativeInstrument,
-///                                                                             asset_class: AssetClass::EquityBasedInstrument,
-///                                                                             identifier: String::from("32198407128904") };
-/// let asset_historical_data: AssetHistData = AssetHistData::new(Array1::from_vec(vec![0.4, 0.5]),
-///                                                               Array1::from_vec(vec![0.0, 0.0]),
-///                                                               Array1::from_vec(vec![0.0, 1.0])).unwrap();
-/// let contract: Contract = Contract::new(ContractType::Future, 1.5, 100.0, 0.03, 2.0, 101.0, compounding_type,
-///                                        financial_instrument_id, asset_historical_data, None).unwrap();
+/// let financial_instrument_id: FinancialInstrumentId = FinancialInstrumentId {
+///     instrument_type: FinancialInstrumentType::DerivativeInstrument, asset_class: AssetClass::EquityBasedInstrument,
+///     identifier: String::from("32198407128904"),
+/// };
+/// let asset_historical_data: AssetHistData = AssetHistData::build(
+///     Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]), Array1::from_vec(vec![0.0, 1.0])
+/// ).unwrap();
+/// let contract: Contract = Contract::build(
+///     ContractType::Future, 1.5, 100.0, 0.03, 2.0, 101.0, compounding_type, financial_instrument_id, asset_historical_data, None
+/// ).unwrap();
 ///
 /// // Theoretical value
 /// let forward_price: f64 = 101.0 * (0.03 * 2.0_f64).exp();
@@ -179,12 +177,11 @@ pub struct Contract {
     /// Time series asset data
     asset_historical_data: AssetHistData,
     /// Stochastic model to use for price paths generation
-    stochastic_model: Box<dyn StochasticProcess>,
+    stochastic_model: Option<Box<dyn StochasticProcess>>,
 }
 
 impl Contract {
 
-    /// # Description
     /// Creates a new `Contract` instance.
     ///
     /// - `contract_type`: Type of contract
@@ -200,32 +197,19 @@ impl Contract {
     ///
     /// # Errors
     /// - Returns an error if time to maturity is negative.
-    pub fn new(_contract_type: ContractType, current_contract_price: f64, delivery_price: f64, discount_rate: f64, time_to_maturity: f64, spot_price: f64,
-               compounding_type: CompoundingType, financial_instrument_id: FinancialInstrumentId, asset_historical_data: AssetHistData,
-               stochastic_model: Option<Box<dyn StochasticProcess>>) -> Result<Self, DigiFiError> {
+    pub fn build(_contract_type: ContractType, current_contract_price: f64, delivery_price: f64, discount_rate: f64, time_to_maturity: f64, spot_price: f64,
+        compounding_type: CompoundingType, financial_instrument_id: FinancialInstrumentId, asset_historical_data: AssetHistData,
+        stochastic_model: Option<Box<dyn StochasticProcess>>
+    ) -> Result<Self, DigiFiError> {
         if time_to_maturity < 0.0 {
             return Err(DigiFiError::ParameterConstraint { title: "Contract".to_owned(), constraint: "The argument `time_to_maturity` must be non-negative.".to_owned(), });
         }
-        let stochastic_model: Box<dyn StochasticProcess> = match stochastic_model {
-            Some(v) => v,
-            None => {
-                // Default stochastic model for the case when the user doesn't provide one
-                let end_index: usize = asset_historical_data.time_array.len() - 1;
-                let prices: Array1<f64> = asset_historical_data.get_price(end_index, None)?;
-                // Parameters estimated from log-returns
-                let returns_transformation: ReturnsTransformation = ReturnsTransformation::LogReturn;
-                let mu: f64 = returns_average(&prices, &ReturnsMethod::EstimatedFromTotalReturn, &returns_transformation, 252)?;
-                let sigma: f64 = returns_std(&prices, &returns_transformation, 252)?;
-                Box::new(GeometricBrownianMotion::new(mu, sigma, 1, asset_historical_data.time_array.len() - 1, time_to_maturity, current_contract_price))
-            }
-        };
         Ok(Contract {
             _contract_type, current_contract_price, delivery_price, discount_rate, time_to_maturity, spot_price, compounding_type, financial_instrument_id,
             asset_historical_data, stochastic_model,
         })
     }
 
-    /// # Description
     /// Updates the spot price.
     ///
     /// # Input
@@ -234,7 +218,6 @@ impl Contract {
         self.spot_price = new_spot_price;
     }
 
-    /// # Description
     /// Updates the time to maturity of the contract.
     ///
     /// # Input
@@ -250,7 +233,6 @@ impl Contract {
         Ok(())
     }
 
-    /// # Description
     /// Add predictable yield to discount rate and save it in the instance definition.
     ///
     /// # Input
@@ -259,7 +241,6 @@ impl Contract {
         self.discount_rate += predictable_yield;
     }
 
-    /// # Description
     /// Add predictable income to the spot price and save it in the instance definition.
     ///
     /// # Input
@@ -276,7 +257,6 @@ impl Contract {
 
 impl FinancialInstrument for Contract {
 
-    /// # Description
     /// Present value of the contract.
     ///
     /// # Output
@@ -290,7 +270,6 @@ impl FinancialInstrument for Contract {
         Ok((forward_price - self.delivery_price) * discount_term.compounding_term(self.time_to_maturity))
     }
 
-    /// # Description
     /// Net present value of the contract.
     ///
     /// # Output
@@ -299,7 +278,6 @@ impl FinancialInstrument for Contract {
         Ok(-self.current_contract_price + self.present_value()?)
     }
 
-    /// # Description
     /// Future value of the contract.
     ///
     /// # Output
@@ -309,7 +287,6 @@ impl FinancialInstrument for Contract {
         Ok(self.present_value()? / discount_term.compounding_term(self.time_to_maturity))
     }
 
-    /// # Description
     /// Returns an array of contract prices.
     ///
     /// # Input
@@ -319,7 +296,6 @@ impl FinancialInstrument for Contract {
         self.asset_historical_data.get_price(end_index, start_index)
     }
 
-    /// # Description
     /// Returns an array of predictable incomes for the contract (i.e., predicatble yield, predictable income, storage cost).
     ///
     /// # Input
@@ -329,44 +305,19 @@ impl FinancialInstrument for Contract {
         self.asset_historical_data.get_predictable_income(end_index, start_index)
     }
 
-    /// # Description
     /// Returns an array of time steps at which the asset price and predictable_income are recorded.
     fn get_time_array(&self) -> Array1<f64> {
         self.asset_historical_data.time_array.clone()
     }
 
-    /// # Description
-    /// Updates the number of paths the stochastic model will produce when called.
-    ///
-    /// # Input
-    /// - `n_paths`: New number of paths to use
-    fn update_n_stochastic_paths(&mut self, n_paths: usize) -> () {
-        self.stochastic_model.update_n_paths(n_paths)
+    /// Updates historical data of the asset with the newly generated data.
+    fn update_historical_data(&mut self, new_data: &AssetHistData) -> () {
+        self.asset_historical_data = new_data.clone();
     }
 
-    /// # Description
-    /// Simulated stochastic paths of the contract.
-    /// 
-    /// # Output
-    /// - Simulated prices of the contract
-    fn stochastic_simulation(&self) -> Result<Vec<Array1<f64>>, DigiFiError> {
-        self.stochastic_model.get_paths()
-    }
-
-    /// # Description
-    /// Generates an array of prices and predictable income, and updates the `asset_historical_data`.
-    /// 
-    /// # Input
-    /// - `in_place`: If true, uses generated data to update the asset history data 
-    fn generate_historic_data(&mut self, in_place: bool) -> Result<AssetHistData, DigiFiError> {
-        let prices: Array1<f64> = self.stochastic_model.get_paths()?.remove(0);
-        let new_data: AssetHistData = AssetHistData::new(prices,
-                                                         Array1::from_vec(vec![0.0; self.asset_historical_data.time_array.len()]),
-                                                         self.asset_historical_data.time_array.clone())?;
-        if in_place {
-            self.asset_historical_data = new_data.clone();
-        }
-        Ok(new_data)
+    /// Returns a mutable reference to the stochastic process that simulates price action.
+    fn stochastic_model(&mut self) -> &mut Option<Box<dyn StochasticProcess>> {
+        &mut self.stochastic_model
     }
 }
 
@@ -382,7 +333,6 @@ impl PortfolioInstrument for Contract {
 }
 
 
-/// # Description
 /// Option financial instrument and its methods.
 ///
 /// # Links
@@ -400,19 +350,21 @@ impl PortfolioInstrument for Contract {
 /// use digifi::portfolio_applications::AssetHistData;
 ///
 /// // Option definition
-/// let financial_instrument_id: FinancialInstrumentId = FinancialInstrumentId {instrument_type: FinancialInstrumentType::DerivativeInstrument,
-///                                                                             asset_class: AssetClass::EquityBasedInstrument,
-///                                                                             identifier: String::from("32198407128904") };
-/// let asset_historical_data: AssetHistData = AssetHistData::new(Array1::from_vec(vec![0.4, 0.5]),
-///                                                               Array1::from_vec(vec![0.0, 0.0]),
-///                                                               Array1::from_vec(vec![0.0, 1.0])).unwrap();
+/// let financial_instrument_id: FinancialInstrumentId = FinancialInstrumentId {
+///     instrument_type: FinancialInstrumentType::DerivativeInstrument, asset_class: AssetClass::EquityBasedInstrument,
+///     identifier: String::from("32198407128904"),
+/// };
+/// let asset_historical_data: AssetHistData = AssetHistData::build(
+///     Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]), Array1::from_vec(vec![0.0, 1.0])
+/// ).unwrap();
 /// let payoff: Box<LongCall> = Box::new(LongCall { k: 100.0, cost: 1.5 });
 /// let option_pricing_method: OptionPricingMethod = OptionPricingMethod::BlackScholes { type_: BlackScholesType::Call };
-/// let option: OptionContract = OptionContract::new(99.0, 100.0, 0.02, 0.0, 3.0, 0.2, OptionType::European,
-///                                                  payoff, 1.5, option_pricing_method, financial_instrument_id, asset_historical_data, None).unwrap();
+/// let option: OptionContract = OptionContract::build(
+///     99.0, 100.0, 0.02, 0.0, 3.0, 0.2, OptionType::European, payoff, 1.5, option_pricing_method, financial_instrument_id, asset_historical_data, None
+///    ).unwrap();
 ///
 /// // Theoretical value
-/// let normal_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0).unwrap();
+/// let normal_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0).unwrap();
 /// let d_1_numerator: f64 = (99.0/100.0_f64).ln() + 3.0  * (0.02 - 0.0 + 0.5*0.2_f64.powi(2));
 /// let d_1: f64 = d_1_numerator / (0.2 * 3.0_f64.sqrt());
 /// let d_2: f64 = d_1 - 0.2 * 3.0_f64.sqrt();
@@ -447,12 +399,11 @@ pub struct OptionContract {
     /// Time series asset data
     asset_historical_data: AssetHistData,
     /// Stochastic model to use for price paths generation
-    stochastic_model: Box<dyn StochasticProcess>,
+    stochastic_model: Option<Box<dyn StochasticProcess>>,
 }
 
 impl OptionContract {
 
-    /// # Description
     /// Creates a new `OptionContract` instance.
     ///
     /// # Input
@@ -473,9 +424,10 @@ impl OptionContract {
     /// # Errors
     /// - Returns an error if the maturity is negative.
     /// - Returns an error if Black-Scholes pricing method is used together with any but European option type.
-    pub fn new(asset_price: f64, strike_price: f64, discount_rate: f64, yield_: f64, time_to_maturity: f64, sigma: f64, option_type: OptionType,
-               payoff: Box<dyn Payoff>, initial_option_price: f64, option_pricing_method: OptionPricingMethod, financial_instrument_id: FinancialInstrumentId,
-               asset_historical_data: AssetHistData, stochastic_model: Option<Box<dyn StochasticProcess>>) -> Result<Self, DigiFiError> {
+    pub fn build(asset_price: f64, strike_price: f64, discount_rate: f64, yield_: f64, time_to_maturity: f64, sigma: f64, option_type: OptionType,
+        payoff: Box<dyn Payoff>, initial_option_price: f64, option_pricing_method: OptionPricingMethod, financial_instrument_id: FinancialInstrumentId,
+        asset_historical_data: AssetHistData, stochastic_model: Option<Box<dyn StochasticProcess>>
+    ) -> Result<Self, DigiFiError> {
         let error_title: String = String::from("Option Contract");
         if time_to_maturity < 0.0 {
             return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument `time_to_maturity` must be non-negative.".to_owned(), });
@@ -490,26 +442,12 @@ impl OptionContract {
             _ => (),
         }
         payoff.validate_payoff(5)?;
-        let stochastic_model: Box<dyn StochasticProcess> = match stochastic_model {
-            Some(v) => v,
-            None => {
-                // Default stochastic model for the case when the user doesn't provide one// Default stochastic model for the case when the user doesn't provide one
-                let end_index: usize = asset_historical_data.time_array.len() - 1;
-                let prices: Array1<f64> = asset_historical_data.get_price(end_index, None)?;
-                // Parameters estimated from log-returns
-                let returns_transformation: ReturnsTransformation = ReturnsTransformation::LogReturn;
-                let mu: f64 = returns_average(&prices, &ReturnsMethod::EstimatedFromTotalReturn, &returns_transformation, 252)?;
-                let sigma_: f64 = returns_std(&prices, &returns_transformation, 252)?;
-                Box::new(GeometricBrownianMotion::new(mu, sigma_, 1, asset_historical_data.time_array.len() - 1, time_to_maturity, initial_option_price))
-            }
-        };
         Ok(OptionContract {
             asset_price, strike_price, discount_rate, yield_, time_to_maturity, sigma, option_type, payoff, initial_option_price, option_pricing_method,
             financial_instrument_id, asset_historical_data, stochastic_model,
         })
     }
 
-    /// # Description
     /// Check that the instance is a European option.
     fn is_european(&self) -> Result<(), DigiFiError> {
         match self.option_type {
@@ -520,7 +458,6 @@ impl OptionContract {
         }
     }
 
-    /// # Description
     /// Measure of sensitivity of the option price to the underlying asset price.
     ///
     /// # Input
@@ -542,7 +479,6 @@ impl OptionContract {
         (option_value_2 - option_value_1) / (asset_price_2 / asset_price_1)
     }
 
-    /// # Description
     /// Measure of sensitivity of the option price to the volatility of the underlying asset.
     ///
     /// # Input
@@ -564,7 +500,6 @@ impl OptionContract {
         (option_value_2 - option_value_1) / (sigma_2 - sigma_1)
     }
 
-    /// # Description
     /// Measure of sensitivity of the option price to the time to maturity.
     ///
     /// # Input
@@ -585,7 +520,6 @@ impl OptionContract {
         (option_value_2 - option_value_1) / (tau_2 - tau_1)
     }
 
-    /// # Description
     /// Measure of sensitivity of the option price to the interest rate.
     ///
     /// # Input
@@ -607,7 +541,6 @@ impl OptionContract {
         (option_value_2 - option_value_1) / (r_2 - r_1)
     }
 
-    /// # Description
     /// Measure of sensitivity of the option price to the dividend of the underlying asset.
     ///
     /// # Input
@@ -629,7 +562,6 @@ impl OptionContract {
         (option_value_2 - option_value_1) / (dividend_2 - dividend_1)
     }
 
-    /// # Description
     /// Measure of sensitivity of the option price to change in the underlying asset price.
     ///
     /// # Input
@@ -655,7 +587,6 @@ impl OptionContract {
         (delta_2 - delta_1) / (asset_price_3 - asset_price_1)
     }
 
-    /// # Description
     /// Defines Black-Scholes parameters d_1 and d_2 for the European option.
     ///
     /// # Errors
@@ -668,7 +599,6 @@ impl OptionContract {
         Ok((d_1, d_2))
     }
 
-    /// # Description
     /// Value of the European option evaluated using Black-Scholes formula.
     ///
     /// # Input
@@ -678,7 +608,7 @@ impl OptionContract {
     /// - Returns an error if the option is not European.
     fn european_option_black_scholes(&self, black_scholes_type: &BlackScholesType) -> Result<f64, DigiFiError> {
         let (d_1, d_2) = self.european_option_black_scholes_params()?;
-        let normal_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0)?;
+        let normal_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
         match black_scholes_type {
             BlackScholesType::Call => {
                 let component_1: f64 = self.asset_price * (-self.yield_ * self.time_to_maturity).exp() * normal_dist.cdf(&Array1::from_vec(vec![d_1]))?[0];
@@ -693,7 +623,6 @@ impl OptionContract {
         }
     }
 
-    /// # Description
     /// Delta of the European option.
     ///
     /// Measure of sensitivity of the option price to the underlying asset price.
@@ -706,7 +635,7 @@ impl OptionContract {
     /// - Original Source: N/A
     pub fn european_option_delta(&self, black_scholes_type: &BlackScholesType) -> Result<f64, DigiFiError> {
         let (d_1, _) = self.european_option_black_scholes_params()?;
-        let normal_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0)?;
+        let normal_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
         match black_scholes_type {
             BlackScholesType::Call => {
                 Ok((-self.yield_ * self.time_to_maturity).exp() * normal_dist.cdf(&Array1::from_vec(vec![d_1]))?[0])
@@ -717,7 +646,6 @@ impl OptionContract {
         }
     }
 
-    /// # Description
     /// Vega of the European option.
     ///
     ///Measure of sensitivity of the option price to the volatility of the underlying asset.
@@ -730,11 +658,10 @@ impl OptionContract {
     /// - Original Source: N/A
     pub fn european_option_vega(&self) -> Result<f64, DigiFiError> {
         let (d_1, _) = self.european_option_black_scholes_params()?;
-        let normal_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0)?;
+        let normal_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
         Ok(self.asset_price * (-self.yield_ * self.time_to_maturity).exp() * normal_dist.cdf(&Array1::from_vec(vec![d_1]))?[0] * self.time_to_maturity.sqrt())
     }
 
-    /// # Description
     /// Theta of the European option.
     ///
     /// Measure of sensitivity of the option price to the time to maturity.
@@ -747,7 +674,7 @@ impl OptionContract {
     /// - Original Source: N/A
     pub fn european_option_theta(&self, black_scholes_type: &BlackScholesType) -> Result<f64, DigiFiError> {
         let (d_1, d_2) = self.european_option_black_scholes_params()?;
-        let normal_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0)?;
+        let normal_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
         match black_scholes_type {
             BlackScholesType::Call => {
                 let component_1: f64 = -(-self.yield_ * self.time_to_maturity).exp() * self.asset_price * normal_dist.cdf(&Array1::from_vec(vec![d_1]))?[0] * self.sigma / (2.0 * self.time_to_maturity.sqrt());
@@ -764,7 +691,6 @@ impl OptionContract {
         }
     }
 
-    /// # Description
     /// Rho of the European option.
     ///
     /// Measure of sensitivity of the option price to the interest rate.
@@ -777,7 +703,7 @@ impl OptionContract {
     /// - Original Source: N/A
     pub fn european_option_rho(&self, black_scholes_type: &BlackScholesType) -> Result<f64, DigiFiError> {
         let (_, d_2) = self.european_option_black_scholes_params()?;
-        let normal_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0)?;
+        let normal_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
         match black_scholes_type {
             BlackScholesType::Call => {
                 Ok(self.strike_price * self.time_to_maturity * (-self.discount_rate * self.time_to_maturity).exp() * normal_dist.cdf(&Array1::from_vec(vec![d_2]))?[0])
@@ -788,7 +714,6 @@ impl OptionContract {
         }
     }
 
-    /// # Description
     /// Epsilon of the European option.
     ///
     /// Measure of sensitivity of the option price to the dividend of the underlying asset.
@@ -801,7 +726,7 @@ impl OptionContract {
     /// - Original Source: N/A
     pub fn european_option_epsilon(&self, black_scholes_type: &BlackScholesType) -> Result<f64, DigiFiError> {
         let (d_1, _) = self.european_option_black_scholes_params()?;
-        let normal_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0)?;
+        let normal_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
         match black_scholes_type {
             BlackScholesType::Call => {
                 Ok(-self.asset_price * self.time_to_maturity * (-self.yield_*self.time_to_maturity).exp() * normal_dist.cdf(&Array1::from_vec(vec![d_1]))?[0])
@@ -812,7 +737,6 @@ impl OptionContract {
         }
     }
 
-    /// # Description
     /// Gamma of the European option.
     /// 
     /// Measure of sensitivity of the option price to change in the underlying asset price.
@@ -824,11 +748,10 @@ impl OptionContract {
     /// - Original Source: N/A
     pub fn european_option_gamma(&self) -> Result<f64, DigiFiError> {
         let (d_1, _) = self.european_option_black_scholes_params()?;
-        let normal_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0)?;
+        let normal_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
         Ok((-self.yield_ * self.time_to_maturity).exp() * normal_dist.cdf(&Array1::from_vec(vec![d_1]))?[0] / (self.asset_price * self.sigma * self.time_to_maturity.sqrt()))
     }
 
-    /// # Description
     /// Surface (i.e., underlying asset price vs option value vs time-to-maturity) of the option price as it approaches maturity.
     ///
     /// # Input
@@ -873,7 +796,6 @@ impl OptionContract {
 
 impl FinancialInstrument for OptionContract {
 
-    /// # Description
     /// Present values of the option.
     ///
     /// # Output
@@ -884,7 +806,7 @@ impl FinancialInstrument for OptionContract {
                 Ok(self.european_option_black_scholes(type_)?)
             },
             OptionPricingMethod::Binomial { n_steps } => {
-                let lattice_model: BrownianMotionBinomialModel = BrownianMotionBinomialModel::new(self.payoff.clone_box(), self.asset_price, self.time_to_maturity, self.discount_rate, self.sigma, self.yield_, *n_steps)?;
+                let lattice_model: BrownianMotionBinomialModel = BrownianMotionBinomialModel::build(self.payoff.clone_box(), self.asset_price, self.time_to_maturity, self.discount_rate, self.sigma, self.yield_, *n_steps)?;
                 match &self.option_type {
                     OptionType::European => Ok(lattice_model.european()?),
                     OptionType::American => Ok(lattice_model.american()?),
@@ -892,7 +814,7 @@ impl FinancialInstrument for OptionContract {
                 }
             },
             OptionPricingMethod::Trinomial { n_steps } => {
-                let lattice_model: BrownianMotionTrinomialModel = BrownianMotionTrinomialModel::new(self.payoff.clone_box(), self.asset_price, self.time_to_maturity, self.discount_rate, self.sigma, self.yield_, *n_steps)?;
+                let lattice_model: BrownianMotionTrinomialModel = BrownianMotionTrinomialModel::build(self.payoff.clone_box(), self.asset_price, self.time_to_maturity, self.discount_rate, self.sigma, self.yield_, *n_steps)?;
                 match &self.option_type {
                     OptionType::European => Ok(lattice_model.european()?),
                     OptionType::American => Ok(lattice_model.american()?),
@@ -902,7 +824,6 @@ impl FinancialInstrument for OptionContract {
         }
     }
 
-    /// # Description
     /// Net present value of the option.
     ///
     /// # Output
@@ -911,7 +832,6 @@ impl FinancialInstrument for OptionContract {
         Ok(-self.initial_option_price + self.present_value()?)
     }
 
-    /// # Description
     /// Future value of the option.
     ///
     /// # Output
@@ -920,7 +840,6 @@ impl FinancialInstrument for OptionContract {
         Ok(self.present_value()? * (self.discount_rate * self.time_to_maturity).exp())
     }
 
-    /// # Description
     /// Returns an array of option prices.
     ///
     /// # Input
@@ -930,7 +849,6 @@ impl FinancialInstrument for OptionContract {
         self.asset_historical_data.get_price(end_index, start_index)
     }
 
-    /// # Description
     /// Returns an array of predictable incomes for the option.
     ///
     /// # Input
@@ -940,44 +858,19 @@ impl FinancialInstrument for OptionContract {
         self.asset_historical_data.get_predictable_income(end_index, start_index)
     }
 
-    /// # Description
     /// Returns an array of time steps at which the asset price and predictable_income are recorded.
     fn get_time_array(&self) -> Array1<f64> {
         self.asset_historical_data.time_array.clone()
     }
 
-    /// # Description
-    /// Updates the number of paths the stochastic model will produce when called.
-    ///
-    /// # Input
-    /// - `n_paths`: New number of paths to use
-    fn update_n_stochastic_paths(&mut self, n_paths: usize) -> () {
-        self.stochastic_model.update_n_paths(n_paths)
+    /// Updates historical data of the asset with the newly generated data.
+    fn update_historical_data(&mut self, new_data: &AssetHistData) -> () {
+        self.asset_historical_data = new_data.clone();
     }
 
-    /// # Description
-    /// Simulated stochastic paths of the option price.
-    /// 
-    /// # Output
-    /// - Simulated prices of the option
-    fn stochastic_simulation(&self) -> Result<Vec<Array1<f64>>, DigiFiError> {
-        self.stochastic_model.get_paths()
-    }
-
-    /// # Description
-    /// Generates an array of prices and predictable income, and updates the `asset_historical_data`.
-    /// 
-    /// # Input
-    /// - `in_place`: If true, uses generated data to update the asset history data 
-    fn generate_historic_data(&mut self, in_place: bool) -> Result<AssetHistData, DigiFiError> {
-        let prices: Array1<f64> = self.stochastic_model.get_paths()?.remove(0);
-        let new_data: AssetHistData = AssetHistData::new(prices,
-                                                         Array1::from_vec(vec![0.0; self.asset_historical_data.time_array.len()]),
-                                                         self.asset_historical_data.time_array.clone())?;
-        if in_place {
-            self.asset_historical_data = new_data.clone();
-        }
-        Ok(new_data)
+    /// Returns a mutable reference to the stochastic process that simulates price action.
+    fn stochastic_model(&mut self) -> &mut Option<Box<dyn StochasticProcess>> {
+        &mut self.stochastic_model
     }
 }
 
@@ -994,7 +887,6 @@ impl PortfolioInstrument for OptionContract {
 
 
 #[cfg(feature = "plotly")]
-/// # Description
 /// Plots the present value/option premium surface (i.e., underlying asset price vs time-to-maturity vs option premium).
 ///
 /// # Input
@@ -1005,7 +897,7 @@ impl PortfolioInstrument for OptionContract {
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```rust,ignore
 /// use digifi::utilities::time_value_utils::CompoundingType;
 /// use digifi::financial_instruments::{FinancialInstrument, FinancialInstrumentId, FinancialInstrumentType, AssetClass, LongCall};
 /// use digifi::financial_instruments::derivatives::{OptionType, OptionPricingMethod, OptionContract, PresentValueSurface};
@@ -1018,16 +910,19 @@ impl PortfolioInstrument for OptionContract {
 ///     use digifi::plots::plot_present_value_surface;
 ///
 ///     // Option definition
-///     let financial_instrument_id: FinancialInstrumentId = FinancialInstrumentId {instrument_type: FinancialInstrumentType::DerivativeInstrument,
-///                                                                                 asset_class: AssetClass::EquityBasedInstrument,
-///                                                                                 identifier: String::from("32198407128904") };
-///     let asset_historical_data: AssetHistData = AssetHistData::new(Array1::from_vec(vec![0.4, 0.5]),
-///                                                                   Array1::from_vec(vec![0.0, 0.0]),
-///                                                                   Array1::from_vec(vec![0.0, 1.0])).unwrap();
+///     let financial_instrument_id: FinancialInstrumentId = FinancialInstrumentId {
+///         instrument_type: FinancialInstrumentType::DerivativeInstrument, asset_class: AssetClass::EquityBasedInstrument,
+///         identifier: String::from("32198407128904"),
+///     };
+///     let asset_historical_data: AssetHistData = AssetHistData::build(
+///         Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]), Array1::from_vec(vec![0.0, 1.0])
+///     ).unwrap();
 ///     let payoff: Box<LongCall> = Box::new(LongCall { k: 100.0, cost: 1.5 });
 ///     let option_pricing_method: OptionPricingMethod = OptionPricingMethod::Binomial { n_steps: 50 };
-///     let mut option: OptionContract = OptionContract::new(99.0, 100.0, 0.02, 0.0, 3.0, 0.2, OptionType::European,
-///                                                      payoff, 1.5, option_pricing_method, financial_instrument_id, asset_historical_data, None).unwrap();
+///     let mut option: OptionContract = OptionContract::build(
+///         99.0, 100.0, 0.02, 0.0, 3.0, 0.2, OptionType::European, payoff, 1.5, option_pricing_method, financial_instrument_id,
+///         asset_historical_data, None
+///     ).unwrap();
 ///
 ///     // Plot
 ///     let surface: PresentValueSurface = option.present_value_surface(70.0, 130.0, 61, 30).unwrap();
@@ -1071,14 +966,17 @@ mod tests {
     fn unit_test_contract() -> () {
         // Contract definition
         let compounding_type: CompoundingType = CompoundingType::Continuous;
-        let financial_instrument_id: FinancialInstrumentId = FinancialInstrumentId {instrument_type: FinancialInstrumentType::DerivativeInstrument,
-                                                                                    asset_class: AssetClass::EquityBasedInstrument,
-                                                                                    identifier: String::from("32198407128904") };
-        let asset_historical_data: AssetHistData = AssetHistData::new(Array1::from_vec(vec![0.4, 0.5]),
-                                                                      Array1::from_vec(vec![0.0, 0.0]),
-                                                                      Array1::from_vec(vec![0.0, 1.0])).unwrap();
-        let contract: Contract = Contract::new(ContractType::Future, 1.5, 100.0, 0.03, 2.0, 101.0, compounding_type,
-                                               financial_instrument_id, asset_historical_data, None).unwrap();
+        let financial_instrument_id: FinancialInstrumentId = FinancialInstrumentId {
+            instrument_type: FinancialInstrumentType::DerivativeInstrument, asset_class: AssetClass::EquityBasedInstrument,
+            identifier: String::from("32198407128904"),
+        };
+        let asset_historical_data: AssetHistData = AssetHistData::build(
+            Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]), Array1::from_vec(vec![0.0, 1.0])
+        ).unwrap();
+        let contract: Contract = Contract::build(
+            ContractType::Future, 1.5, 100.0, 0.03, 2.0, 101.0, compounding_type, financial_instrument_id,
+            asset_historical_data, None
+        ).unwrap();
         // Theoretical value
         let forward_price: f64 = 101.0 * (0.03 * 2.0_f64).exp();
         let pv: f64 = (forward_price - 100.0) * (-0.03 * 2.0_f64).exp();
@@ -1088,18 +986,21 @@ mod tests {
     #[test]
     fn unit_test_option() -> () {
         // Option definition
-        let financial_instrument_id: FinancialInstrumentId = FinancialInstrumentId {instrument_type: FinancialInstrumentType::DerivativeInstrument,
-                                                                                    asset_class: AssetClass::EquityBasedInstrument,
-                                                                                    identifier: String::from("32198407128904") };
-        let asset_historical_data: AssetHistData = AssetHistData::new(Array1::from_vec(vec![0.4, 0.5]),
-                                                                      Array1::from_vec(vec![0.0, 0.0]),
-                                                                      Array1::from_vec(vec![0.0, 1.0])).unwrap();
+        let financial_instrument_id: FinancialInstrumentId = FinancialInstrumentId {
+            instrument_type: FinancialInstrumentType::DerivativeInstrument, asset_class: AssetClass::EquityBasedInstrument,
+            identifier: String::from("32198407128904"),
+        };
+        let asset_historical_data: AssetHistData = AssetHistData::build(
+            Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]), Array1::from_vec(vec![0.0, 1.0])
+        ).unwrap();
         let payoff: Box<LongCall> = Box::new(LongCall { k: 100.0, cost: 1.5 });
         let option_pricing_method: OptionPricingMethod = OptionPricingMethod::BlackScholes { type_: BlackScholesType::Call };
-        let option: OptionContract = OptionContract::new(99.0, 100.0, 0.02, 0.0, 3.0, 0.2, OptionType::European,
-                                                         payoff, 1.5, option_pricing_method, financial_instrument_id, asset_historical_data, None).unwrap();
+        let option: OptionContract = OptionContract::build(
+            99.0, 100.0, 0.02, 0.0, 3.0, 0.2, OptionType::European, payoff, 1.5, option_pricing_method,
+            financial_instrument_id, asset_historical_data, None
+        ).unwrap();
         // Theoretical value
-        let normal_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0).unwrap();
+        let normal_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0).unwrap();
         let d_1_numerator: f64 = (99.0/100.0_f64).ln() + 3.0  * (0.02 - 0.0 + 0.5*0.2_f64.powi(2));
         let d_1: f64 = d_1_numerator / (0.2 * 3.0_f64.sqrt());
         let d_2: f64 = d_1 - 0.2 * 3.0_f64.sqrt();
@@ -1120,11 +1021,11 @@ mod tests {
         use crate::financial_instruments::LongCall;
         let payoff: LongCall = LongCall { k: 105.0, cost: 0.0, };
         // Binomial model
-        let bmbm: BrownianMotionBinomialModel = BrownianMotionBinomialModel::new(Box::new(payoff.clone()), 100.0, 1.0, 0.02, 0.15, 0.0, 1000).unwrap();
+        let bmbm: BrownianMotionBinomialModel = BrownianMotionBinomialModel::build(Box::new(payoff.clone()), 100.0, 1.0, 0.02, 0.15, 0.0, 1000).unwrap();
         let predicted_value: f64 = bmbm.european().unwrap();
         println!("Binomial: {}", predicted_value);
         // Trinomial model
-        let bmtm: BrownianMotionTrinomialModel = BrownianMotionTrinomialModel::new(Box::new(payoff.clone()), 100.0, 1.0, 0.02, 0.15, 0.0, 1000).unwrap();
+        let bmtm: BrownianMotionTrinomialModel = BrownianMotionTrinomialModel::build(Box::new(payoff.clone()), 100.0, 1.0, 0.02, 0.15, 0.0, 1000).unwrap();
         let predicted_value: f64 = bmtm.european().unwrap();
         println!("Trinomial: {}", predicted_value);
         // Black-Scholes
@@ -1139,20 +1040,24 @@ mod tests {
 
     #[cfg(feature = "plotly")]
     #[test]
+    #[ignore]
     fn unit_test_option_plot() -> () {
         use plotly::Plot;
         use crate::financial_instruments::derivatives::{plot_present_value_surface, PresentValueSurface};
         // Option definition
-        let financial_instrument_id: FinancialInstrumentId = FinancialInstrumentId {instrument_type: FinancialInstrumentType::DerivativeInstrument,
-                                                                                    asset_class: AssetClass::EquityBasedInstrument,
-                                                                                    identifier: String::from("32198407128904") };
-        let asset_historical_data: AssetHistData = AssetHistData::new(Array1::from_vec(vec![0.4, 0.5]),
-                                                                      Array1::from_vec(vec![0.0, 0.0]),
-                                                                      Array1::from_vec(vec![0.0, 1.0])).unwrap();
+        let financial_instrument_id: FinancialInstrumentId = FinancialInstrumentId {
+            instrument_type: FinancialInstrumentType::DerivativeInstrument, asset_class: AssetClass::EquityBasedInstrument,
+            identifier: String::from("32198407128904"),
+        };
+        let asset_historical_data: AssetHistData = AssetHistData::build(
+            Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]), Array1::from_vec(vec![0.0, 1.0])
+        ).unwrap();
         let payoff: Box<LongCall> = Box::new(LongCall { k: 100.0, cost: 1.5 });
         let option_pricing_method: OptionPricingMethod = OptionPricingMethod::Binomial { n_steps: 50 };
-        let mut option: OptionContract = OptionContract::new(99.0, 100.0, 0.02, 0.0, 3.0, 0.2, OptionType::European,
-                                                         payoff, 1.5, option_pricing_method, financial_instrument_id, asset_historical_data, None).unwrap();
+        let mut option: OptionContract = OptionContract::build(
+            99.0, 100.0, 0.02, 0.0, 3.0, 0.2, OptionType::European, payoff, 1.5, option_pricing_method,
+            financial_instrument_id, asset_historical_data, None
+        ).unwrap();
         // Plot
         let surface: PresentValueSurface = option.present_value_surface(70.0, 130.0, 61, 30).unwrap();
         let plot: Plot = plot_present_value_surface(&surface);

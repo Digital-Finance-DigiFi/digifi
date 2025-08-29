@@ -3,7 +3,6 @@ use serde::{Serialize, Deserialize};
 
 
 pub trait PortfolioPerformanceMetric: {
-    /// # Description
     /// Measures the performance of the portfolio based on portfolio data.
     ///
     /// # Input
@@ -11,7 +10,6 @@ pub trait PortfolioPerformanceMetric: {
     /// - `portfolio_std`: Standard deviation of portfolio returns
     fn performance(&self, portfolio_return: f64, portfolio_std: f64) -> f64;
 
-    /// # Description
     /// Objective function that will be minimized to find the optimal weights distribution of the portfolio.
     ///
     /// # Input
@@ -23,7 +21,6 @@ pub trait PortfolioPerformanceMetric: {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Measure of the performance of a portfolio compared to risk-free rate and adjusted for risk.
 ///
 /// # Links
@@ -36,7 +33,6 @@ pub struct SharpeRatio {
 
 impl PortfolioPerformanceMetric for SharpeRatio {
 
-    /// # Description
     /// Measure of the performance of a portfolio compared to risk-free rate and adjusted for risk.
     /// 
     /// # Input
@@ -60,7 +56,6 @@ impl PortfolioPerformanceMetric for SharpeRatio {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Measure of the performance of a portfolio compared to a benchmark relative to the volatility of the active return.
 ///
 /// # Links
@@ -75,7 +70,6 @@ pub struct InformationRatio {
 
 impl PortfolioPerformanceMetric for InformationRatio {
 
-    /// # Description
     /// Measure of the performance of a portfolio compared to a benchmark relative to the volatility of the active return.
     ///
     /// # Input
@@ -99,7 +93,6 @@ impl PortfolioPerformanceMetric for InformationRatio {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Measure of the performance of a portfolio in excess of what could have been earned on an investment with no diversifiable risk.
 ///
 /// # Links
@@ -114,7 +107,6 @@ pub struct TreynorRatio {
 
 impl PortfolioPerformanceMetric for TreynorRatio {
 
-    /// # Description
     /// Measure of the performance of a portfolio in excess of what could have been earned on an investment with no diversifiable risk.
     /// 
     /// # Input
@@ -139,7 +131,6 @@ impl PortfolioPerformanceMetric for TreynorRatio {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Measure of the performance of the portfolio in excess of its theoretical expected return.
 /// 
 /// # Links
@@ -156,7 +147,6 @@ pub struct JensensAlpha {
 
 impl PortfolioPerformanceMetric for JensensAlpha {
 
-    /// # Description
     /// Measure of the performance of the portfolio in excess of its theoretical expected return.
     /// 
     /// # Input
@@ -180,7 +170,6 @@ impl PortfolioPerformanceMetric for JensensAlpha {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Measure of the performance of the portfolio in the form of risk-adjusted return.
 /// 
 /// This measure is the extension of Sharpe ratio, but it penalizes the 'downside' volatility and not the 'upside' volatility.
@@ -197,7 +186,6 @@ pub struct SortinoRatio {
 
 impl PortfolioPerformanceMetric for SortinoRatio {
 
-    /// # Description
     /// Measure of the performance of the portfolio in the form of risk-adjusted return.
     /// 
     /// This measure is the extension of Sharpe ratio, but it penalizes the 'downside' volatility and not the 'upside' volatility.

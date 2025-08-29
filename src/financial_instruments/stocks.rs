@@ -5,12 +5,11 @@ use crate::error::DigiFiError;
 use crate::utilities::{compare_array_len, time_value_utils::{Compounding, CompoundingType, Perpetuity}};
 use crate::financial_instruments::{FinancialInstrument, FinancialInstrumentId};
 use crate::corporate_finance;
-use crate::portfolio_applications::{returns_average, returns_std, ReturnsMethod, ReturnsTransformation, AssetHistData, PortfolioInstrument};
+use crate::portfolio_applications::{AssetHistData, PortfolioInstrument};
 use crate::statistics::linear_regression;
-use crate::stochastic_processes::{StochasticProcess, standard_stochastic_models::GeometricBrownianMotion};
+use crate::stochastic_processes::StochasticProcess;
 
 
-/// # Description
 /// Choice of how to quote the values returned by functions.
 pub enum QuoteValues {
     PerShare,
@@ -19,7 +18,6 @@ pub enum QuoteValues {
 
 
 #[derive(Debug)]
-/// # Description
 /// Type of model to use for valuation of stock price.
 pub enum StockValuationType {
     DividendDiscountModel,
@@ -29,7 +27,6 @@ pub enum StockValuationType {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Parameters for valuation by comparables.
 pub struct ValuationByComparablesParams {
     /// Array of valuations of the companies
@@ -54,7 +51,7 @@ impl ValuationByComparablesParams {
     ///
     /// # Errors
     /// - Returns an error if the number of datapoints (i.e., number of points in arrays) is less than `5`.
-    pub fn new(valuations: Array1<f64>, pe_ratios: Option<Array1<f64>>, pb_ratios: Option<Array1<f64>>, ev_to_ebitda: Option<Array1<f64>>) -> Result<Self, DigiFiError> {
+    pub fn build(valuations: Array1<f64>, pe_ratios: Option<Array1<f64>>, pb_ratios: Option<Array1<f64>>, ev_to_ebitda: Option<Array1<f64>>) -> Result<Self, DigiFiError> {
         if valuations.len() < 5 {
             return Err(DigiFiError::ValidationError { title: "Valuation by Comparables Params".to_owned(), details: "Minimum number of datapoints required is `5`.".to_owned(), });
         }
@@ -64,7 +61,6 @@ impl ValuationByComparablesParams {
         Ok(ValuationByComparablesParams { valuations, pe_ratios, pb_ratios, ev_to_ebitda })
     }
 
-    /// # Description
     /// Validates an array against the valuations array.
     fn validate_array(valuations: &Array1<f64>, array: &Option<Array1<f64>>, array_name: &str) -> Result<(), DigiFiError> {
         match array {
@@ -76,25 +72,21 @@ impl ValuationByComparablesParams {
         }
     }
 
-    /// # Description
     /// Returns an array of stocks' valuations.
     pub fn valuations(&self) -> Array1<f64> {
         self.valuations.clone()
     }
 
-    /// # Description
     /// Returns an array of stocks' P/E raatios.
     pub fn pe_ratios(&self) -> Option<Array1<f64>> {
         self.pe_ratios.clone()
     }
 
-    /// # Description
     /// Returns an array of stock's P/B ratios.
     pub fn pb_ratios(&self) -> Option<Array1<f64>> {
         self.pb_ratios.clone()
     }
 
-    /// # Description
     /// Returns an array of stocks' EV/EBITDA ratios.
     pub fn ev_to_ebitda(&self) -> Option<Array1<f64>> {
         self.ev_to_ebitda.clone()
@@ -102,7 +94,6 @@ impl ValuationByComparablesParams {
 }
 
 
-/// # Description
 /// Stock financial instrument and its methods.
 ///
 /// # Links
@@ -122,15 +113,16 @@ impl ValuationByComparablesParams {
 ///
 /// // Stock definition
 /// let compounding_type: CompoundingType = CompoundingType::Continuous;
-/// let financial_instrument_id: FinancialInstrumentId = FinancialInstrumentId {instrument_type: FinancialInstrumentType::CashInstrument,
-///                                                                             asset_class: AssetClass::EquityBasedInstrument,
-///                                                                             identifier: String::from("32198407128904") };
-/// let asset_historical_data: AssetHistData = AssetHistData::new(Array1::from_vec(vec![0.4, 0.5]),
-///                                                               Array1::from_vec(vec![0.0, 0.0]),
-///                                                               Array1::from_vec(vec![0.0, 1.0])).unwrap();
-/// let stock: Stock = Stock::new(100.0, 1_000_000, 3.0, 2.5, QuoteValues::PerShare, 99.0, compounding_type,
-///                               0.0, StockValuationType::DividendDiscountModel, Some(10.0), Some(3.0), Some(6.5),
-///                               5.0, financial_instrument_id, asset_historical_data, None).unwrap();
+/// let financial_instrument_id: FinancialInstrumentId = FinancialInstrumentId {
+///     instrument_type: FinancialInstrumentType::CashInstrument, asset_class: AssetClass::EquityBasedInstrument, identifier: String::from("32198407128904"),
+/// };
+/// let asset_historical_data: AssetHistData = AssetHistData::build(
+///     Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]), Array1::from_vec(vec![0.0, 1.0])
+/// ).unwrap();
+/// let stock: Stock = Stock::build(
+///     100.0, 1_000_000, 3.0, 2.5, QuoteValues::PerShare, 99.0, compounding_type, 0.0, StockValuationType::DividendDiscountModel, Some(10.0), Some(3.0), Some(6.5),
+///     5.0, financial_instrument_id, asset_historical_data, None
+/// ).unwrap();
 ///
 /// // Theoretical value
 /// let r: f64 = 3.0 / 100.0 + 0.0;
@@ -149,23 +141,27 @@ impl ValuationByComparablesParams {
 ///
 /// // Stock definition
 /// let compounding_type: CompoundingType = CompoundingType::Continuous;
-/// let financial_instrument_id: FinancialInstrumentId = FinancialInstrumentId {instrument_type: FinancialInstrumentType::CashInstrument,
-///                                                                             asset_class: AssetClass::EquityBasedInstrument,
-///                                                                             identifier: String::from("32198407128904") };
-/// let asset_historical_data: AssetHistData = AssetHistData::new(Array1::from_vec(vec![0.4, 0.5]),
-///                                                               Array1::from_vec(vec![0.0, 0.0]),
-///                                                               Array1::from_vec(vec![0.0, 1.0])).unwrap();
+/// let financial_instrument_id: FinancialInstrumentId = FinancialInstrumentId {
+///     instrument_type: FinancialInstrumentType::CashInstrument, asset_class: AssetClass::EquityBasedInstrument,
+///     identifier: String::from("32198407128904"),
+/// };
+/// let asset_historical_data: AssetHistData = AssetHistData::build(
+///     Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]), Array1::from_vec(vec![0.0, 1.0])
+/// ).unwrap();
 ///
 /// // Valuation parameters
 /// let valuations: Array1<f64> = Array1::from_vec(vec![200_000_000.0, 1_000_000_000.0, 3_000_000_000.0, 500_000_000.0, 1_500_000_000.0]);
 /// let pe_ratios: Array1<f64> = Array1::from_vec(vec![20.0, 8.0, 9.0, 15.0, 11.0]);
 /// let pb_ratios: Array1<f64> = Array1::from_vec(vec![7.0, 2.0, 4.0, 10.0, 5.0]);
 /// let ev_to_ebitda: Array1<f64> = Array1::from_vec(vec![10.0, 5.0, 6.0, 7.0, 6.0]);
-/// let valuation_params: ValuationByComparablesParams = ValuationByComparablesParams::new(valuations, Some(pe_ratios), Some(pb_ratios), Some(ev_to_ebitda)).unwrap();
-/// let stock: Stock = Stock::new(100.0, 1_000_000, 3.0, 2.5, QuoteValues::Total, 99.0, compounding_type,
-///                               0.0, StockValuationType::ValuationByComparables { params: valuation_params },
-///                               Some(10.0), Some(3.0), Some(6.5),
-///                               5.0, financial_instrument_id, asset_historical_data, None).unwrap();
+/// let valuation_params: ValuationByComparablesParams = ValuationByComparablesParams::build(
+///     valuations, Some(pe_ratios), Some(pb_ratios), Some(ev_to_ebitda)
+/// ).unwrap();
+/// 
+/// let stock: Stock = Stock::new(
+///     100.0, 1_000_000, 3.0, 2.5, QuoteValues::Total, 99.0, compounding_type, 0.0, StockValuationType::ValuationByComparables { params: valuation_params },
+///     Some(10.0), Some(3.0), Some(6.5), 5.0, financial_instrument_id, asset_historical_data, None
+/// );
 /// assert!(1_000_000_000.0 < stock.present_value().unwrap());
 /// ````
 pub struct Stock {
@@ -200,12 +196,11 @@ pub struct Stock {
     /// Time series asset data
     asset_historical_data: AssetHistData,
     /// Stochastic model to use for price paths generation
-    stochastic_model: Box<dyn StochasticProcess>,
+    stochastic_model: Option<Box<dyn StochasticProcess>>,
 }
 
 impl Stock {
 
-    /// # Description
     /// Creates a new `Stock` instance.
     ///
     /// # Input:
@@ -226,26 +221,15 @@ impl Stock {
     /// - `asset_historical_data`: Time series asset data
     /// - `stochastic_model`: Stochastic model to use for price paths generation
     pub fn new(price_per_share: f64, n_shares_outstanding: i32, dividend_per_share: f64, earnings_per_share: f64, quote_values: QuoteValues, initial_price: f64,
-               compounding_type: CompoundingType, dividend_growth_rate: f64, stock_valuation_type: StockValuationType, pe: Option<f64>, pb: Option<f64>,
-               ev_to_ebitda: Option<f64>, t_f: f64, financial_instrument_id: FinancialInstrumentId, asset_historical_data: AssetHistData,
-               stochastic_model: Option<Box<dyn StochasticProcess>>) -> Result<Self, DigiFiError> {
-        let stochastic_model: Box<dyn StochasticProcess> = match stochastic_model {
-            Some(v) => v,
-            None => {
-                // Default stochastic model for the case when the user doesn't provide one
-                let end_index: usize = asset_historical_data.time_array.len() - 1;
-                let prices: Array1<f64> = asset_historical_data.get_price(end_index, None)?;
-                // Parameters estimated from log-returns
-                let returns_transformation: ReturnsTransformation = ReturnsTransformation::LogReturn;
-                let mu: f64 = returns_average(&prices, &ReturnsMethod::EstimatedFromTotalReturn, &returns_transformation, 252)?;
-                let sigma: f64 = returns_std(&prices, &returns_transformation, 252)?;
-                Box::new(GeometricBrownianMotion::new(mu, sigma, 1, asset_historical_data.time_array.len() - 1, t_f, initial_price))
-            }
-        };
-        Ok(Stock {
+        compounding_type: CompoundingType, dividend_growth_rate: f64, stock_valuation_type: StockValuationType, pe: Option<f64>, pb: Option<f64>,
+        ev_to_ebitda: Option<f64>, t_f: f64, financial_instrument_id: FinancialInstrumentId, asset_historical_data: AssetHistData,
+        stochastic_model: Option<Box<dyn StochasticProcess>>
+    ) -> Self {
+        Stock {
             price_per_share, n_shares_outstanding: n_shares_outstanding as f64, dividend_per_share, earnings_per_share, quote_values, initial_price,
             compounding_type, dividend_growth_rate, stock_valuation_type, pe, pb, ev_to_ebitda, t_f, financial_instrument_id, asset_historical_data,
-            stochastic_model })
+            stochastic_model,
+        }
     }
 
     fn apply_value_quotation_type(&self, prices_per_share: Array1<f64>) -> Array1<f64> {
@@ -261,7 +245,6 @@ impl Stock {
         self.price_per_share
     }
 
-    /// # Description
     /// Monetary value of earnings per outstanding share of common stock for a company during a defined period of time.
     /// 
     /// EPS = (Net Income - Preferred Dividends) / Number of Common Shares Outstanding
@@ -289,7 +272,6 @@ impl Stock {
         trailing_eps
     }
 
-    /// # Description
     /// The ratio of market price to earnings.
     /// 
     /// Price-to-Earnings Ratio = Share Price / Earnings per Share
@@ -343,7 +325,6 @@ impl Stock {
         pb
     }
 
-    /// # Description
     /// Enterprise value is the sum of a company's market capitalization and any debts, minus cash or cash equivalents on hand.
     /// 
     /// EV = Maarket Cap - Total Debt + Cash & Cash Equivalents
@@ -366,7 +347,6 @@ impl Stock {
         corporate_finance::enterprise_value(market_cap, total_debt, cash)
     }
 
-    /// # Description
     /// Measure of the value of a stock that compares a company's enterprise value to its revenue.
     /// EV/R is one of several fundamental indicators that investors use to determine whether a stock is priced fairly.
     /// The EV/R multiple is also often used to determine a company's valuation in the case of a potential acquisition.
@@ -391,7 +371,6 @@ impl Stock {
         corporate_finance::ev_to_revenue(market_cap, total_debt, cash, revenue)
     }
 
-    /// # Description
     /// Valuation multiple used to determine the fair market value of a company.
     /// By contrast to the more widely available P/E ratio (price-earnings ratio) it includes debt as part of the value of the
     /// company in the numerator and excludes costs such as the need to replace depreciating plant, interest on debt,
@@ -420,7 +399,6 @@ impl Stock {
         ev_to_ebitda
     }
 
-    /// # Description
     /// Computes the cost of equity capital (Market capitalization rate).
     ///
     /// Cost of Equity Capital = (Expected Dividend / Current Share Price) + Sustainable Growth Rate
@@ -447,7 +425,6 @@ impl Stock {
         expected_dividend / self.price_per_share + self.dividend_growth_rate
     }
 
-    /// # Description
     /// Measure of a company's financial performance. It is calculated by dividing net income by shareholders' equity.
     /// Because shareholders' equity is equal to a company’s assets minus its debt, ROE is a way of showing a company's
     /// return on net assets.
@@ -471,7 +448,6 @@ impl Stock {
         corporate_finance::return_on_equity(net_income, equity)
     }
 
-    /// # Description
     /// Financial ratio that indicates how profitable a company is relative to its total assets.
     /// It can used to determine how efficiently a company uses its resources to generate a profit.
     /// 
@@ -494,7 +470,6 @@ impl Stock {
         corporate_finance::return_on_assets(net_income, total_assets)
     }
 
-    /// # Description
     /// Performance measure used to evaluate the efficiency or profitability of an investment or compare the efficiency
     /// of a number of different investments. ROI tries to directly measure the amount of return on a particular investment,
     /// relative to the investment’s cost.
@@ -518,7 +493,6 @@ impl Stock {
         corporate_finance::return_on_investment(revenue, cost_of_goods_sold)
     }
 
-    /// # Description
     /// Ratio indicating the relative proportion of shareholders' equity and debt used to finance the company's assets.
     /// 
     /// D/E = Debt / Equity
@@ -560,8 +534,9 @@ impl Stock {
     /// - Original Source: <https://doi.org/10.2307/1927792>
     pub fn dividend_discount_model(&self, expected_dividend: Option<f64>) -> Result<f64, DigiFiError> {
         let cost_of_equity_capital: f64 = self.cost_of_equity_capital(expected_dividend);
-        let dividend_perpetuity: Perpetuity = Perpetuity::new(self.dividend_per_share, cost_of_equity_capital,
-                                                              self.dividend_growth_rate, self.compounding_type.clone())?;
+        let dividend_perpetuity: Perpetuity = Perpetuity::build(
+            self.dividend_per_share, cost_of_equity_capital, self.dividend_growth_rate, self.compounding_type.clone()
+        )?;
         let pv: f64 = dividend_perpetuity.present_value();
         Ok(self.apply_value_quotation_type(Array1::from_vec(vec![pv]))[0])
     }
@@ -584,7 +559,6 @@ impl Stock {
         }
     }
 
-    /// # Description
     /// Valuation of the stock by comparing its features to the features of similar stocks.
     ///
     /// # Input
@@ -660,7 +634,6 @@ impl Stock {
         Ok(self.apply_value_quotation_type(Array1::from_vec(vec![valuation / self.n_shares_outstanding]))[0])
     }
 
-    /// # Description
     /// Ratio of dividends to earnings per share.
     /// 
     /// Payout Ratio = Dividend per Share / Earnings per Share
@@ -682,7 +655,6 @@ impl Stock {
         corporate_finance::payout_ratio(self.dividend_per_share, self.earnings_per_share)
     }
 
-    /// # Description
     /// One minus payout ratio.
     /// 
     /// Plowback Ratio = 1 - (Dividend per Share / Earnings per Share)
@@ -704,7 +676,6 @@ impl Stock {
         corporate_finance::plowback_ratio(self.dividend_per_share, self.earnings_per_share)
     }
 
-    /// # Description
     /// Computes dividend growth rate.
     ///
     /// Dividend Growth Rate = Plowback Ratio * ROE
@@ -727,7 +698,6 @@ impl Stock {
         g
     }
 
-    /// # Description
     /// Computes present value of growth opportunities (PVGO) which corresponds to the component of stock's valuation responsible for earnings growth.
     ///
     /// PVGO = Share Price - Earnings per Share / Cost of Equity Capital
@@ -797,7 +767,6 @@ impl FinancialInstrument for Stock {
         Ok(self.present_value()? / discount_term.compounding_term(self.t_f))
     }
 
-    /// # Description
     /// Returns an array of stock prices.
     ///
     /// # Input
@@ -807,7 +776,6 @@ impl FinancialInstrument for Stock {
         self.asset_historical_data.get_price(end_index, start_index)
     }
 
-    /// # Description
     /// Returns an array of predictable incomes for the stock (i.e., dividends).
     ///
     /// # Input
@@ -817,44 +785,19 @@ impl FinancialInstrument for Stock {
         self.asset_historical_data.get_predictable_income(end_index, start_index)
     }
 
-    /// # Description
     /// Returns an array of time steps at which the asset price and predictable_income are recorded.
     fn get_time_array(&self) -> Array1<f64> {
         self.asset_historical_data.time_array.clone()
     }
 
-    /// # Description
-    /// Updates the number of paths the stochastic model will produce when called.
-    ///
-    /// # Input
-    /// - `n_paths`: New number of paths to use
-    fn update_n_stochastic_paths(&mut self, n_paths: usize) -> () {
-        self.stochastic_model.update_n_paths(n_paths)
+    /// Updates historical data of the asset with the newly generated data.
+    fn update_historical_data(&mut self, new_data: &AssetHistData) -> () {
+        self.asset_historical_data = new_data.clone();
     }
 
-    /// # Description
-    /// Simulated stochastic paths of the stock.
-    /// 
-    /// # Output
-    /// - Simulated prices of the stock
-    fn stochastic_simulation(&self) -> Result<Vec<Array1<f64>>, DigiFiError> {
-        self.stochastic_model.get_paths()
-    }
-
-    /// # Description
-    /// Generates an array of prices and predictable income, and updates the `asset_historical_data`.
-    /// 
-    /// # Input
-    /// - `in_place`: If true, uses generated data to update the asset history data 
-    fn generate_historic_data(&mut self, in_place: bool) -> Result<AssetHistData, DigiFiError> {
-        let prices: Array1<f64> = self.stochastic_model.get_paths()?.remove(0);
-        let new_data: AssetHistData = AssetHistData::new(prices,
-                                                         Array1::from_vec(vec![0.0; self.asset_historical_data.time_array.len()]),
-                                                         self.asset_historical_data.time_array.clone())?;
-        if in_place {
-            self.asset_historical_data = new_data.clone();
-        }
-        Ok(new_data)
+    /// Returns a mutable reference to the stochastic process that simulates price action.
+    fn stochastic_model(&mut self) -> &mut Option<Box<dyn StochasticProcess>> {
+        &mut self.stochastic_model
     }
 }
 
@@ -883,15 +826,18 @@ mod tests {
     fn unit_test_stock_dividend_discount_model() -> () {
         // Stock definition
         let compounding_type: CompoundingType = CompoundingType::Continuous;
-        let financial_instrument_id: FinancialInstrumentId = FinancialInstrumentId {instrument_type: FinancialInstrumentType::CashInstrument,
-                                                                                    asset_class: AssetClass::EquityBasedInstrument,
-                                                                                    identifier: String::from("32198407128904") };
-        let asset_historical_data: AssetHistData = AssetHistData::new(Array1::from_vec(vec![0.4, 0.5]),
-                                                                      Array1::from_vec(vec![0.0, 0.0]),
-                                                                      Array1::from_vec(vec![0.0, 1.0])).unwrap();
-        let stock: Stock = Stock::new(100.0, 1_000_000, 3.0, 2.5, QuoteValues::PerShare, 99.0, compounding_type,
-                                      0.0, StockValuationType::DividendDiscountModel, Some(10.0), Some(3.0), Some(6.5),
-                                      5.0, financial_instrument_id, asset_historical_data, None).unwrap();
+        let financial_instrument_id: FinancialInstrumentId = FinancialInstrumentId {
+            instrument_type: FinancialInstrumentType::CashInstrument, asset_class: AssetClass::EquityBasedInstrument,
+            identifier: String::from("32198407128904"),
+        };
+        let asset_historical_data: AssetHistData = AssetHistData::build(
+            Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]), Array1::from_vec(vec![0.0, 1.0])
+        ).unwrap();
+        let stock: Stock = Stock::new(
+            100.0, 1_000_000, 3.0, 2.5, QuoteValues::PerShare, 99.0, compounding_type, 0.0,
+            StockValuationType::DividendDiscountModel, Some(10.0), Some(3.0), Some(6.5), 5.0, financial_instrument_id,
+            asset_historical_data, None
+        );
         // Theoretical value
         let r: f64 = 3.0 / 100.0 + 0.0;
         let perpetuity_pv: f64 = 3.0 * 0.0_f64.exp() / ((r - 0.0).exp() - 1.0);
@@ -902,22 +848,26 @@ mod tests {
     fn unit_test_stock_valuation_by_comparables() -> () {
         // Stock definition
         let compounding_type: CompoundingType = CompoundingType::Continuous;
-        let financial_instrument_id: FinancialInstrumentId = FinancialInstrumentId {instrument_type: FinancialInstrumentType::CashInstrument,
-                                                                                    asset_class: AssetClass::EquityBasedInstrument,
-                                                                                    identifier: String::from("32198407128904") };
-        let asset_historical_data: AssetHistData = AssetHistData::new(Array1::from_vec(vec![0.4, 0.5]),
-                                                                      Array1::from_vec(vec![0.0, 0.0]),
-                                                                      Array1::from_vec(vec![0.0, 1.0])).unwrap();
+        let financial_instrument_id: FinancialInstrumentId = FinancialInstrumentId {
+            instrument_type: FinancialInstrumentType::CashInstrument, asset_class: AssetClass::EquityBasedInstrument,
+            identifier: String::from("32198407128904"),
+        };
+        let asset_historical_data: AssetHistData = AssetHistData::build(
+            Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]), Array1::from_vec(vec![0.0, 1.0])
+        ).unwrap();
         // Valuation parameters
         let valuations: Array1<f64> = Array1::from_vec(vec![200_000_000.0, 1_000_000_000.0, 3_000_000_000.0, 500_000_000.0, 1_500_000_000.0]);
         let pe_ratios: Array1<f64> = Array1::from_vec(vec![20.0, 8.0, 9.0, 15.0, 11.0]);
         let pb_ratios: Array1<f64> = Array1::from_vec(vec![7.0, 2.0, 4.0, 10.0, 5.0]);
         let ev_to_ebitda: Array1<f64> = Array1::from_vec(vec![10.0, 5.0, 6.0, 7.0, 6.0]);
-        let valuation_params: ValuationByComparablesParams = ValuationByComparablesParams::new(valuations, Some(pe_ratios), Some(pb_ratios), Some(ev_to_ebitda)).unwrap();
-        let stock: Stock = Stock::new(100.0, 1_000_000, 3.0, 2.5, QuoteValues::Total, 99.0, compounding_type,
-                                      0.0, StockValuationType::ValuationByComparables { params: valuation_params },
-                                      Some(10.0), Some(3.0), Some(6.5),
-                                      5.0, financial_instrument_id, asset_historical_data, None).unwrap();
+        let valuation_params: ValuationByComparablesParams = ValuationByComparablesParams::build(
+            valuations, Some(pe_ratios), Some(pb_ratios), Some(ev_to_ebitda)
+        ).unwrap();
+        let stock: Stock = Stock::new(
+            100.0, 1_000_000, 3.0, 2.5, QuoteValues::Total, 99.0, compounding_type, 0.0,
+            StockValuationType::ValuationByComparables { params: valuation_params }, Some(10.0), Some(3.0),
+            Some(6.5), 5.0, financial_instrument_id, asset_historical_data, None
+        );
         assert!(1_000_000_000.0 < stock.present_value().unwrap());
     }
 }

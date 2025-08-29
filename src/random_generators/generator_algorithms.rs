@@ -6,7 +6,6 @@ use crate::utilities::compare_array_len;
 use crate::random_generators::{RandomGenerator, uniform_generators::{LinearCongruentialGenerator, FibonacciGenerator}};
 
 
-/// # Description
 /// Implements the Accept-Reject Method, a Monte Carlo technique for generating random samples from a probability distribution.
 /// 
 /// # Input
@@ -26,8 +25,9 @@ use crate::random_generators::{RandomGenerator, uniform_generators::{LinearCongr
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Rejection_sampling>
 /// - Original Source: N/A
-pub fn accept_reject(f_x: &impl ProbabilityDistribution, g_x : &impl ProbabilityDistribution, y_sample: &Array1<f64>,
-                            m: f64, uniform_sample: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
+pub fn accept_reject(
+    f_x: &impl ProbabilityDistribution, g_x : &impl ProbabilityDistribution, y_sample: &Array1<f64>, m: f64, uniform_sample: &Array1<f64>
+) -> Result<Array1<f64>, DigiFiError> {
     let g: Array1<f64> = g_x.pdf(y_sample)?;
     let f: Array1<f64> = f_x.pdf(y_sample)?;
     compare_array_len(&g, &f, "g", "f")?;
@@ -44,7 +44,6 @@ pub fn accept_reject(f_x: &impl ProbabilityDistribution, g_x : &impl Probability
 }
 
 
-/// # Description
 /// Uses the Inverse Transform Method to generate random samples from a specified probability distribution function.
 /// 
 /// # Input
@@ -66,7 +65,6 @@ pub fn inverse_transform(f_x: &impl ProbabilityDistribution, sample_size: usize)
 }
 
 
-/// # Description
 /// The Box-Muller algorithm transforms uniformly distributed samples into samples distributed according to the standard normal distribution.
 /// 
 /// # Input
@@ -91,7 +89,6 @@ pub fn box_muller(uniform_sample_1: &Array1<f64>, unfiform_sample_2: &Array1<f64
 }
 
 
-/// # Description
 /// The Marsaglia polar method for generating standard normal random variables from uniformly distributed random numbers.
 /// 
 /// # Input
@@ -125,7 +122,6 @@ pub fn marsaglia(max_iterations: usize) -> Result<Option<(f64, f64)>, DigiFiErro
 }
 
 
-/// # Description
 /// The Ziggurat algorithm is a method for generating random samples from a normal distribution.
 ///
 /// Note: This version of Ziggurat algorithm does not implement a fallback algorithm for the tail.
@@ -142,7 +138,7 @@ pub fn marsaglia(max_iterations: usize) -> Result<Option<(f64, f64)>, DigiFiErro
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Ziggurat_algorithm>
 /// - Original Source: <https://doi.org/10.1145/1464291.1464310>
 pub fn ziggurat(x_guess: &Array1<f64>, sample_size: usize, max_iterations: usize) -> Result<Array1<f64>, DigiFiError> {
-    let normal_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0)?;
+    let normal_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
     let y: Array1<f64> = normal_dist.pdf(&x_guess)?;
     let mut z: Array1<f64> = Array1::from_vec(vec![1.0; sample_size]);
     for j in 0..sample_size {

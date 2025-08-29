@@ -1,10 +1,14 @@
+//! # Monte Carlo Methods
+//! 
+//! Contains functionality for running Monte Carlo simulations for pricing instruments with payoff functions.
+
+
 use ndarray::{Array1, arr1};
 use crate::error::DigiFiError;
 use crate::financial_instruments::Payoff;
 use crate::stochastic_processes::StochasticProcess;
 
 
-/// # Description
 /// Simulates the paths of the stochastic process and uses these simulations to price the payoff.
 /// 
 /// Note: To correctly price the payoff, the paths produced by the stochastic process must be in terms of future values of the asset
@@ -53,7 +57,10 @@ pub fn monte_carlo_simulation(stochastic_process: &dyn StochasticProcess, payoff
     let exercise_time_steps: &Vec<bool> = match exercise_time_steps {
         Some(exercise_time_steps_vec) => {
             if exercise_time_steps_vec.len() != n_steps {
-                return Err(DigiFiError::Other { title: "Monte-Carlo Simulation".to_owned(), details: format!("The argument exercise time steps should be of length {} as defined by the stochastic process.", n_steps), });
+                return Err(DigiFiError::Other {
+                    title: "Monte-Carlo Simulation".to_owned(),
+                    details: format!("The argument exercise time steps should be of length {} as defined by the stochastic process.", n_steps),
+                });
             }
             exercise_time_steps_vec
         },
@@ -96,7 +103,9 @@ mod tests {
         let gbm: GeometricBrownianMotion = GeometricBrownianMotion::new(rf, 0.2, n_paths, n_steps, 1.0, 10.0);
         let long_call: LongCall = LongCall { k: 11.0, cost: 0.0 };
         // Predicted value (Monte-Carlo simulation)
-        let predicted_value: f64 = monte_carlo_simulation(&gbm, &long_call, rf, &Some(vec![false; n_steps])).unwrap();
+        let predicted_value: f64 = monte_carlo_simulation(
+            &gbm, &long_call, rf, &Some(vec![false; n_steps])
+        ).unwrap();
         // Theoretical value (Black-Scholes formula)
         let theoretical_value: f64 = black_scholes_formula(10.0, 11.0, 0.2, 1.0, 0.02, 0.0, &BlackScholesType::Call).unwrap();
         assert!((predicted_value - theoretical_value).abs() < 10_000_000.0*TEST_ACCURACY);

@@ -17,7 +17,6 @@ pub struct LiquidityCurve {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Token data format used to define `AMMLiquidityPool`.
 pub struct AMMToken {
     /// Token identifier/name
@@ -33,7 +32,6 @@ pub struct AMMToken {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Liquidity data for the `AMM`.
 /// 
 /// Characteristic Number = Token 1 Supply * Token 2 Supply
@@ -48,7 +46,6 @@ pub struct AMMLiquidityPool {
 }
 
 impl AMMLiquidityPool {
-    /// # Description
     /// Creates a new `AMMLiquidityPool` instance.
     /// 
     /// # Input
@@ -60,13 +57,19 @@ impl AMMLiquidityPool {
     /// # Errors
     /// - Returns an error if the characteristic number is not positive.
     /// - Returns an error if the product of supplies of the two tokens do not equal to the characteristic number.
-    pub fn new(token_1: AMMToken, token_2: AMMToken, char_number: f64, tolerance: f64) -> Result<Self, DigiFiError> {
+    pub fn build(token_1: AMMToken, token_2: AMMToken, char_number: f64, tolerance: f64) -> Result<Self, DigiFiError> {
         let error_title: String = String::from("AMM Liquidity Pool");
         if char_number <= 0.0 {
-            return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument `char_number` must be positive.".to_owned(), });
+            return Err(DigiFiError::ParameterConstraint {
+                title: error_title,
+                constraint: "The argument `char_number` must be positive.".to_owned(),
+            });
         }
         if tolerance < ((token_1.supply * token_2.supply) - char_number).abs() {
-            return Err(DigiFiError::ValidationError { title: error_title.clone(), details: "The argument `char_number` must be the product of supplies of the tokens.".to_owned(), });
+            return Err(DigiFiError::ValidationError {
+                title: error_title,
+                details: "The argument `char_number` must be the product of supplies of the tokens.".to_owned(),
+            });
         }
         Ok(AMMLiquidityPool { token_1, token_2, char_number, tolerance })
     }
@@ -83,7 +86,6 @@ impl AMMLiquidityPool {
         self.char_number
     }
 
-    /// # Description
     /// Updates the state of the liquidity pool while preserving the characteristic number
     /// 
     /// # Input
@@ -96,13 +98,16 @@ impl AMMLiquidityPool {
     pub fn update_token_supply(&mut self, token_1: AMMToken, token_2: AMMToken) -> Result<(), DigiFiError> {
         let error_title: String = String::from("AMM Liquidity Pool");
         if self.tolerance < ((token_1.supply * token_2.supply) - self.char_number).abs() {
-            return Err(DigiFiError::ValidationError { title: error_title.clone(), details: "The argument `char_number` must be the product of supplies of the tokens.".to_owned(), });
+            return Err(DigiFiError::ValidationError {
+                title: error_title,
+                details: "The argument `char_number` must be the product of supplies of the tokens.".to_owned(),
+            });
         }
         if self.token_1.id != token_1.id {
-            return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "Wrong `token_1` id is provided.".to_owned(), });
+            return Err(DigiFiError::ParameterConstraint { title: error_title, constraint: "Wrong `token_1` id is provided.".to_owned(), });
         }
         if self.token_2.id != token_2.id {
-            return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "Wrong `token_2` id is provided.".to_owned(), });
+            return Err(DigiFiError::ParameterConstraint { title: error_title, constraint: "Wrong `token_2` id is provided.".to_owned(), });
         }
         self.token_1 = token_1;
         self.token_2 = token_2;
@@ -113,7 +118,6 @@ impl AMMLiquidityPool {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Transaction data used to pass transactions into AMM methods.
 pub struct AMMTransactionData {
     /// Token identifier/name that is being purchased
@@ -125,13 +129,13 @@ pub struct AMMTransactionData {
 }
 
 impl AMMTransactionData {
-    pub fn new(token_id: String, quantity: f64, percent_fee: f64) -> Result<Self, DigiFiError> {
+    pub fn build(token_id: String, quantity: f64, percent_fee: f64) -> Result<Self, DigiFiError> {
         let error_title: String = String::from("AMM Transaction Data");
         if quantity <= 0.0 {
-            return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument `quantity` must be positive.".to_owned(), });
+            return Err(DigiFiError::ParameterConstraint { title: error_title, constraint: "The argument `quantity` must be positive.".to_owned(), });
         }
         if percent_fee < 0.0 {
-            return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument `percent_fee` must be non-negative.".to_owned(), });
+            return Err(DigiFiError::ParameterConstraint { title: error_title, constraint: "The argument `percent_fee` must be non-negative.".to_owned(), });
         }
         Ok(AMMTransactionData { token_id, quantity, percent_fee })
     }
@@ -165,7 +169,6 @@ pub struct AMMTransactionResult {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Contains computational methods for an AMM with the liquidity pool given by:
 /// 
 /// Characteristic Number = Token 1 Supply * Token 2 Supply
@@ -184,8 +187,8 @@ pub struct AMMTransactionResult {
 ///
 /// let token_1: AMMToken = AMMToken { id: String::from("BTC"), supply: 10.0, fee_lower_bound: 0.0, fee_upper_bound: 0.03  };
 /// let token_2: AMMToken = AMMToken { id: String::from("ETH"), supply: 1_000.0, fee_lower_bound: 0.0, fee_upper_bound: 0.03  };
-/// let liquidity_pool: AMMLiquidityPool = AMMLiquidityPool::new(token_1, token_2, 10_000.0, 0.00001).unwrap();
-/// let tx_data: AMMTransactionData = AMMTransactionData::new(String::from("BTC"), 1.0, 0.01).unwrap();
+/// let liquidity_pool: AMMLiquidityPool = AMMLiquidityPool::build(token_1, token_2, 10_000.0, 0.00001).unwrap();
+/// let tx_data: AMMTransactionData = AMMTransactionData::build(String::from("BTC"), 1.0, 0.01).unwrap();
 ///
 /// let mut amm: SimpleAMM = SimpleAMM::new(liquidity_pool);
 /// let receipt: AMMTransactionResult = amm.make_transaction(tx_data).unwrap();
@@ -200,7 +203,6 @@ pub struct SimpleAMM {
 
 impl SimpleAMM {
 
-    /// # Description
     /// Creates a new `SimpleAMM` instance.
     /// 
     /// # Input
@@ -209,7 +211,6 @@ impl SimpleAMM {
         SimpleAMM { liquidity_pool }
     }
 
-    /// # Description
     /// Buy a quntity of a token from the AMM by submitting the buy order quoted in terms of the token to putchase.
     /// 
     /// Transaction includes fee as the percentage of the quantity purchased.
@@ -246,14 +247,20 @@ impl SimpleAMM {
             token_fee_upper_bound = token_2.fee_upper_bound;
             counterparty_token_supply = token_1.supply;
         } else {
-            return Err(DigiFiError::NotFound { title: error_title.clone(), data: format!("token with identifier {}", tx_data.token_id()), });
+            return Err(DigiFiError::NotFound { title: error_title, data: format!("token with identifier {}", tx_data.token_id()), });
         }
         let tx_buy_size: f64 = tx_data.quantity() * (1.0 + tx_data.percent_fee());
         if token_supply < tx_buy_size {
-            return Err(DigiFiError::Other { title: error_title.clone(), details: format!("Not enough supply of token `{}` (`{}`) to fill in the buy order of `{}`.", token_id, token_supply, tx_buy_size), });
+            return Err(DigiFiError::Other {
+                title: error_title,
+                details: format!("Not enough supply of token `{}` (`{}`) to fill in the buy order of `{}`.", token_id, token_supply, tx_buy_size),
+            });
         }
         if (tx_data.percent_fee() < token_fee_lower_bound) || (token_fee_upper_bound < tx_data.percent_fee()) {
-            return Err(DigiFiError::Other { title: error_title.clone(), details: format!("The argument percent_fee must be in the range [{}, {}].", token_fee_lower_bound, token_fee_upper_bound), });
+            return Err(DigiFiError::Other {
+                title: error_title,
+                details: format!("The argument percent_fee must be in the range [{}, {}].", token_fee_lower_bound, token_fee_upper_bound),
+            });
         }
         // Change in supply of token (y - delta_y)
         let updated_token_supply: f64 = token_supply - tx_buy_size;
@@ -277,7 +284,6 @@ impl SimpleAMM {
         Ok(AMMTransactionResult { quantity_to_sell: dx, exchange_price: price, fee_in_purchased_token: fee })
     }
 
-    /// # Description
     /// Generates points to plot the liquidity curve of the AMM.
     /// 
     /// # Input
@@ -303,8 +309,8 @@ mod tests {
         use crate::market_making::amm::{AMMToken, AMMLiquidityPool, AMMTransactionData, AMMTransactionResult, SimpleAMM};
         let token_1: AMMToken = AMMToken { id: String::from("BTC"), supply: 10.0, fee_lower_bound: 0.0, fee_upper_bound: 0.03  };
         let token_2: AMMToken = AMMToken { id: String::from("ETH"), supply: 1_000.0, fee_lower_bound: 0.0, fee_upper_bound: 0.03  };
-        let liquidity_pool: AMMLiquidityPool = AMMLiquidityPool::new(token_1, token_2, 10_000.0, 0.00001).unwrap();
-        let tx_data: AMMTransactionData = AMMTransactionData::new(String::from("BTC"), 1.0, 0.01).unwrap();
+        let liquidity_pool: AMMLiquidityPool = AMMLiquidityPool::build(token_1, token_2, 10_000.0, 0.00001).unwrap();
+        let tx_data: AMMTransactionData = AMMTransactionData::build(String::from("BTC"), 1.0, 0.01).unwrap();
         let mut amm: SimpleAMM = SimpleAMM::new(liquidity_pool);
         let receipt: AMMTransactionResult = amm.make_transaction(tx_data).unwrap();
         assert_eq!(receipt.quantity_to_sell, 10_000.0/8.99 - 1_000.0);

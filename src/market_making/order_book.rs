@@ -1,4 +1,3 @@
-/// # Description
 /// The difference between the best bid and best ask quotes divided by their sum.
 /// 
 /// Volume Imbalance = (Best Bid Volume - Best Ask Volume) / (Best Bid Volume + Best Ask Volume)

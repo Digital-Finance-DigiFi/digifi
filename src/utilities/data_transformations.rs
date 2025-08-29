@@ -7,7 +7,6 @@ use crate::utilities::NUMERICAL_CORRECTION;
 use crate::statistics::n_choose_r;
 
 
-/// # Description
 /// General form of the min-max normalization where the array is normalized to the interval `\[a,b\]`.
 ///
 /// # Input
@@ -51,7 +50,6 @@ pub fn min_max_scaling(x: Array1<f64>, a: f64, b: f64) -> Array1<f64> {
 }
 
 
-/// # Description
 /// Percent change of values in the time series compared to the previous values.
 /// 
 /// # Input
@@ -91,7 +89,6 @@ pub fn percent_change(x: &Array1<f64>) -> Array1<f64> {
 }
 
 
-/// # Description
 /// Log-return transformation of values in the time series.
 /// 
 /// # Input
@@ -126,7 +123,6 @@ pub fn log_return_transformation(x: &Array1<f64>) -> Array1<f64> {
 }
 
 
-/// # Description
 /// Differencing in statistics is a transformation applied to a non-stationary time-series in order to make
 /// it trend stationary (i.e., stationary in the mean sense), by removing or subtracting the trend or non-constant mean.
 /// 
@@ -176,7 +172,6 @@ pub fn differencing(v: &Array1<f64>, n: usize) -> Result<Array1<f64>, DigiFiErro
 }
 
 
-/// # Description
 /// Data transformation where numerical values are replaced by their rank when the data is sorted.
 /// 
 /// # Input
@@ -216,7 +211,6 @@ pub fn rank_transformation(x: &Array1<f64>) -> Array1<f64> {
 }
 
 
-/// # Description
 /// General form of the unit vector normalization using the p-norm.
 ///
 /// # Input
@@ -254,7 +248,6 @@ pub fn unit_vector_normalization(x: Array1<f64>, p: usize) -> Array1<f64> {
 
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Type of data transformation that can be applied to an array of data.
 pub enum TransformationType {
     MinMaxScaling {a: f64, b: f64},
@@ -269,7 +262,6 @@ pub enum TransformationType {
 
 impl TransformationType {
 
-    /// # Description
     /// Performs specified data transformation on the data passed in.
     /// 
     /// # Input
@@ -292,13 +284,11 @@ impl TransformationType {
 }
 
 
-/// # Description
 /// Struct that collect all data transformation utilities under one namespace.
 pub struct DataTransformations;
 
 impl DataTransformations {
 
-    /// # Description
     /// Performs specified data transformation on the data passed in.
     /// 
     /// # Input
@@ -311,7 +301,6 @@ impl DataTransformations {
         transformation_type.transformation(data)
     }
 
-    /// # Description
     /// Utility that crops two arrays so that they are of the same length.
     /// 
     /// Note: This utility is useful to apply after the data transforamtion has been performed on two or more arrays since some transformations return
@@ -348,7 +337,6 @@ impl DataTransformations {
         }
     }
 
-    /// # Description
     /// Utility that crops multiple arrays so that they are of the same length.
     /// 
     /// Note: This utility is useful to apply after the data transforamtion has been performed on two or more arrays since some transformations return

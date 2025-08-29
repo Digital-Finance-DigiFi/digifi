@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use ndarray::{arr1, Array1};
 
 
-/// # Description
 /// Sample data.
 pub enum SampleData {
     /// Data for testing `CAPM`
@@ -318,7 +317,6 @@ impl SampleData {
         (dates, stock_data)
     }
 
-    /// # Description
     /// Loads samples of data.
     pub fn load_sample_data(&self) -> (Vec<&str>, HashMap<String, Array1<f64>>) {
         match self {

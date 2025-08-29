@@ -9,7 +9,6 @@ use crate::random_generators::standard_normal_generators::StandardNormalInverseT
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Different methods of simulating the Feller Square-Root Process.
 pub enum FSRSimulationMethod {
     EulerMaruyama,
@@ -19,7 +18,6 @@ pub enum FSRSimulationMethod {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Arithmetic Brownian motion.
 /// 
 /// # LaTeX Formula
@@ -72,7 +70,6 @@ pub struct ArithmeticBrownianMotion {
 }
 
 impl ArithmeticBrownianMotion {
-    /// # Description
     /// Creates a new `ArithmeticBrownianMotion` instance.
     /// 
     /// # Input
@@ -88,7 +85,6 @@ impl ArithmeticBrownianMotion {
         ArithmeticBrownianMotion { mu, sigma, n_paths, n_steps, t_f, s_0, dt, t }
     }
 
-    /// # Description
     /// Calculates the expected path of the Arithmetic Brownian Motion.
     /// 
     /// # Output
@@ -100,7 +96,6 @@ impl ArithmeticBrownianMotion {
         self.mu * &self.t + self.s_0
     }
 
-    /// # Description
     /// Calculates the variance of the Arithmetic Brownian Motion at each time step.
     /// 
     /// # Output
@@ -112,7 +107,6 @@ impl ArithmeticBrownianMotion {
         &self.t * self.sigma.powi(2)
     }
 
-    /// # Description
     /// Calculates the auto-covariance of the Arithmetic Brownian Motion between two time points.
     /// 
     /// # Input
@@ -153,7 +147,6 @@ impl StochasticProcess for ArithmeticBrownianMotion {
         self.t_f
     }
 
-    /// # Description
     /// Generates simulation paths for the Arithmetic Brownian Motion using the Euler-Maruyama method.
     /// 
     /// # Output
@@ -177,7 +170,6 @@ impl StochasticProcess for ArithmeticBrownianMotion {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Model describing the evolution of stock prices.
 /// 
 /// # LaTeX Formula
@@ -229,7 +221,6 @@ pub struct GeometricBrownianMotion {
 }
 
 impl GeometricBrownianMotion {
-    /// # Description
     /// Creates a new `GoemetricBrownianMotion` instance.
     /// 
     /// # Input
@@ -245,7 +236,6 @@ impl GeometricBrownianMotion {
         GeometricBrownianMotion { mu, sigma, n_paths, n_steps, t_f, s_0, dt, t }
     }
 
-    /// # Description
     /// Calculates the expected path of the Geometric Brownian Motion. This represents the mean trajectory of the stock price over time.
     /// 
     /// # Output
@@ -257,7 +247,6 @@ impl GeometricBrownianMotion {
         self.s_0 * (self.mu * &self.t).map(|i| i.exp() )
     }
 
-    /// # Description
     /// Computes the variance of the stock price at each time step under the Geometric Brownian Motion model.
     /// This provides an indication of the variability or risk associated with the stock price.
     /// 
@@ -285,7 +274,6 @@ impl StochasticProcess for GeometricBrownianMotion {
         self.t_f
     }
 
-    /// # Description
     /// Simulates paths of the Geometric Brownian Motion using the Euler-Maruyama method.
     /// This method provides an approximation of the continuous-time process.
     /// 
@@ -311,7 +299,6 @@ impl StochasticProcess for GeometricBrownianMotion {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Model describes the evolution of interest rates.
 /// 
 /// # LaTeX Formula
@@ -368,7 +355,6 @@ pub struct OrnsteinUhlenbeckProcess {
 }
 
 impl OrnsteinUhlenbeckProcess {
-    /// # Description
     /// Creates a new `OrnsteinUhlenbeckProcess` instance.
     /// 
     /// # Input
@@ -386,7 +372,6 @@ impl OrnsteinUhlenbeckProcess {
         OrnsteinUhlenbeckProcess { mu, sigma, alpha, n_paths, n_steps, t_f, s_0, dt, t, analytic_em }
     }
 
-    /// # Description
     /// Calculates the expected path of the Ornstein-Uhlenbeck Process, showing the mean-reverting nature of the process over time.
     /// 
     /// # Output
@@ -398,7 +383,6 @@ impl OrnsteinUhlenbeckProcess {
         self.mu + (self.s_0 * self.mu) * (-self.alpha * &self.t).map(|i| i.exp() )
     }
 
-    /// # Description
     /// Computes the variance of the Ornstein-Uhlenbeck Process at each time step, providing insights into the variability around the mean.
     /// 
     /// # Output
@@ -424,7 +408,6 @@ impl StochasticProcess for OrnsteinUhlenbeckProcess {
         self.t_f
     }
 
-    /// # Description
     /// Simulates paths of the Ornstein-Uhlenbeck Process using the Euler-Maruyama method.
     /// This method can be adjusted to use either the standard numerical simulation or an analytic adjustment for Euler-Maruyama.
     /// 
@@ -465,7 +448,6 @@ impl StochasticProcess for OrnsteinUhlenbeckProcess {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Model can support useful variance reduction techniques for pricing derivative contracts using Monte-Carlo simulation, 
 /// such as sampling. Also used in scenario generation.
 /// 
@@ -518,7 +500,6 @@ pub struct BrownianBridge {
 }
 
 impl BrownianBridge {
-    /// # Description
     /// Creates a new `BrownianBridge` instance.
     /// 
     /// # Input
@@ -534,8 +515,8 @@ impl BrownianBridge {
         BrownianBridge { alpha, beta, sigma, n_paths, n_steps, t_f, dt, t }
     }
 
-    /// # Description
-    /// Calculates the expected path of the Brownian Bridge. It represents the expected value of the process at each time step, starting at 'alpha' and trending towards 'beta'.
+    /// Calculates the expected path of the Brownian Bridge. It represents the expected value of the process at each time step,
+    /// starting at 'alpha' and trending towards 'beta'.
     /// 
     /// # Output
     /// - An array of expected values of the process at each time step
@@ -546,7 +527,6 @@ impl BrownianBridge {
         self.alpha + (self.beta - self.alpha) / self.t_f * &self.t
     }
 
-    /// # Description
     /// Computes the variance of the Brownian Bridge at each time step.
     /// This illustrates how the variability of the process decreases as it approaches the endpoint 'beta' at time T.
     /// 
@@ -573,7 +553,6 @@ impl StochasticProcess for BrownianBridge {
         self.t_f
     }
 
-    /// # Description
     /// Generates simulation paths for the Brownian Bridge using the Euler-Maruyama method.
     /// 
     /// This method approximates the continuous-time process and ensures that the path starts at 'alpha' and ends at 'beta' at time t_f.
@@ -601,7 +580,6 @@ impl StochasticProcess for BrownianBridge {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Model describes the evolution of interest rates.
 /// 
 /// # LaTeX Formula
@@ -658,7 +636,6 @@ pub struct FellerSquareRootProcess {
 }
 
 impl FellerSquareRootProcess {
-    /// # Description
     /// Creates a new `FellerSquareRootProcess` instance.
     /// 
     /// # Input
@@ -676,7 +653,6 @@ impl FellerSquareRootProcess {
         FellerSquareRootProcess { mu, sigma, alpha, n_paths, n_steps, t_f, s_0, dt, t, method }
     }
 
-    /// # Description
     /// Calculates the expected path of the Feller Square-Root Process, showing the mean-reverting nature over time towards the long-term mean \\mu.
     /// 
     /// # Output
@@ -688,7 +664,6 @@ impl FellerSquareRootProcess {
         self.mu + (self.s_0 - self.mu) * (-self.alpha * &self.t).map(|i| i.exp() )
     }
 
-    /// # Description
     /// Computes the variance of the Feller Square-Root Process at each time step, providing insights into the variability around the mean.
     /// 
     /// # Output
@@ -713,7 +688,6 @@ impl StochasticProcess for FellerSquareRootProcess {
         self.t_f
     }
 
-    /// # Description
     /// Simulates paths of the Feller Square-Root Process using different methods: Euler-Maruyama, Analytic Euler-Maruyama,
     /// or Exact method, depending on the specified method in the process setup.
     /// 
@@ -797,7 +771,9 @@ mod tests {
         use crate::stochastic_processes::standard_stochastic_models::OrnsteinUhlenbeckProcess;
         let n_paths: usize = 100;
         let n_steps: usize = 200;
-        let oup: OrnsteinUhlenbeckProcess = OrnsteinUhlenbeckProcess::new(0.07, 0.1, 10.0, n_paths, n_steps, 1.0, 0.05, true);
+        let oup: OrnsteinUhlenbeckProcess = OrnsteinUhlenbeckProcess::new(
+            0.07, 0.1, 10.0, n_paths, n_steps, 1.0, 0.05, true
+        );
         let paths: Vec<Array1<f64>> = oup.get_paths().unwrap();
         assert_eq!(paths.len(), n_paths);
         assert_eq!(paths[0].len(), n_steps+1);

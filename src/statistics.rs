@@ -1,3 +1,9 @@
+//! # Statistics
+//! 
+//! Contains continuous and discrete probability distributions that are commonly used in finance, along with common statistical functions such as beta
+//! and gamma functions, tests for statistical significance, and a tool for performing a linear regression analysis.
+
+
 // Re-Exports
 pub use self::gamma::{ln_gamma, gamma, lower_incomplete_gamma, upper_incomplete_gamma, digamma};
 pub use self::beta::{ln_beta, beta, incomplete_beta, regularized_incomplete_beta, multivariate_beta};
@@ -35,56 +41,43 @@ pub enum ProbabilityDistributionType {
 }
 
 
-/// # Description
 /// Trait that describes all the available methods for a probability distribution.
 pub trait ProbabilityDistribution {
-    /// # Description
     /// Mean.
     fn mean(&self) -> f64;
 
-    /// # Description
     /// Median.
     fn median(&self) -> Vec<f64>;
 
-    /// # Description
     /// Mode.
     fn mode(&self) -> Vec<f64>;
 
-    /// # Description
     /// Variance.
     fn variance(&self) -> f64;
 
-    /// # Description
     /// Skewness.
     fn skewness(&self) -> f64;
 
-    /// # Description
     /// Excess kurtosis.
     fn excess_kurtosis(&self) -> f64;
 
-    /// # Description
     /// Entropy.
     fn entropy(&self) -> Result<f64, DigiFiError>;
 
-    /// # Description
     /// Probability density function.
     fn pdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, DigiFiError>;
 
-    /// # Description
     /// Cummulative distribution function (CDF).
     fn cdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, DigiFiError>;
 
-    /// # Description
     /// Moment generating function (MGF).
     fn mgf(&self, t: &Array1<usize>) -> Array1<f64>;
 
-    /// # Description
     /// Inverse cumulative distribution function (CDF), else knwon as quantile function.
     fn inverse_cdf(&self, p: &Array1<f64>) -> Result<Array1<f64>, DigiFiError>;
 }
 
 
-/// # Description
 /// Measure of joint variability of two random variables.
 /// 
 /// Cov(X,Y) = E\[(X-E\[X\])(Y-E\[Y\])\]
@@ -123,15 +116,20 @@ pub trait ProbabilityDistribution {
 pub fn covariance(array_1: &Array1<f64>, array_2: &Array1<f64>, ddof: usize) -> Result<f64, DigiFiError> {
     let error_title: String = String::from("Covariance");
     compare_array_len(array_1, array_2, "array_1", "array_2")?;
-    let x: Array1<f64> = array_1 - array_1.mean()
-        .ok_or(DigiFiError::MeanCalculation { title: error_title.clone(), series: "array_1".to_owned(), })?;
-    let y: Array1<f64> = array_2 - array_2.mean()
-        .ok_or(DigiFiError::MeanCalculation { title: error_title.clone(), series: "array_2".to_owned(), })?;
+    let array_1_mean: f64 = match array_1.mean() {
+        Some(mean) => mean,
+        None => return Err(DigiFiError::MeanCalculation { title: error_title, series: "array_1".to_owned(), }),
+    };
+    let array_2_mean: f64 = match array_2.mean() {
+        Some(v) => v,
+        None => return Err(DigiFiError::MeanCalculation { title: error_title, series: "array_2".to_owned(), })
+    };
+    let x: Array1<f64> = array_1 - array_1_mean;
+    let y: Array1<f64> = array_2 - array_2_mean;
     Ok((&x * &y).sum() / (x.len() - ddof) as f64)
 }
 
 
-/// # Description
 /// Calculates the skewness of a given data array. Skewness measures the asymmetry of the probability distribution of a real-valued random variable about its mean.
 /// 
 /// The skewness value can be positive, zero, negative, or undefined.
@@ -166,12 +164,19 @@ pub fn covariance(array_1: &Array1<f64>, array_2: &Array1<f64>, ddof: usize) -> 
 /// ```
 pub fn skewness(array: &Array1<f64>) -> Result<f64, DigiFiError> {
     let error_title: String = String::from("Skewness");
-    let difference: Array1<f64> = array - array.mean()
-        .ok_or(DigiFiError::MeanCalculation { title: error_title.clone(), series: "array".to_owned(), })?;
-    let numerator: f64 = difference.map(| i | i.powi(3)).mean()
-        .ok_or(DigiFiError::MeanCalculation { title: error_title.clone(), series: "difference array".to_owned(), })?;
-    let denominator: f64 = difference.map(| i | i.powi(2)).mean()
-        .ok_or(DigiFiError::MeanCalculation { title: error_title.clone(), series: "difference array".to_owned(), })?.powf(3.0/2.0);
+    let mean: f64 = match array.mean() {
+        Some(v) => v,
+        None => return Err(DigiFiError::MeanCalculation { title: error_title, series: "array".to_owned(), }),
+    };
+    let difference: Array1<f64> = array - mean;
+    let numerator: f64 = match difference.map(| i | i.powi(3)).mean() {
+        Some(v) => v,
+        None => return Err(DigiFiError::MeanCalculation { title: error_title, series: "difference array".to_owned(), }),
+    };
+    let denominator: f64 = match difference.map(| i | i.powi(2)).mean() {
+        Some(v) => v.powf(3.0/2.0),
+        None => return Err(DigiFiError::MeanCalculation { title: error_title, series: "difference array".to_owned(), }),
+    };
     if denominator == 0.0 {
         Ok(f64::NAN)
     } else {
@@ -180,7 +185,6 @@ pub fn skewness(array: &Array1<f64>) -> Result<f64, DigiFiError> {
 }
 
 
-/// # Description
 /// Computes the kurtosis of a given data array. Kurtosis is a measure of the "tailedness" of the probability distribution of a real-valued random variable.
 /// 
 /// Higher kurtosis implies a heavier tail.
@@ -215,12 +219,19 @@ pub fn skewness(array: &Array1<f64>) -> Result<f64, DigiFiError> {
 /// ```
 pub fn kurtosis(array: &Array1<f64>) -> Result<f64, DigiFiError> {
     let error_title: String = String::from("Kurtosis");
-    let difference: Array1<f64> = array - array.mean()
-        .ok_or(DigiFiError::MeanCalculation { title: error_title.clone(), series: "array".to_owned(), })?;
-    let numerator: f64 = difference.map(| i | i.powi(2)).mean()
-        .ok_or(DigiFiError::MeanCalculation { title: error_title.clone(), series: "difference array".to_owned(), })?;
-    let denominator: f64 = difference.map(| i | i.powi(2)).mean()
-        .ok_or(DigiFiError::MeanCalculation { title: error_title.clone(), series: "difference array".to_owned(), })?.powi(2);
+    let mean: f64 = match array.mean() {
+        Some(v) => v,
+        None => return Err(DigiFiError::MeanCalculation { title: error_title, series: "array".to_owned(), }),
+    };
+    let difference: Array1<f64> = array - mean;
+    let numerator: f64 = match difference.map(| i | i.powi(2)).mean() {
+        Some(v) => v,
+        None => return Err(DigiFiError::MeanCalculation { title: error_title, series: "difference array".to_owned(), }),
+    };
+    let denominator: f64 = match difference.map(| i | i.powi(2)).mean() {
+        Some(v) => v.powi(2),
+        None => return Err(DigiFiError::MeanCalculation { title: error_title, series: "difference array".to_owned(), }),
+    };
     if denominator == 0.0 {
         Ok(f64::NAN)
     } else {
@@ -229,7 +240,6 @@ pub fn kurtosis(array: &Array1<f64>) -> Result<f64, DigiFiError> {
 }
 
 
-/// # Description
 /// Pearson correlation coefficient. Pearson correlation is a measure of linear correlation between two arrays.
 ///
 /// # Input
@@ -272,7 +282,6 @@ pub fn pearson_correlation(array_1: &Array1<f64>, array_2: &Array1<f64>, ddof: u
 }
 
 
-/// # Description
 /// nCr:  n choose r
 /// 
 /// # Input
@@ -295,13 +304,15 @@ pub fn pearson_correlation(array_1: &Array1<f64>, array_2: &Array1<f64>, ddof: u
 /// ```
 pub fn n_choose_r(n: u128, r: u128) -> Result<u128, DigiFiError> {
     if n < r {
-        return Err(DigiFiError::ParameterConstraint { title: "n Choose r".to_owned(), constraint: "The value of variable n must be larger or equal to the value of variable r.".to_owned(), });
+        return Err(DigiFiError::ParameterConstraint {
+            title: "n Choose r".to_owned(),
+            constraint: "The value of variable n must be larger or equal to the value of variable r.".to_owned(),
+        });
     }
     Ok(factorial(n) / (factorial(n - r) * factorial(r)))
 }
 
 
-/// # Description
 /// Statistical model that estimates the linear dependency between a scalar response and one or more explanatory variables.
 /// 
 /// # Input
@@ -350,7 +361,6 @@ pub fn linear_regression(x: &Array2<f64>, y: &Array1<f64>) -> Result<Array1<f64>
 }
 
 
-/// # Description
 /// Standard error of linear regression coefficient, which is used for different statistical tests.
 /// 
 /// # Input
@@ -389,7 +399,6 @@ pub fn se_lr_coefficient(y: &Array1<f64>, y_prediction: &Array1<f64>, x: &Array1
 }
 
 
-/// # Description
 /// Coefficient of determination, the ratio of the systematic variance to the total variance.
 /// 
 /// # Input
@@ -415,7 +424,6 @@ pub fn r_squared(real_values: &Array1<f64>, predicted_values: &Array1<f64>) -> R
 }
 
 
-/// # Description
 /// Adjusted R-squared for the upward bias in the R-squared due to estimated values of the parameters used.
 /// 
 /// # Input
@@ -438,7 +446,6 @@ pub fn adjusted_r_squared(real_values: &Array1<f64>, predicted_values: &Array1<f
 }
 
 
-/// # Description
 /// Ratio (quotient) of the variance of a parameter estimate when fitting a full model that includes other parameters to the variance of the parameter estimate
 /// if the model is fit with only the parameter on its own.
 /// 

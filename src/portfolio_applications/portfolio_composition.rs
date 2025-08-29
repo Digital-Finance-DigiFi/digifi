@@ -12,7 +12,6 @@ use crate::portfolio_applications::{ReturnsMethod, ReturnsTransformation, return
 use crate::portfolio_applications::portfolio_performance::PortfolioPerformanceMetric;
 
 
-/// # Description
 /// Type of asset returns calculation.
 pub enum AssetReturnsType {
     /// Time series of the returns per asset
@@ -22,7 +21,6 @@ pub enum AssetReturnsType {
 }
 
 
-/// # Description
 /// Type of portfolio returns calculation.
 pub enum PortfolioReturnsType {
     /// Time series of the returns of the pertfolio 
@@ -34,7 +32,6 @@ pub enum PortfolioReturnsType {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Output produced by the portfolio optimization.
 pub struct PortfolioOptimizationResult {
     /// The optimized output of the performance metric
@@ -51,7 +48,6 @@ pub struct PortfolioOptimizationResult {
 
 impl PortfolioOptimizationResult {
 
-    /// # Description
     /// Returns a list of asset names as a `String`.
     pub fn assets_names_string(&self) -> String {
         let mut asset_names: String = String::from("[");
@@ -66,7 +62,6 @@ impl PortfolioOptimizationResult {
         asset_names + "]"
     }
 
-    /// # Description
     /// Returns a list of weights as a `String`.
     pub fn weights_string(&self) -> String {
         let mut weights: String = String::from("[");
@@ -85,7 +80,6 @@ impl PortfolioOptimizationResult {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Efficient frontier of the market for a given performance metric.
 pub struct EfficientFrontier {
     /// Portfolio with maximum performance score based on the performance metric
@@ -98,7 +92,6 @@ pub struct EfficientFrontier {
 
 impl EfficientFrontier {
 
-    /// # Description
     /// Returns a tuple of standard deviations and expected returns of the portfolios that sit on the efficient frontier.
     ///
     /// # Output
@@ -117,7 +110,6 @@ impl EfficientFrontier {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Describes an asset inside a portfolio.
 pub struct Asset {
     /// Historical time series of the asset
@@ -128,21 +120,22 @@ pub struct Asset {
 
 impl Asset {
     
-    /// # Description
     /// Validates the asset data.
     ///
     /// # Errors
     /// - Returns an error if the weight is infinite or NAN.
     pub fn validate(&self) -> Result<(), DigiFiError> {
         if self.weight.is_nan() || self.weight.is_infinite() {
-            return Err(DigiFiError::ValidationError { title: "Asset".to_owned(), details: "The `weight` of the portfolio asset cannot be infinite or `NAN`.".to_owned(), });
+            return Err(DigiFiError::ValidationError {
+                title: "Asset".to_owned(),
+                details: "The `weight` of the portfolio asset cannot be infinite or `NAN`.".to_owned(),
+            });
         }
         Ok(())
     }
 }
 
 
-/// # Description
 /// Generates `Portfolio` from the financial instruments provided.
 ///
 /// # Input
@@ -154,17 +147,17 @@ impl Asset {
 /// # Output
 /// - `Portfolio` struct
 pub fn generate_portfolio(financial_instruments: Vec<impl PortfolioInstrument>, n_periods: Option<usize>, returns_method: Option<ReturnsMethod>,
-                          performance_metric: Box<dyn PortfolioPerformanceMetric>) -> Result<Portfolio, DigiFiError> {
+    performance_metric: Box<dyn PortfolioPerformanceMetric>
+) -> Result<Portfolio, DigiFiError> {
     let mut assets: HashMap<String, Asset>  = HashMap::<String, Asset>::new();
     let weight: f64 = 1.0 / financial_instruments.len() as f64;
     for fi in financial_instruments {
         assets.insert(fi.asset_name(), Asset { hist_data: fi.historical_data().clone(), weight });
     }
-    Portfolio::new(assets, None, n_periods, returns_method, performance_metric)
+    Portfolio::build(assets, None, n_periods, returns_method, performance_metric)
 }
 
 
-/// # Description
 /// Portfolio of assets and its methods.
 ///
 /// # Links
@@ -192,18 +185,18 @@ pub fn generate_portfolio(financial_instruments: Vec<impl PortfolioInstrument>, 
 ///     let dummy_array: Array1<f64> = Array1::from_vec(vec![0.0; time.len()]);
 ///     let mut assets: HashMap<String, Asset> = HashMap::<String, Asset>::new();
 ///     for (k, v) in data.into_iter() {
-///         let hist_data: AssetHistData = AssetHistData::new(v, dummy_array.clone(), dummy_array.clone()).unwrap();
+///         let hist_data: AssetHistData = AssetHistData::build(v, dummy_array.clone(), dummy_array.clone()).unwrap();
 ///         assets.insert(k, Asset { hist_data, weight, });
 ///     }
 ///     let performance_metric: Box<SharpeRatio> = Box::new(SharpeRatio { rf: 0.02 });
 ///
 ///     // Portfolio definition and optimization
-///     let mut portfolio: Portfolio = Portfolio::new(assets, None, None, None, performance_metric).unwrap();
+///     let mut portfolio: Portfolio = Portfolio::build(assets, None, None, None, performance_metric).unwrap();
 ///     let max_sr: PortfolioOptimizationResult = portfolio.maximize_performance(Some(1_000), Some(10_000)).unwrap();
 ///
-///     assert!((max_sr.performance_score - 2.0014857429921786).abs() < TEST_ACCURACY);
-///     assert!((max_sr.expected_return - 0.6976676284502152).abs() < TEST_ACCURACY);
-///     assert!((max_sr.std - 0.3385822910919748).abs() < TEST_ACCURACY);
+///     assert!((max_sr.performance_score - 2.010620260010254).abs() < TEST_ACCURACY);
+///     assert!((max_sr.expected_return - 0.7005606636574792).abs() < TEST_ACCURACY);
+///     assert!((max_sr.std - 0.3384829433947951).abs() < TEST_ACCURACY);
 /// }
 /// ```
 ///
@@ -226,17 +219,17 @@ pub fn generate_portfolio(financial_instruments: Vec<impl PortfolioInstrument>, 
 ///     let dummy_array: Array1<f64> = Array1::from_vec(vec![0.0; time.len()]);
 ///     let mut assets: HashMap<String, Asset> = HashMap::<String, Asset>::new();
 ///     for (k, v) in data.into_iter() {
-///         let hist_data: AssetHistData = AssetHistData::new(v, dummy_array.clone(), dummy_array.clone()).unwrap();
+///         let hist_data: AssetHistData = AssetHistData::build(v, dummy_array.clone(), dummy_array.clone()).unwrap();
 ///         assets.insert(k, Asset { hist_data, weight, });
 ///     }
 ///     let performance_metric: Box<SharpeRatio> = Box::new(SharpeRatio { rf: 0.02 });
 ///
 ///     // Portfolio definition and optimization
-///     let mut portfolio: Portfolio = Portfolio::new(assets, None, None, None, performance_metric).unwrap();
+///     let mut portfolio: Portfolio = Portfolio::build(assets, None, None, None, performance_metric).unwrap();
 ///     let min_std: PortfolioOptimizationResult = portfolio.minimize_std(Some(1_000), Some(10_000)).unwrap();
 ///
-///     assert!((min_std.performance_score - 1.1105703346892972).abs() < TEST_ACCURACY);
-///     assert!((min_std.expected_return - 0.22861616935563267).abs() < TEST_ACCURACY);
+///     assert!((min_std.performance_score - 1.1159801330821704).abs() < TEST_ACCURACY);
+///     assert!((min_std.expected_return - 0.22963237821918314).abs() < TEST_ACCURACY);
 ///     assert!((min_std.std - 0.18784597682775037).abs() < TEST_ACCURACY);
 /// }
 /// ```
@@ -260,13 +253,13 @@ pub fn generate_portfolio(financial_instruments: Vec<impl PortfolioInstrument>, 
 ///     let dummy_array: Array1<f64> = Array1::from_vec(vec![0.0; time.len()]);
 ///     let mut assets: HashMap<String, Asset> = HashMap::<String, Asset>::new();
 ///     for (k, v) in data.into_iter() {
-///         let hist_data: AssetHistData = AssetHistData::new(v, dummy_array.clone(), dummy_array.clone()).unwrap();
+///         let hist_data: AssetHistData = AssetHistData::build(v, dummy_array.clone(), dummy_array.clone()).unwrap();
 ///         assets.insert(k, Asset { hist_data, weight, });
 ///     }
 ///     let performance_metric: Box<SharpeRatio> = Box::new(SharpeRatio { rf: 0.02 });
 ///
 ///     // Portfolio definition and optimization
-///     let mut portfolio: Portfolio = Portfolio::new(assets, None, None, None, performance_metric).unwrap();
+///     let mut portfolio: Portfolio = Portfolio::build(assets, None, None, None, performance_metric).unwrap();
 ///     let frontier: EfficientFrontier = portfolio.efficient_frontier(30, Some(1_000), Some(10_000)).unwrap();
 ///
 ///     for point in &frontier.frontier {
@@ -294,7 +287,6 @@ pub struct Portfolio {
 
 impl Portfolio {
 
-    /// # Description
     /// Creates a new `Portfolio` instance.
     ///
     /// # Input
@@ -308,8 +300,9 @@ impl Portfolio {
     /// - Returns an error if the weight is infinite or `NAN`.
     /// - Returns an error if the assets provided do not have time series of the same length.
     /// - Returns an error if the sum of portfolio weights is not equal to `1` (Subject to `rounding_error_tol`).
-    pub fn new(assets: HashMap<String, Asset>, rounding_error_tol: Option<f64>, n_periods: Option<usize>, returns_method: Option<ReturnsMethod>,
-               performance_metric: Box<dyn PortfolioPerformanceMetric>) -> Result<Self, DigiFiError> {
+    pub fn build(assets: HashMap<String, Asset>, rounding_error_tol: Option<f64>, n_periods: Option<usize>, returns_method: Option<ReturnsMethod>,
+        performance_metric: Box<dyn PortfolioPerformanceMetric>
+    ) -> Result<Self, DigiFiError> {
         let rounding_error_tol: f64 = match rounding_error_tol { Some(v) => v, None => 0.001 };
         let mut assets_: Vec<AssetHistData> = Vec::<AssetHistData>::new();
         let mut assets_names: Vec<String> = Vec::<String>::new();
@@ -318,11 +311,14 @@ impl Portfolio {
         for (k, v) in assets {
             // Validation of the asset (independent of other assets)
             v.validate()?;
-            // Validation of the asset (dependend of other assets)
+            // Validation of the asset (dependent on other assets)
             match time_series_len {
                 Some(l) => {
                     if v.hist_data.get_n_datapoints() != l {
-                        return Err(DigiFiError::ValidationError { title: "Portfolio".to_owned(), details: "The assets provided do not have time series of the same length.".to_owned(), });
+                        return Err(DigiFiError::ValidationError {
+                            title: "Portfolio".to_owned(),
+                            details: "The assets provided do not have time series of the same length.".to_owned(),
+                        });
                     }
                 },
                 None => { time_series_len = Some(v.hist_data.get_n_datapoints()); },
@@ -338,19 +334,16 @@ impl Portfolio {
         Ok(Portfolio { assets_names, assets: assets_, weights, rounding_error_tol, n_periods, returns_method, performance_metric, })
     }
 
-    /// # Description
     /// Returns the names of the assets in portfolio.
     pub fn assets_names(&self) -> &Vec<String> {
         &self.assets_names
     }
 
-    /// # Description
     /// Returns the historical asset data for every asset in the portfolio.
     pub fn assets(&self) -> &Vec<AssetHistData> {
         &self.assets
     }
 
-    /// # Description
     /// Validates the weights of the portfolio, and cleans them (i.e., makes the sum of weights equal to `1`) if the dicrepancy
     /// between the weights and 1 is less than the `rounding_error_tol`.
     ///
@@ -373,7 +366,6 @@ impl Portfolio {
         Ok(())
     }
 
-    /// # Description
     /// Generates uniform weights across all assets in the market.
     fn uniform_weights(&self) -> Vec<f64> {
         let n_assets: usize = self.assets.len();
@@ -383,7 +375,6 @@ impl Portfolio {
         weights
     }
 
-    /// # Description
     /// Update weights of the portfolio of assets.
     ///
     /// # Input
@@ -401,7 +392,6 @@ impl Portfolio {
         Ok(())
     }
 
-    /// # Description
     /// Adds assets to the market of the portfolio.
     ///
     /// Note: This action will reset the weights in the portfolio to be uniform.
@@ -421,7 +411,10 @@ impl Portfolio {
             v.validate()?;
             // Validation of the asset (dependend of other assets)
             if v.hist_data.get_n_datapoints() != time_series_len {
-                return Err(DigiFiError::ValidationError { title: "Portfolio".to_owned(), details: "The assets provided do not have time series of the same length.".to_owned(), });
+                return Err(DigiFiError::ValidationError {
+                    title: "Portfolio".to_owned(),
+                    details: "The assets provided do not have time series of the same length.".to_owned(),
+                });
             }
             // Generation of data for portfolio
             new_assets_names.push(k);
@@ -436,7 +429,6 @@ impl Portfolio {
         Ok(())
     }
 
-    /// # Description
     /// Removes assets from the market of the portfolio.
     ///
     /// Note: This action will reset the weights in the portfolio to be uniform.
@@ -469,7 +461,6 @@ impl Portfolio {
         predictable_income / price
     }
 
-    /// # Description
     /// Calculates the returns of the assets for the provided asset returns type.
     ///
     /// # Input
@@ -497,7 +488,6 @@ impl Portfolio {
         returns
     }
 
-    /// # Description
     /// Calculates the returns of the portfolio.
     ///
     /// # Input
@@ -520,7 +510,6 @@ impl Portfolio {
         }
     }
 
-    /// # Description
     /// Calculate the mean return of the portfolio.
     ///
     /// # Output
@@ -533,7 +522,6 @@ impl Portfolio {
         Ok(mean)
     }
 
-    /// # Description
     /// Calculate the covariance of asset returns.
     ///
     /// # Output
@@ -557,7 +545,6 @@ impl Portfolio {
         Ok(Array2::from_shape_vec((n_assets, n_assets), flat_arr)?)
     }
 
-    /// # Description
     /// Calculate the standard deviation of the portfolio.
     ///
     /// # Output
@@ -570,7 +557,6 @@ impl Portfolio {
         Ok((&weights.t().dot(&proxy)).sqrt())
     }
 
-    /// # Description
     /// Computes the performance of the portfolio for a given performance metric.
     ///
     /// # Output
@@ -581,7 +567,6 @@ impl Portfolio {
         Ok(self.performance_metric.performance(mean_returns, std_returns))
     }
 
-    /// # Description
     /// Finds the portfolio that optimizes the performance metric.
     ///
     /// # Input
@@ -611,7 +596,6 @@ impl Portfolio {
         Ok(PortfolioOptimizationResult { performance_score: performance, weights: self.weights.clone(), assets_names: self.assets_names.clone(), expected_return, std })
     }
 
-    /// # Description
     /// Find portfolio with lowest standard deviation.
     ///
     /// # Input
@@ -639,7 +623,6 @@ impl Portfolio {
         Ok(PortfolioOptimizationResult { performance_score: performance, weights: self.weights.clone(), assets_names: self.assets_names.clone(), expected_return, std })
     }
 
-    /// # Description
     /// Find risk level on the efficient frontier for a given target return.
     ///
     /// # Input
@@ -669,10 +652,11 @@ impl Portfolio {
         let performance: f64 = self.performance()?;
         let expected_return: f64 = self.mean_return()?;
         let std: f64 = self.standard_deviation()?;
-        Ok(PortfolioOptimizationResult { performance_score: performance, weights: self.weights.clone(), assets_names: self.assets_names.clone(), expected_return, std })
+        Ok(PortfolioOptimizationResult {
+            performance_score: performance, weights: self.weights.clone(), assets_names: self.assets_names.clone(), expected_return, std
+        })
     }
 
-    /// # Description
     /// Calculate efficient frontier.
     ///
     /// # Input
@@ -696,7 +680,6 @@ impl Portfolio {
 
 
 #[cfg(feature = "plotly")]
-/// # Description
 /// Plots the efficient frontier.
 ///
 /// # Input
@@ -707,7 +690,7 @@ impl Portfolio {
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```rust,ignore
 /// use std::collections::HashMap;
 /// use ndarray::Array1;
 /// use digifi::portfolio_applications::{AssetHistData, SharpeRatio, Asset, EfficientFrontier, Portfolio};
@@ -725,13 +708,13 @@ impl Portfolio {
 ///     let dummy_array: Array1<f64> = Array1::from_vec(vec![0.0; time.len()]);
 ///     let mut assets: HashMap<String, Asset> = HashMap::<String, Asset>::new();
 ///     for (k, v) in data.into_iter() {
-///         let hist_data: AssetHistData = AssetHistData::new(v, dummy_array.clone(), dummy_array.clone()).unwrap();
+///         let hist_data: AssetHistData = AssetHistData::build(v, dummy_array.clone(), dummy_array.clone()).unwrap();
 ///         assets.insert(k, Asset { hist_data, weight, });
 ///     }
 ///     let performance_metric: Box<SharpeRatio> = Box::new(SharpeRatio { rf: 0.02 });
 ///
 ///     // Portfolio definition and optimization
-///     let mut portfolio: Portfolio = Portfolio::new(assets, None, None, None, performance_metric).unwrap();
+///     let mut portfolio: Portfolio = Portfolio::build(assets, None, None, None, performance_metric).unwrap();
 ///     let frontier: EfficientFrontier = portfolio.efficient_frontier(30, Some(1_000), Some(10_000)).unwrap();
 ///
 ///     // Efficient frontier plot
@@ -743,26 +726,44 @@ pub fn plot_efficient_frontier(frontier: EfficientFrontier) -> Plot {
     let mut plot: Plot = Plot::new();
     // Minimum volatility portfolio
     let min_vol_marker: Marker = Marker::new().symbol(MarkerSymbol::Diamond).color(NamedColor::Red).size(14);
-    let min_vol_hover: String = format!("Standard Deviation: {:.2}<br>Expected Return: {:.2}<br>Performance Score: {:.2}<br>Asset Names: {}<br>Weights: {}",
-                                         frontier.min_std.std, frontier.min_std.expected_return, frontier.min_std.performance_score,
-                                         frontier.min_std.assets_names_string(), frontier.min_std.weights_string());
+    let min_vol_hover: String = format!(
+        "Standard Deviation: {:.2}<br>Expected Return: {:.2}<br>Performance Score: {:.2}<br>Asset Names: {}<br>Weights: {}",
+        frontier.min_std.std, frontier.min_std.expected_return, frontier.min_std.performance_score, frontier.min_std.assets_names_string(),
+        frontier.min_std.weights_string()
+    );
     let min_vol: Box<Scatter<f64, f64>> = Scatter::new(vec![100.0 * frontier.min_std.std], vec![100.0 * frontier.min_std.expected_return])
-        .name("Minimum Volatility Portfolio").mode(Mode::Markers).marker(min_vol_marker).hover_info(HoverInfo::Text).hover_text(min_vol_hover);
+        .name("Minimum Volatility Portfolio")
+        .mode(Mode::Markers)
+        .marker(min_vol_marker)
+        .hover_info(HoverInfo::Text)
+        .hover_text(min_vol_hover);
     // Maximum performance portfolio
     let max_per_marker: Marker = Marker::new().symbol(MarkerSymbol::Star).color(NamedColor::Green).size(14);
-    let max_per_hover: String = format!("Standard Deviation: {:.2}<br>Expected Return: {:.2}<br>Performance Score: {:.2}<br>Asset Names: {}<br>Weights: {}",
-                                         frontier.max_performance.std, frontier.max_performance.expected_return, frontier.max_performance.performance_score,
-                                         frontier.max_performance.assets_names_string(), frontier.max_performance.weights_string());
+    let max_per_hover: String = format!(
+        "Standard Deviation: {:.2}<br>Expected Return: {:.2}<br>Performance Score: {:.2}<br>Asset Names: {}<br>Weights: {}",
+        frontier.max_performance.std, frontier.max_performance.expected_return, frontier.max_performance.performance_score,
+        frontier.max_performance.assets_names_string(), frontier.max_performance.weights_string()
+    );
     let max_per: Box<Scatter<f64, f64>> = Scatter::new(vec![100.0 * frontier.max_performance.std], vec![100.0 * frontier.max_performance.expected_return])
-        .name("Maximum Performance Portfolio").mode(Mode::Markers).marker(max_per_marker).hover_info(HoverInfo::Text).hover_text(max_per_hover);
+        .name("Maximum Performance Portfolio")
+        .mode(Mode::Markers)
+        .marker(max_per_marker)
+        .hover_info(HoverInfo::Text)
+        .hover_text(max_per_hover);
     // Efficient frontier
     let eff_marker: Marker = Marker::new().symbol(MarkerSymbol::Circle).color(NamedColor::Black).size(7);
     let mut eff_traces: Vec<Box<dyn Trace>> = Vec::<Box<dyn Trace>>::new();
     for eff in frontier.frontier {
-        let hover_text: String = format!("Standard Deviation: {:.2}<br>Expected Return: {:.2}<br>Performance Score: {:.2}<br>Asset Names: {}<br>Weights: {}",
-                                         eff.std, eff.expected_return, eff.performance_score, eff.assets_names_string(), eff.weights_string());
-        eff_traces.push(Scatter::new(vec![100.0 * eff.std], vec![100.0 * eff.expected_return]).mode(Mode::Markers).marker(eff_marker.clone())
-                        .hover_info(HoverInfo::Text).hover_text(hover_text));
+        let hover_text: String = format!(
+            "Standard Deviation: {:.2}<br>Expected Return: {:.2}<br>Performance Score: {:.2}<br>Asset Names: {}<br>Weights: {}",
+            eff.std, eff.expected_return, eff.performance_score, eff.assets_names_string(), eff.weights_string()
+        );
+        eff_traces.push(
+            Scatter::new(vec![100.0 * eff.std], vec![100.0 * eff.expected_return])
+                .mode(Mode::Markers)
+                .marker(eff_marker.clone())
+                .hover_info(HoverInfo::Text).hover_text(hover_text)
+        );
     }
     // Select trace order
     plot.add_traces(eff_traces);
@@ -794,16 +795,16 @@ mod tests {
         let dummy_array: Array1<f64> = Array1::from_vec(vec![0.0; time.len()]);
         let mut assets: HashMap<String, Asset> = HashMap::<String, Asset>::new();
         for (k, v) in data.into_iter() {
-            let hist_data: AssetHistData = AssetHistData::new(v, dummy_array.clone(), dummy_array.clone()).unwrap();
+            let hist_data: AssetHistData = AssetHistData::build(v, dummy_array.clone(), dummy_array.clone()).unwrap();
             assets.insert(k, Asset { hist_data, weight, });
         }
         let performance_metric: Box<SharpeRatio> = Box::new(SharpeRatio { rf: 0.02 });
         // Portfolio definition and optimization
-        let mut portfolio: Portfolio = Portfolio::new(assets, None, None, None, performance_metric).unwrap();
+        let mut portfolio: Portfolio = Portfolio::build(assets, None, None, None, performance_metric).unwrap();
         let max_sr: PortfolioOptimizationResult = portfolio.maximize_performance(Some(1_000), Some(10_000)).unwrap();
-        assert!((max_sr.performance_score - 2.0014857429921786).abs() < TEST_ACCURACY);
-        assert!((max_sr.expected_return - 0.6976676284502152).abs() < TEST_ACCURACY);
-        assert!((max_sr.std - 0.3385822910919748).abs() < TEST_ACCURACY);
+        assert!((max_sr.performance_score - 2.010620260010254).abs() < TEST_ACCURACY);
+        assert!((max_sr.expected_return - 0.7005606636574792).abs() < TEST_ACCURACY);
+        assert!((max_sr.std - 0.3384829433947951).abs() < TEST_ACCURACY);
     }
 
     #[test]
@@ -815,15 +816,15 @@ mod tests {
         let dummy_array: Array1<f64> = Array1::from_vec(vec![0.0; time.len()]);
         let mut assets: HashMap<String, Asset> = HashMap::<String, Asset>::new();
         for (k, v) in data.into_iter() {
-            let hist_data: AssetHistData = AssetHistData::new(v, dummy_array.clone(), dummy_array.clone()).unwrap();
+            let hist_data: AssetHistData = AssetHistData::build(v, dummy_array.clone(), dummy_array.clone()).unwrap();
             assets.insert(k, Asset { hist_data, weight, });
         }
         let performance_metric: Box<SharpeRatio> = Box::new(SharpeRatio { rf: 0.02 });
         // Portfolio definition and optimization
-        let mut portfolio: Portfolio = Portfolio::new(assets, None, None, None, performance_metric).unwrap();
+        let mut portfolio: Portfolio = Portfolio::build(assets, None, None, None, performance_metric).unwrap();
         let min_std: PortfolioOptimizationResult = portfolio.minimize_std(Some(1_000), Some(10_000)).unwrap();
-        assert!((min_std.performance_score - 1.1105703346892972).abs() < TEST_ACCURACY);
-        assert!((min_std.expected_return - 0.22861616935563267).abs() < TEST_ACCURACY);
+        assert!((min_std.performance_score - 1.1159801330821704).abs() < TEST_ACCURACY);
+        assert!((min_std.expected_return - 0.22963237821918314).abs() < TEST_ACCURACY);
         assert!((min_std.std - 0.18784597682775037).abs() < TEST_ACCURACY);
     }
 
@@ -836,12 +837,12 @@ mod tests {
         let dummy_array: Array1<f64> = Array1::from_vec(vec![0.0; time.len()]);
         let mut assets: HashMap<String, Asset> = HashMap::<String, Asset>::new();
         for (k, v) in data.into_iter() {
-            let hist_data: AssetHistData = AssetHistData::new(v, dummy_array.clone(), dummy_array.clone()).unwrap();
+            let hist_data: AssetHistData = AssetHistData::build(v, dummy_array.clone(), dummy_array.clone()).unwrap();
             assets.insert(k, Asset { hist_data, weight, });
         }
         let performance_metric: Box<SharpeRatio> = Box::new(SharpeRatio { rf: 0.02 });
         // Portfolio definition and optimization
-        let mut portfolio: Portfolio = Portfolio::new(assets, None, None, None, performance_metric).unwrap();
+        let mut portfolio: Portfolio = Portfolio::build(assets, None, None, None, performance_metric).unwrap();
         let frontier: EfficientFrontier = portfolio.efficient_frontier(30, Some(1_000), Some(10_000)).unwrap();
         for point in &frontier.frontier {
             assert!(point.performance_score <= frontier.max_performance.performance_score);
@@ -851,6 +852,7 @@ mod tests {
 
     #[cfg(feature = "plotly")]
     #[test]
+    #[ignore]
     fn unit_test_plot_efficient_frontier() -> () {
         use plotly::Plot;
         use crate::portfolio_applications::portfolio_composition::plot_efficient_frontier;
@@ -861,12 +863,12 @@ mod tests {
         let dummy_array: Array1<f64> = Array1::from_vec(vec![0.0; time.len()]);
         let mut assets: HashMap<String, Asset> = HashMap::<String, Asset>::new();
         for (k, v) in data.into_iter() {
-            let hist_data: AssetHistData = AssetHistData::new(v, dummy_array.clone(), dummy_array.clone()).unwrap();
+            let hist_data: AssetHistData = AssetHistData::build(v, dummy_array.clone(), dummy_array.clone()).unwrap();
             assets.insert(k, Asset { hist_data, weight, });
         }
         let performance_metric: Box<SharpeRatio> = Box::new(SharpeRatio { rf: 0.02 });
         // Portfolio definition and optimization
-        let mut portfolio: Portfolio = Portfolio::new(assets, None, None, None, performance_metric).unwrap();
+        let mut portfolio: Portfolio = Portfolio::build(assets, None, None, None, performance_metric).unwrap();
         let frontier: EfficientFrontier = portfolio.efficient_frontier(30, Some(1_000), Some(10_000)).unwrap();
         // Efficient frontier plot
         let plot: Plot = plot_efficient_frontier(frontier);

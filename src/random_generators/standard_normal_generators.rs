@@ -7,7 +7,6 @@ use crate::statistics::ProbabilityDistribution;
 
 
 #[derive(Debug)]
-/// # Description
 /// Pseudo-random number generator for standard normal distribution.
 /// 
 /// It samples the Laplace distribution to generate the standard normal distribution (i.e., exponential tilting).
@@ -42,7 +41,6 @@ pub struct StandardNormalAcceptReject {
 }
 
 impl StandardNormalAcceptReject {
-    /// # Description
     /// Creates a new `StandardNormalAcceptReject` instance.
     /// 
     /// # Input
@@ -53,16 +51,18 @@ impl StandardNormalAcceptReject {
     /// 
     /// # Errors
     /// - Returns an error if the argument `lap_b` is not positive.
-    pub fn new(max_sample_size: usize, lap_b: f64, seed_1: u32, seed_2: u32) -> Result<Self, DigiFiError> {
+    pub fn build(max_sample_size: usize, lap_b: f64, seed_1: u32, seed_2: u32) -> Result<Self, DigiFiError> {
         if lap_b <= 0.0 {
-            return Err(DigiFiError::ParameterConstraint { title: "Accept-Reject Algorithm".to_owned(), constraint: "The argument `lap_b` must be positive.".to_owned(), });
+            return Err(DigiFiError::ParameterConstraint {
+                title: "Accept-Reject Algorithm".to_owned(),
+                constraint: "The argument `lap_b` must be positive.".to_owned(),
+            });
         }
         Ok(StandardNormalAcceptReject { max_sample_size, lap_b, seed_1, seed_2 })
     }
 }
 
 impl RandomGenerator<StandardNormalAcceptReject> for StandardNormalAcceptReject {
-    /// # Description
     /// Creates a new `StandardNormalAcceptReject` instance with random parameters.
     /// 
     /// # Input
@@ -71,7 +71,6 @@ impl RandomGenerator<StandardNormalAcceptReject> for StandardNormalAcceptReject 
         Ok(StandardNormalAcceptReject { max_sample_size: sample_size, lap_b: 1.0, seed_1: generate_seed()?, seed_2: generate_seed()? })
     }
 
-    /// # Description
     /// Array of pseudo-random generated numbers based on the Accept-Reject Method and the probability of the Laplace Distribution lap_p.
     /// 
     /// # Output
@@ -81,18 +80,17 @@ impl RandomGenerator<StandardNormalAcceptReject> for StandardNormalAcceptReject 
         let m: f64 = (2.0 * std::f64::consts::E / std::f64::consts::PI).sqrt();
         let u_2: Array1<f64> = FibonacciGenerator::new(self.seed_2, self.max_sample_size, 5, 17, 714_025, 1_366, 150_889).generate()?;
         // Laplace distribution sampling.
-        let laplace_dist: LaplaceDistribution = LaplaceDistribution::new(0.0, self.lap_b)?;
+        let laplace_dist: LaplaceDistribution = LaplaceDistribution::build(0.0, self.lap_b)?;
         let l: Array1<f64> = laplace_dist.inverse_cdf(&u_1)?
             .map(|i| { if i.is_infinite() && i.is_sign_positive() { 1.0 } else if i.is_infinite() && i.is_sign_negative() { 0.0 } else { *i } });
         // Accept-Reject algorithm.
-        let standard_normal_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0)?;
+        let standard_normal_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
         accept_reject(&standard_normal_dist, &laplace_dist, &l, m, &u_2)
     }
 }
 
 
 #[derive(Debug)]
-/// # Description
 /// Pseudo-random number generator for standard normal distribution.
 /// 
 /// It returns the array of values from sampling an inverse CDF.
@@ -121,7 +119,6 @@ pub struct StandardNormalInverseTransform {
 }
 
 impl StandardNormalInverseTransform {
-    /// # Description
     /// Creates a new `StandardNormalInverseTransform` instance.
     /// 
     /// # Input
@@ -132,7 +129,6 @@ impl StandardNormalInverseTransform {
 }
 
 impl RandomGenerator<StandardNormalInverseTransform> for StandardNormalInverseTransform {
-    /// # Description
     /// Creates a new `StandardNormalInverseTransform` instance.
     /// 
     /// # Input
@@ -141,20 +137,18 @@ impl RandomGenerator<StandardNormalInverseTransform> for StandardNormalInverseTr
         Ok(StandardNormalInverseTransform { sample_size })
     }
 
-    /// # Description
     /// Array of pseudo-random generated numbers based on the Inverse Transform Method.
     /// 
     /// # Output
     /// - An array of pseudo-random numbers following a standard normal distribution
     fn generate(&self) -> Result<Array1<f64>, DigiFiError> {
-        let standard_normal_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0)?;
+        let standard_normal_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
         inverse_transform(&standard_normal_dist, self.sample_size)
     }
 }
 
 
 #[derive(Debug)]
-/// # Description
 /// Pseudo-random number generator for standard normal distribution.
 /// 
 /// It returns two independent pseudo-random arrays.
@@ -192,7 +186,6 @@ pub struct StandardNormalBoxMuller {
 }
 
 impl StandardNormalBoxMuller {
-    /// # Description
     /// Creates a new `StandardNormalBoxMuller` instance.
     /// 
     /// # Input
@@ -205,7 +198,6 @@ impl StandardNormalBoxMuller {
 }
 
 impl RandomGenerator<StandardNormalBoxMuller> for StandardNormalBoxMuller {
-    /// # Description
     /// Creates a new `StandardNormalBoxMuller` instance with random parameters.
     /// 
     /// # Input
@@ -214,7 +206,6 @@ impl RandomGenerator<StandardNormalBoxMuller> for StandardNormalBoxMuller {
         Ok(StandardNormalBoxMuller { sample_size, seed_1: generate_seed()?, seed_2: generate_seed()? })
     }
 
-    /// # Description
     /// One of two independent arrays of pseudo-random generated numbers produced using the Box-Muller Algorithm.
     /// 
     /// # Output
@@ -229,7 +220,6 @@ impl RandomGenerator<StandardNormalBoxMuller> for StandardNormalBoxMuller {
 
 
 #[derive(Debug)]
-/// # Description
 /// Pseudo-random number generator for standard normal distribution.
 /// 
 /// It returns two independent pseudo-random arrays.
@@ -266,7 +256,6 @@ pub struct StandardNormalMarsaglia {
 }
 
 impl StandardNormalMarsaglia {
-    /// # Description
     /// Creates a new `StandardNormalMarsaglia` instance.
     /// 
     /// # Input
@@ -278,7 +267,6 @@ impl StandardNormalMarsaglia {
 }
 
 impl RandomGenerator<StandardNormalMarsaglia> for StandardNormalMarsaglia {
-    /// # Description
     /// Creates a new `StandardNormalMarsaglia` instance with random parameters.
     /// 
     /// # Input
@@ -287,7 +275,6 @@ impl RandomGenerator<StandardNormalMarsaglia> for StandardNormalMarsaglia {
         Ok(StandardNormalMarsaglia { sample_size, max_iterations: 1_000 })
     }
 
-    /// # Description
     /// Two independent arrays of pseudo-random generated numbers based on the Marsaglie Method.
     /// 
     /// # Output
@@ -298,7 +285,10 @@ impl RandomGenerator<StandardNormalMarsaglia> for StandardNormalMarsaglia {
         //  Marsaglia method.
         for i in 0..self.sample_size {
             (z_1[i], z_2[i]) = marsaglia(self.max_iterations)?
-                .ok_or(DigiFiError::Other { title: "Marsaglia Algorithm".to_owned(), details: "Marsaglia algorithm failed to generate pseudo-random numbers.".to_owned(), })?;
+                .ok_or(DigiFiError::Other {
+                    title: "Marsaglia Algorithm".to_owned(),
+                    details: "Marsaglia algorithm failed to generate pseudo-random numbers.".to_owned(),
+                })?;
         }
         Ok(z_1)
     }
@@ -306,7 +296,6 @@ impl RandomGenerator<StandardNormalMarsaglia> for StandardNormalMarsaglia {
 
 
 #[derive(Debug)]
-/// # Description
 /// Pseudo-random number generator for standard normal distribution.
 /// 
 /// # Links
@@ -339,7 +328,6 @@ pub struct StandardNormalZiggurat {
 }
 
 impl StandardNormalZiggurat {
-    /// # Description
     /// Creates a new `StandardNormalZiggurat` instance.
     /// 
     /// # Input
@@ -352,7 +340,6 @@ impl StandardNormalZiggurat {
 }
 
 impl RandomGenerator<StandardNormalZiggurat> for StandardNormalZiggurat {
-    /// # Description
     /// Creates a new `StandardNormalZiggurat` instance with random parameters.
     /// 
     /// # Input
@@ -361,7 +348,6 @@ impl RandomGenerator<StandardNormalZiggurat> for StandardNormalZiggurat {
         Ok(StandardNormalZiggurat { sample_size, rectangle_size: 1.0/256.0, max_iterations: 10_000, dx: 0.001, limit: 6.0 })
     }
 
-    /// # Description
     /// Array of pseudo-random generated numbers based on the Ziggurat Algorithm.
     ///
     /// Note: This version of Ziggurat algorithm does not implement a fallback algorithm for the tail.
@@ -372,7 +358,7 @@ impl RandomGenerator<StandardNormalZiggurat> for StandardNormalZiggurat {
         let mut x_guess: Vec<f64> = Vec::<f64>::new();
         let mut current_x: f64 = 0.0;
         let mut rectangle_length: f64 = 0.0;
-        let standard_normal_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0)?;
+        let standard_normal_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
         // Initial guess.
         while current_x < self.limit {
             rectangle_length = rectangle_length + self.dx;

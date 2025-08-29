@@ -23,7 +23,6 @@ fn transpose(v: Vec<Array1<f64>>) -> Vec<Array1<f64>> {
 }
 
 
-/// # Description
 /// Defines an SDE in the generalized form.
 ///
 /// SDE = Drift + Diffusion + Jump
@@ -57,7 +56,7 @@ fn transpose(v: Vec<Array1<f64>>) -> Vec<Array1<f64>> {
 /// let jump: Jump = Jump::NoJumps;
 ///
 /// // SDE definition
-/// let sde: SDE = SDE::new(t_f, s_0, n_steps, n_paths, drift_component, diffusion_component, noise, jump).unwrap();
+/// let sde: SDE = SDE::build(t_f, s_0, n_steps, n_paths, drift_component, diffusion_component, noise, jump).unwrap();
 /// let paths: Vec<Array1<f64>> = sde.get_paths().unwrap();
 ///
 /// // Tests
@@ -93,7 +92,7 @@ fn transpose(v: Vec<Array1<f64>>) -> Vec<Array1<f64>> {
 /// let jump: Jump = Jump::NoJumps;
 ///
 /// // SDE definition
-/// let sde: SDE = SDE::new(t_f, s_0, n_steps, n_paths, drift_component, diffusion_component, noise, jump).unwrap();
+/// let sde: SDE = SDE::build(t_f, s_0, n_steps, n_paths, drift_component, diffusion_component, noise, jump).unwrap();
 /// let paths: Vec<Array1<f64>> = sde.get_paths().unwrap();
 ///
 /// // Tests
@@ -132,7 +131,6 @@ pub struct SDE {
 
 impl SDE {
 
-    /// # Description
     /// Creates a new `SDE` instance.
     ///
     /// # Input
@@ -144,7 +142,9 @@ impl SDE {
     /// - `diffusion_component`: Type of function \\sigma(S_{t}, t) to be used when constructing the diffusion
     /// - `noise`: Type of noise to be used when constructing the diffusion
     /// - `jump`: Type of function dJ to be used when constructing the jump
-    pub fn new(t_f: f64, s_0: f64, n_steps: usize, n_paths: usize, drift_component: SDEComponent, diffusion_component: SDEComponent, noise: Noise, jump: Jump) -> Result<Self, DigiFiError> {
+    pub fn build(
+        t_f: f64, s_0: f64, n_steps: usize, n_paths: usize, drift_component: SDEComponent, diffusion_component: SDEComponent, noise: Noise, jump: Jump
+    ) -> Result<Self, DigiFiError> {
         // Input validation
         drift_component.validate(n_paths)?;
         diffusion_component.validate(n_paths)?;
@@ -170,7 +170,6 @@ impl StochasticProcess for SDE {
         self.t_f
     }
 
-    /// # Description
     /// Generate paths for the constructed SDE.
     ///
     /// # Output
@@ -179,8 +178,8 @@ impl StochasticProcess for SDE {
         let mut time_steps: Vec<Array1<f64>> = vec![Array1::from_vec(vec![self.s_0; self.n_paths])];
         for i in 1..self.t.len() {
             let mut time_slice: Array1<f64> = self.drift_component.get_component_values(self.n_paths, &time_steps[time_steps.len() - 1], self.t[i], self.dt)? * self.dt
-                                        + self.diffusion_component.get_component_values(self.n_paths, &time_steps[time_steps.len() - 1], self.t[i], self.dt)? * self.noise.get_noise(self.n_paths, self.dt)?
-                                        + self.jump.get_jumps(self.n_paths, self.dt)?;
+                + self.diffusion_component.get_component_values(self.n_paths, &time_steps[time_steps.len() - 1], self.t[i], self.dt)? * self.noise.get_noise(self.n_paths, self.dt)?
+                + self.jump.get_jumps(self.n_paths, self.dt)?;
             time_slice += &time_steps[time_steps.len() - 1];
             time_steps.push(time_slice);
         }
@@ -189,7 +188,6 @@ impl StochasticProcess for SDE {
 }
 
 
-/// # Description
 /// Defines a stochastic process in the generalized where the stochastic drift can be difference-stationary (i.e., autoregressive)
 /// or trend-stationary (i.e., only time dependent).
 ///
@@ -222,7 +220,7 @@ impl StochasticProcess for SDE {
 /// let error: StationaryError = StationaryError::Weiner { sigma };
 ///
 /// // Process definition
-/// let process: StochasticDrift = StochasticDrift::new(t_f, n_steps, n_paths, stochastic_drift_type, error).unwrap();
+/// let process: StochasticDrift = StochasticDrift::build(t_f, n_steps, n_paths, stochastic_drift_type, error).unwrap();
 /// let paths: Vec<Array1<f64>> = process.get_paths().unwrap();
 ///
 /// // Tests
@@ -255,7 +253,6 @@ pub struct StochasticDrift {
 
 impl StochasticDrift {
 
-    /// # Description
     /// Creates a new `StochasticDrift` instance.
     ///
     /// # Input
@@ -264,7 +261,7 @@ impl StochasticDrift {
     /// - `n_paths`: Number of paths to return
     /// - `stochastic_drift_type`: Type of stochastic drift
     /// - `error`: Type of error function to be used in the construction of an error term
-    pub fn new(t_f: f64, n_steps: usize, n_paths: usize, stochastic_drift_type: StochasticDriftType, error: StationaryError) -> Result<Self, DigiFiError> {
+    pub fn build(t_f: f64, n_steps: usize, n_paths: usize, stochastic_drift_type: StochasticDriftType, error: StationaryError) -> Result<Self, DigiFiError> {
         // Input validation
         match &stochastic_drift_type {
             StochasticDriftType::TrendStationary { trend, .. } => { trend.validate(n_paths)?; },
@@ -291,7 +288,6 @@ impl StochasticProcess for StochasticDrift {
         self.t_f
     }
 
-    /// # Description
     /// Generate paths for the constructed process.
     ///
     /// # Output
@@ -358,7 +354,7 @@ mod tests {
         let noise: Noise = Noise::WeinerProcess;
         let jump: Jump = Jump::NoJumps;
         // SDE definition
-        let sde: SDE = SDE::new(t_f, s_0, n_steps, n_paths, drift_component, diffusion_component, noise, jump).unwrap();
+        let sde: SDE = SDE::build(t_f, s_0, n_steps, n_paths, drift_component, diffusion_component, noise, jump).unwrap();
         let paths: Vec<Array1<f64>> = sde.get_paths().unwrap();
         // Tests
         assert_eq!(paths.len(), n_paths);
@@ -386,7 +382,7 @@ mod tests {
         let noise: Noise = Noise::WeinerProcess;
         let jump: Jump = Jump::NoJumps;
         // SDE definition
-        let sde: SDE = SDE::new(t_f, s_0, n_steps, n_paths, drift_component, diffusion_component, noise, jump).unwrap();
+        let sde: SDE = SDE::build(t_f, s_0, n_steps, n_paths, drift_component, diffusion_component, noise, jump).unwrap();
         let paths: Vec<Array1<f64>> = sde.get_paths().unwrap();
         // Tests
         assert_eq!(paths.len(), n_paths);
@@ -413,7 +409,7 @@ mod tests {
         let stochastic_drift_type: StochasticDriftType = StochasticDriftType::TrendStationary { trend, s_0 };
         let error: StationaryError = StationaryError::Weiner { sigma };
         // Process definition
-        let process: StochasticDrift = StochasticDrift::new(t_f, n_steps, n_paths, stochastic_drift_type, error).unwrap();
+        let process: StochasticDrift = StochasticDrift::build(t_f, n_steps, n_paths, stochastic_drift_type, error).unwrap();
         let paths: Vec<Array1<f64>> = process.get_paths().unwrap();
         // Tests
         assert_eq!(paths.len(), n_paths);

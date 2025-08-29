@@ -1,4 +1,3 @@
-/// # Dscription
 /// Exponential utility is a constant absolute risk aversion (CARA) utility measure with respect to consumption.
 /// 
 /// # Input
@@ -19,7 +18,6 @@ pub fn cara(consumption: f64, absolute_risk_aversion: f64) -> f64 {
 }
 
 
-/// # Description
 /// Isoelastic utility is a constant relative risk aversion (CRRA) utility measure with respect to consumption.
 /// 
 /// # Input

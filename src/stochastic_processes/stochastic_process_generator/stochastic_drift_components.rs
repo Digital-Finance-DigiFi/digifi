@@ -4,7 +4,6 @@ use crate::statistics::continuous_distributions::ContinuousUniformDistribution;
 use crate::random_generators::{RandomGenerator, generator_algorithms::inverse_transform, standard_normal_generators::StandardNormalInverseTransform};
 
 
-/// # Description
 /// Type of drift that the stochastic process has.
 pub enum StochasticDriftType {
     TrendStationary { trend: TrendStationary, s_0: f64, },
@@ -14,7 +13,6 @@ pub enum StochasticDriftType {
 
 pub trait CustomTrendStationary {
 
-    /// # Description
     /// Custom trend-stationary trend function.
     ///
     /// # Input
@@ -22,7 +20,6 @@ pub trait CustomTrendStationary {
     /// - `t`: Current time step
     fn trend_func(&self, n_paths: usize, t: f64) -> Result<Array1<f64>, DigiFiError>;
 
-    /// # Description
     /// Validate custom trend-stationary component function object to satisfy the computational requirements.
     ///
     /// # Input
@@ -31,17 +28,19 @@ pub trait CustomTrendStationary {
     /// # Errors
     /// - Returns an error if the custom function does not return an array of the same length as there are number of paths.
     fn validate(&self, n_paths: usize) -> Result<(), DigiFiError> {
-        let cont_uni_dist: ContinuousUniformDistribution = ContinuousUniformDistribution::new(0.0, 1.0)?;
+        let cont_uni_dist: ContinuousUniformDistribution = ContinuousUniformDistribution::build(0.0, 1.0)?;
         let t: f64 = inverse_transform(&cont_uni_dist, 1)?[0];
         if self.trend_func(n_paths, t)?.len() != n_paths {
-            return Err(DigiFiError::ValidationError { title: "Custom Trend Stationary Function".to_owned(), details: "Custom function does not produce an array of the same size as the defined number of paths.".to_owned(), });
+            return Err(DigiFiError::ValidationError {
+                title: "Custom Trend Stationary Function".to_owned(),
+                details: "Custom function does not produce an array of the same size as the defined number of paths.".to_owned(),
+            });
         }
         Ok(())
     }
 }
 
 
-/// # Description
 /// The Trend Stationary enum handles the trend term for a discrete-time stochastic process.
 /// This enum models trends such as linear, quadratic, or exponential, which can revert to a deterministic trend over time.
 ///
@@ -57,7 +56,6 @@ pub enum TrendStationary {
 
 impl TrendStationary {
 
-    /// # Description
     /// Validates the parameters of the trend stationary type.
     ///
     /// # Input
@@ -71,7 +69,10 @@ impl TrendStationary {
             TrendStationary::Linear { .. } => Ok(()),
             TrendStationary::Quadratic { a, .. } => {
                 if a == &0.0 {
-                    return Err(DigiFiError::ParameterConstraint { title: "Trend Stationary Tren Type".to_owned(), constraint: "The argument `a` for quadratic trend stationary trend type must be non-zero.".to_owned(), });
+                    return Err(DigiFiError::ParameterConstraint {
+                        title: "Trend Stationary Tren Type".to_owned(),
+                        constraint: "The argument `a` for quadratic trend stationary trend type must be non-zero.".to_owned(),
+                    });
                 }
                 Ok(())
             },
@@ -80,7 +81,6 @@ impl TrendStationary {
         }
     }
 
-    /// # Description
     /// Generates an array of trend values based on the specified trend type.
     /// It accounts for different trends like linear, quadratic, exponential, or a custom-defined trend.
     ///
@@ -104,7 +104,6 @@ impl TrendStationary {
 
 pub trait CustomStationaryError {
 
-    /// # Description
     /// Custom error of the diffusion component.
     ///
     /// # Input
@@ -112,7 +111,6 @@ pub trait CustomStationaryError {
     /// - `dt`: Time step increment
     fn error_func(&self, n_paths: usize, dt: f64) -> Result<Array1<f64>, DigiFiError>;
 
-    /// # Description
     /// Validate custom error component function object to satisfy the computational requirements.
     ///
     /// # Input
@@ -121,17 +119,19 @@ pub trait CustomStationaryError {
     /// # Errors
     /// - Returns an error if the custom function does not return an array of the same length as there are number of paths.
     fn validate(&self, n_paths: usize) -> Result<(), DigiFiError> {
-        let cont_uni_dist: ContinuousUniformDistribution = ContinuousUniformDistribution::new(0.0, 1.0)?;
+        let cont_uni_dist: ContinuousUniformDistribution = ContinuousUniformDistribution::build(0.0, 1.0)?;
         let dt: f64 = inverse_transform(&cont_uni_dist, 1)?[0];
         if self.error_func(n_paths, dt)?.len() != n_paths {
-            return Err(DigiFiError::ValidationError { title: "Custom Error Function".to_owned(), details: "Custom function does not produce an array of the same size as the defined number of paths.".to_owned(), });
+            return Err(DigiFiError::ValidationError {
+                title: "Custom Error Function".to_owned(),
+                details: "Custom function does not produce an array of the same size as the defined number of paths.".to_owned(),
+            });
         }
         Ok(())
     }
 }
 
 
-/// # Description
 /// The StationaryError enum represents a stationary error term for a discrete-time stochastic process.
 /// This error term can follow a Weiner process or be custom-defined, adding randomness to the process in a controlled manner.
 pub enum StationaryError {
@@ -144,7 +144,6 @@ pub enum StationaryError {
 
 impl StationaryError {
 
-    /// # Description
     /// Validates the parameters of the stationary error.
     ///
     /// # Input
@@ -159,7 +158,6 @@ impl StationaryError {
         }
     }
 
-    /// # Description
     /// Generates an array of error values based on the defined error type. The method supports a Weiner process or a custom error generation mechanism.
     ///
     /// # Input
@@ -181,7 +179,6 @@ impl StationaryError {
 
 
 #[derive(Debug)]
-/// # Description
 /// The Difference Stationary struct represents a difference stationary term for a discrete-time stochastic process.
 /// This term is crucial in processes characterized by a unit root, where shocks have a permanent effect on the level of the series.
 ///
@@ -199,7 +196,6 @@ pub struct DifferenceStationary {
 
 impl DifferenceStationary {
 
-    /// # Description
     /// Creates a new `DifferenceStationary` instance.
     ///
     /// # Input
@@ -209,12 +205,11 @@ impl DifferenceStationary {
     /// # Errors
     /// - Returns an error if the length of `staring_values` does not match the number of paths.
     /// - Returns an error if an array in `strating_values` has different length to parameters of autoregression.
-    pub fn new(n_paths: usize, autoregression_params: Array1<f64>, starting_values: Vec<Array1<f64>>) -> Result<Self, DigiFiError> {
+    pub fn build(n_paths: usize, autoregression_params: Array1<f64>, starting_values: Vec<Array1<f64>>) -> Result<Self, DigiFiError> {
         DifferenceStationary::validate_values(n_paths, &starting_values)?;
         Ok(DifferenceStationary { n_paths, autoregression_params, starting_values })
     }
 
-    /// # Description
     /// Validates the array of values.
     ///
     /// # Input
@@ -229,23 +224,27 @@ impl DifferenceStationary {
         let process_order: usize = values.len();
         // Input validation
         if values.len() != n_paths {
-            return Err(DigiFiError::ValidationError { title: error_title.clone(), details: "The length of previous values must match the number of paths.".to_owned(), });
+            return Err(DigiFiError::ValidationError {
+                title: error_title,
+                details: "The length of previous values must match the number of paths.".to_owned(),
+            });
         }
         for v in values {
             if v.len() != process_order {
-                return Err(DigiFiError::Other { title: error_title.clone(), details: format!("All arrays of previous values must match the order of process, {}.", process_order), });
+                return Err(DigiFiError::Other {
+                    title: error_title,
+                    details: format!("All arrays of previous values must match the order of process, {}.", process_order),
+                });
             }
         }
         Ok(())
     }
 
-    /// # Description
     /// Returns the starting values of the process.
     pub fn strating_values(&self) -> Vec<Array1<f64>> {
         self.starting_values.clone()
     }
 
-    /// # Description
     /// Calculates autoregression values for the difference stationary process.
     /// This method considers previous values of the process and applies the autoregression parameters to generate the next term in the series.
     ///

@@ -4,7 +4,6 @@ use crate::random_generators::{RandomGenerator, generate_seed};
 
 
 #[derive(Debug)]
-/// # Description
 /// Pseudo-random number generator for uniform distribution.
 /// 
 /// # LaTeX Formula
@@ -41,7 +40,6 @@ pub struct LinearCongruentialGenerator {
 }
 
 impl LinearCongruentialGenerator {
-    /// # Description
     /// Creates a new `LinearCongruentialGenerator` instance.
     /// 
     /// # Input
@@ -56,7 +54,6 @@ impl LinearCongruentialGenerator {
 }
 
 impl RandomGenerator<LinearCongruentialGenerator> for LinearCongruentialGenerator {
-    /// # Description
     /// Creates a new `LinearCongruentialGenerator` instance with random parameters.
     /// 
     /// # Input
@@ -69,7 +66,6 @@ impl RandomGenerator<LinearCongruentialGenerator> for LinearCongruentialGenerato
         Ok(LinearCongruentialGenerator { seed, sample_size, m, a, b })
     }
 
-    /// # Description
     /// Array of pseudo-random generated numbers based on Linear Congruential Generator.
     /// 
     /// # Output
@@ -90,7 +86,6 @@ impl RandomGenerator<LinearCongruentialGenerator> for LinearCongruentialGenerato
 
 
 #[derive(Debug)]
-/// # Description
 /// Pseudo-random number generator for uniform distribution.
 /// 
 /// # LaTeX Formula
@@ -139,7 +134,6 @@ pub struct FibonacciGenerator {
 }
 
 impl FibonacciGenerator {
-    /// # Description
     /// Creates a new `FibonacciGenerator` instance.
     /// 
     /// # Input
@@ -156,7 +150,6 @@ impl FibonacciGenerator {
 }
 
 impl RandomGenerator<FibonacciGenerator> for FibonacciGenerator {
-    /// # Description
     /// Creates a new `FibonacciGenerator` instance with random parameters.
     /// 
     /// # Input
@@ -169,7 +162,6 @@ impl RandomGenerator<FibonacciGenerator> for FibonacciGenerator {
         Ok(FibonacciGenerator { seed, sample_size, mu: 5, nu: 17, m, a, b })
     }
 
-    /// # Description
     /// Array of pseudo-random generated numbers based on Fibonacci Generator.
     /// 
     /// # Output

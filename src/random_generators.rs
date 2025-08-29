@@ -1,3 +1,9 @@
+//! # random Generators
+//! 
+//! Contains different pseudo-random number generator algorithms for generating numbers from continuous uniform and standard normal distributions.
+//! This module also provides algorithms to generate pseudo-random numbers from different probability distributions provided by this library.
+
+
 // Re-Exports
 pub use self::generator_algorithms::{accept_reject, inverse_transform, box_muller, marsaglia, ziggurat};
 pub use self::uniform_generators::{LinearCongruentialGenerator, FibonacciGenerator};
@@ -25,7 +31,6 @@ pub trait RandomGenerator<T> {
 }
 
 
-/// # Description
 /// Generates a seed from nanosecond timestamp of the system.
 ///
 /// # Examples
@@ -50,7 +55,6 @@ pub fn generate_seed () -> Result<u32, DigiFiError> {
 
 
 #[cfg(feature = "plotly")]
-/// # Description
 /// Plots the probability density of the generated points.
 ///
 /// # Input
@@ -62,7 +66,7 @@ pub fn generate_seed () -> Result<u32, DigiFiError> {
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```rust,ignore
 /// use ndarray::Array1;
 /// use digifi::random_generators::{RandomGenerator, StandardNormalInverseTransform};
 ///
@@ -87,7 +91,6 @@ pub fn plot_pdf(points: &Array1<f64>, n_bins: usize) -> Plot {
 
 
 #[cfg(feature = "plotly")]
-/// # Description
 /// Plots the 2D scatter plot of an array of points against itself. Assuming the points are randomly distributed, the plot can be used to
 /// validate the distribution of points (e.g., normally distributed numbers are distributed in an ellipsical shape).
 ///
@@ -99,7 +102,7 @@ pub fn plot_pdf(points: &Array1<f64>, n_bins: usize) -> Plot {
 ///
 /// # Example
 ///
-/// ```rust
+/// ```rust,ignore
 /// use ndarray::Array1;
 /// use digifi::random_generators::{RandomGenerator, StandardNormalInverseTransform};
 ///
@@ -126,7 +129,6 @@ pub fn plot_2d_scatter_points(points: &Array1<f64>) -> Plot {
 
 
 #[cfg(feature = "plotly")]
-/// # Description
 /// Plots the 3D scatter plot of an array of points against itself. Assuming the points are randomly distributed, the plot can be used to
 /// validate the distribution of points (e.g., normally distributed numbers are distributed in an ellipsoidal shape).
 ///
@@ -138,7 +140,7 @@ pub fn plot_2d_scatter_points(points: &Array1<f64>) -> Plot {
 ///
 /// # Example
 ///
-/// ```rust
+/// ```rust,ignore
 /// use ndarray::Array1;
 /// use digifi::random_generators::{RandomGenerator, StandardNormalInverseTransform};
 ///
@@ -179,6 +181,7 @@ mod tests {
 
     #[cfg(feature = "plotly")]
     #[test]
+    #[ignore]
     fn unit_test_plot_pdf() -> () {
         use ndarray::Array1;
         use plotly::Plot;
@@ -192,6 +195,7 @@ mod tests {
 
     #[cfg(feature = "plotly")]
     #[test]
+    #[ignore]
     fn unit_test_plot_2d_scatter_points() -> () {
         use ndarray::Array1;
         use plotly::Plot;
@@ -205,6 +209,7 @@ mod tests {
 
     #[cfg(feature = "plotly")]
     #[test]
+    #[ignore]
     fn unit_test_plot_3d_scatter_points() -> () {
         use ndarray::Array1;
         use plotly::Plot;

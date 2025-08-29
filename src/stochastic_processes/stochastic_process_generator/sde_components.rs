@@ -6,7 +6,6 @@ use crate::random_generators::{RandomGenerator, generator_algorithms::inverse_tr
 
 pub trait CustomSDEComponent {
 
-    /// # Description
     /// Custom SDE component function.
     ///
     /// # Input
@@ -16,7 +15,6 @@ pub trait CustomSDEComponent {
     /// - `dt`: Time step increment
     fn comp_func(&self, n_paths: usize, stochastic_values: &Array1<f64>, t: f64, dt: f64) -> Result<Array1<f64>, DigiFiError>;
 
-    /// # Description
     /// Validates a custom SDE component function ensuring it meets computational requirements.
     ///
     /// # Input
@@ -25,20 +23,21 @@ pub trait CustomSDEComponent {
     /// # Errors
     /// - Returns an error if the custom function does not return an array of the same length as there are number of paths.
     fn validate(&self, n_paths: usize) -> Result<(), DigiFiError> {
-        let cont_uni_dist: ContinuousUniformDistribution = ContinuousUniformDistribution::new(0.0, 1.0)?;
+        let cont_uni_dist: ContinuousUniformDistribution = ContinuousUniformDistribution::build(0.0, 1.0)?;
         let sample: Array1<f64> = inverse_transform(&cont_uni_dist, 2)?;
         if self.comp_func(n_paths, &Array1::from_vec(vec![1.0; n_paths]), sample[0], sample[1])?.len() != n_paths {
-            return Err(DigiFiError::ValidationError { title: "Custom SDE Component".to_owned(), details: "Custom function does not produce an array of the same size as the defined number of paths.".to_owned(), });
+            return Err(DigiFiError::ValidationError {
+                title: "Custom SDE Component".to_owned(),
+                details: "Custom function does not produce an array of the same size as the defined number of paths.".to_owned(),
+            });
         }
         Ok(())
     }
 }
 
 
-/// # Description
 /// An SDE component that is used in either drift or diffusion terms of the SDE.
 pub enum SDEComponent {
-    /// # Description
     /// Generates a constant array representing a linear SDE component.
     /// 
     /// # LaTeX Formula
@@ -47,7 +46,6 @@ pub enum SDEComponent {
         /// Constant linear coefficient (i.e., the gradient of the linear function)
         a: f64,
     },
-    /// # Description
     /// Generates an array representing a quadratic time-dependent SDE component.
     ///
     /// # LaTeX Formula
@@ -58,7 +56,6 @@ pub enum SDEComponent {
         /// Constant term in quadratic gradient
         b: f64,
     },
-    /// # Description
     /// Generates an array representing a power-law stochastic SDE component.
     ///
     /// # LaTeX Formula
@@ -69,7 +66,6 @@ pub enum SDEComponent {
         /// Power-law exponent
         power: f64,
     },
-    /// # Description
     /// Generate a term that converges to a specific final value (e.g., Brownian Bridge Drift -\\frac{b - a}{T - t}).
     ///
     /// # LaTeX Formula
@@ -82,7 +78,6 @@ pub enum SDEComponent {
         /// Final process value
         b: f64,
     },
-    /// # Description
     /// Generates a term that regresses to a trend value (e.g., Ornstein-Uhlenbeck Process Drift - \\alpha(\\mu - S_{t})).
     ///
     /// # LaTeX Formula
@@ -98,7 +93,6 @@ pub enum SDEComponent {
 
 impl SDEComponent {
 
-    /// # Description
     /// Validates the parameters of the SDE component type.
     ///
     /// # Input
@@ -113,10 +107,16 @@ impl SDEComponent {
         match &self {
             SDEComponent::ConvergenceToValue { final_time, a, b } => {
                 if b <= a {
-                    return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument `b` must be larger that the argument `a`.".to_owned(), });
+                    return Err(DigiFiError::ParameterConstraint {
+                        title: error_title,
+                        constraint: "The argument `b` must be larger that the argument `a`.".to_owned(),
+                    });
                 }
                 if final_time <= &0.0 {
-                    return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument `final_time` must be positive.".to_owned(), });
+                    return Err(DigiFiError::ParameterConstraint {
+                        title: error_title,
+                        constraint: "The argument `final_time` must be positive.".to_owned(),
+                    });
                 }
             },
             SDEComponent::Custom { f } => { f.validate(n_paths)?; },
@@ -125,7 +125,6 @@ impl SDEComponent {
         Ok(())
     }
 
-    /// # Description
     /// Computes SDE component values for a given component type using the specified parameters and stochastic values.
     ///
     /// # Input
@@ -141,7 +140,10 @@ impl SDEComponent {
     /// - Returns an error if the argument `stochastic_values` has length that is not same as the value of `n_paths`.
     pub fn get_component_values(&self, n_paths: usize, stochastic_values: &Array1<f64>, t: f64, dt: f64) -> Result<Array1<f64>, DigiFiError> {
         if stochastic_values.len() != n_paths {
-            return Err(DigiFiError::ParameterConstraint { title: "SDE Component".to_owned(), constraint: "The argument `stochastic_values` must have the length of `n_paths`.".to_owned(), });
+            return Err(DigiFiError::ParameterConstraint {
+                title: "SDE Component".to_owned(),
+                constraint: "The argument `stochastic_values` must have the length of `n_paths`.".to_owned(),
+            });
         }
         match &self {
             SDEComponent::Linear { a } => {
@@ -169,7 +171,6 @@ impl SDEComponent {
 
 pub trait CustomNoise {
 
-    /// # Description
     /// Custom noise function.
     ///
     /// # Input
@@ -177,26 +178,26 @@ pub trait CustomNoise {
     /// - `dt`: Time step increment
     fn noise_func(&self, n_paths: usize, dt: f64) -> Result<Array1<f64>, DigiFiError>;
 
-    /// # Description
     /// Validates a custom noise function ensuring it meets computational requirements.
     ///
     /// # Errors
     /// - Returns an error if the custom function does not return an array of the same length as there are number of paths.
     fn validate(&self, n_paths: usize) -> Result<(), DigiFiError> {
-        let cont_uni_dist: ContinuousUniformDistribution = ContinuousUniformDistribution::new(0.0, 1.0)?;
+        let cont_uni_dist: ContinuousUniformDistribution = ContinuousUniformDistribution::build(0.0, 1.0)?;
         let dt: f64 = inverse_transform(&cont_uni_dist, 2)?[0];
         if self.noise_func(n_paths, dt)?.len() != n_paths {
-            return Err(DigiFiError::ValidationError { title: "Custom Noise Function".to_owned(), details: "Custom function does not produce an array of the same size as the defined number of paths.".to_owned(), });
+            return Err(DigiFiError::ValidationError {
+                title: "Custom Noise Function".to_owned(),
+                details: "Custom function does not produce an array of the same size as the defined number of paths.".to_owned(),
+            });
         }
         Ok(())
     }
 }
 
 
-/// # Description
 /// Type of noise function to use in the diffusion term of the stochastic process.
 pub enum Noise {
-    /// # Description
     /// Generates standard Gaussian white noise with mean 0 and variance 1.
     ///
     /// # LaTeX Formula
@@ -206,7 +207,6 @@ pub enum Noise {
     /// - Wikipedia: <https://en.wikipedia.org/wiki/White_noise>
     /// - Original Source: N/A
     StandardWhiteNoise,
-    /// # Description
     /// Generates increments of the Wiener process, suitable for simulating Brownian motion.
     ///
     /// # Links
@@ -218,7 +218,6 @@ pub enum Noise {
 
 impl Noise {
 
-    /// # Description
     /// Validates the parameters of the noise type.
     ///
     /// # Input
@@ -234,7 +233,6 @@ impl Noise {
         Ok(())
     }
 
-    /// # Description
     /// Computes noise for the diffusion term.
     ///
     /// # Input
@@ -259,34 +257,33 @@ impl Noise {
 
 pub trait CustomJump {
 
-    /// # Description
     /// Custom jump function.
     ///
     /// # Input
     /// - `dt`:Time step increment
     fn jump_func(&self, n_paths: usize, dt: f64) -> Result<Array1<f64>, DigiFiError>;
 
-    /// # Description
     /// Validates a custom jump function ensuring it meets computational requirements.
     ///
     /// # Errors
     /// - Returns an error if the custom function does not return an array of the same length as there are number of paths.
     fn validate(&self, n_paths: usize) -> Result<(), DigiFiError> {
-        let cont_uni_dist: ContinuousUniformDistribution = ContinuousUniformDistribution::new(0.0, 1.0)?;
+        let cont_uni_dist: ContinuousUniformDistribution = ContinuousUniformDistribution::build(0.0, 1.0)?;
         let dt: f64 = inverse_transform(&cont_uni_dist, 2)?[0];
         if self.jump_func(n_paths, dt)?.len() != n_paths {
-            return Err(DigiFiError::ValidationError { title: "Custom Jump Function".to_owned(), details: "Custom function does not produce an array of the same size as the defined number of paths.".to_owned(), });
+            return Err(DigiFiError::ValidationError {
+                title: "Custom Jump Function".to_owned(),
+                details: "Custom function does not produce an array of the same size as the defined number of paths.".to_owned(),
+            });
         }
         Ok(())
     }
 }
 
 
-/// # Description
 /// Represents the jump term in a discrete-time SDE. The jump term accounts for sudden, discontinuous changes in the value of the process.
 pub enum Jump {
     NoJumps,
-    /// # Description
     /// Generates jumps according to a compound Poisson process with normally distributed jump sizes.
     ///
     /// # LaTeX Formula
@@ -300,7 +297,6 @@ pub enum Jump {
         /// Standard deviation of jump magnitude
         sigma_j: f64
     },
-    /// # Description
     /// Generates jumps according to a compound Poisson process with bilateral exponential jump sizes.
     ///
     /// # LaTeX Formula
@@ -322,7 +318,6 @@ pub enum Jump {
 
 impl Jump {
 
-    /// # Description
     /// Validates the parameters of the jump function type.
     ///
     /// # Input
@@ -338,16 +333,25 @@ impl Jump {
             Jump::NoJumps => Ok(()),
             Jump::CompoundPoissonNormal { lambda_j, .. } => {
                 if lambda_j <= &0.0 {
-                    return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument `lambda_j` of the compound Poisson normal jump must be positive.".to_owned(), });
+                    return Err(DigiFiError::ParameterConstraint {
+                        title: error_title,
+                        constraint: "The argument `lambda_j` of the compound Poisson normal jump must be positive.".to_owned(),
+                    });
                 }
                 Ok(())
             },
             Jump::CompoundPoissonBilateral { lambda_j, p, .. } => {
                 if lambda_j <= &0.0 {
-                    return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument `lambda_j` of the compound Poisson bilateral jump must be positive.".to_owned(), });
+                    return Err(DigiFiError::ParameterConstraint {
+                        title: error_title,
+                        constraint: "The argument `lambda_j` of the compound Poisson bilateral jump must be positive.".to_owned(),
+                    });
                 }
                 if (p < &0.0) || (&1.0 < p) {
-                    return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument `p` of the compound Poisson bilateral jump must be in the range `[0, 1]`.".to_owned(), });
+                    return Err(DigiFiError::ParameterConstraint {
+                        title: error_title,
+                        constraint: "The argument `p` of the compound Poisson bilateral jump must be in the range `[0, 1]`.".to_owned(),
+                    });
                 }
                 Ok(())
             },
@@ -355,7 +359,6 @@ impl Jump {
         }
     }
 
-    /// # Description
     /// Computes the jump term for each path in the stochastic process at a given time.
     ///
     /// # Input
@@ -365,15 +368,15 @@ impl Jump {
         match &self {
             Jump::NoJumps => { Ok(Array1::from_vec(vec![0.0; n_paths])) },
             Jump::CompoundPoissonNormal { lambda_j, mu_j, sigma_j } => {
-                let pois_dist: PoissonDistribution = PoissonDistribution::new(lambda_j*dt)?;
+                let pois_dist: PoissonDistribution = PoissonDistribution::build(lambda_j*dt)?;
                 let dp: Array1<f64> = inverse_transform(&pois_dist, n_paths)?;
                 Ok(*mu_j * &dp + *sigma_j * dp.map(|v| v.sqrt() ) * StandardNormalInverseTransform::new_shuffle(n_paths)?.generate()?)
             },
             Jump::CompoundPoissonBilateral { lambda_j, p, eta_d, eta_u } => {
-                let pois_dist: PoissonDistribution = PoissonDistribution::new(lambda_j*dt)?;
+                let pois_dist: PoissonDistribution = PoissonDistribution::build(lambda_j*dt)?;
                 let dp: Array1<f64> = inverse_transform(&pois_dist, n_paths)?;
                 // Assymetric double exponential distribution
-                let cont_uni_dist: ContinuousUniformDistribution = ContinuousUniformDistribution::new(0.0, 1.0)?;
+                let cont_uni_dist: ContinuousUniformDistribution = ContinuousUniformDistribution::build(0.0, 1.0)?;
                 let u: Array1<f64> = inverse_transform(&cont_uni_dist, n_paths)?;
                 let mut y: Array1<f64> = Array1::from_vec(vec![0.0; n_paths]);
                 for i in 0..u.len() {

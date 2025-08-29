@@ -1,3 +1,10 @@
+//! # Financial Instruments
+//! 
+//! Provides utilies for pricing different types of financial instruments. This modules contains multiple payoff functions for pricing options and 
+//! financial instrument structs like `Bond`, `Contract`, `OptionContract`, `ForwardRateAgreement` and `Stock` that implement methods for pricing
+//! these instruments and performing their analysis. 
+
+
 // Re-Exports
 pub use self::bonds::{bootstrap, YtMMethod, BondType, Bond};
 pub use self::derivatives::{
@@ -21,6 +28,7 @@ use serde::{Serialize, Deserialize};
 use plotly::{Plot, Scatter, Layout, layout::Axis};
 use crate::error::DigiFiError;
 use crate::portfolio_applications::AssetHistData;
+use crate::stochastic_processes::StochasticProcess;
 
 
 #[derive(Debug)]
@@ -44,7 +52,6 @@ pub enum AssetClass {
 
 
 #[derive(Debug)]
-/// # Description
 /// Struct with general financial instrument data.
 pub struct FinancialInstrumentId {
     /// Type of the financial instrument (i.e., cash instrument or derivative instrument)
@@ -57,19 +64,15 @@ pub struct FinancialInstrumentId {
 
 
 pub trait FinancialInstrument {
-    /// # Description
     /// Computes the present value of the financial instrument.
     fn present_value(&self) -> Result<f64, DigiFiError>;
 
-    /// # Description
     /// Computes the net present value of the financial instrument.
     fn net_present_value(&self) -> Result<f64, DigiFiError>;
 
-    /// # Description
     /// Computes the future value of the financial instrument.
     fn future_value(&self) -> Result<f64, DigiFiError>;
 
-    /// # Description
     /// Returns an array of asset prices.
     ///
     /// # Input
@@ -77,7 +80,6 @@ pub trait FinancialInstrument {
     /// - `start_index`: Time index below which no data will be returned
     fn get_prices(&self, end_index: usize, start_index: Option<usize>) -> Result<Array1<f64>, DigiFiError>;
 
-    /// # Description
     /// Returns an array of predictable incomes for an asset (i.e., dividends, coupons, etc.).
     ///
     /// # Input
@@ -85,21 +87,55 @@ pub trait FinancialInstrument {
     /// - `start_index`: Time index below which no data will be returned
     fn get_predictable_income(&self, end_index: usize, start_index: Option<usize>) -> Result<Array1<f64>, DigiFiError>;
 
-    /// # Description
     /// Returns an array of time steps at which the asset price and predictable_income are recorded.
     fn get_time_array(&self) -> Array1<f64>;
 
-    /// # Description
+    /// Updates historical data of the asset with the newly generated data.
+    fn update_historical_data(&mut self, new_data: &AssetHistData) -> ();
+
+    /// Returns a mutable reference to the stochastic process that simulates price action.
+    fn stochastic_model(&mut self) -> &mut Option<Box<dyn StochasticProcess>>;
+
     /// Updates the number of paths the stochastic model will produce when called.
-    fn update_n_stochastic_paths(&mut self, n_paths: usize) -> ();
+    /// 
+    /// # Input
+    /// - `n_paths`: New number of paths to use
+    fn update_n_stochastic_paths(&mut self, n_paths: usize) -> () {
+        match self.stochastic_model() {
+            Some(sm) => sm.update_n_paths(n_paths),
+            None => (),
+        }
+    }
 
-    /// # Description
     /// Simulates the paths of price action for the financial instrument.
-    fn stochastic_simulation(&self) -> Result<Vec<Array1<f64>>, DigiFiError>;
+    fn stochastic_simulation(&mut self) -> Result<Option<Vec<Array1<f64>>>, DigiFiError> {
+        let paths: Vec<Array1<f64>> = match self.stochastic_model() {
+            Some(sm) => sm.get_paths()?,
+            None => return Ok(None),
+        };
+        Ok(Some(paths))
+    }
 
-    /// # Description
     /// Genrates and updates the historica data about the asset.
-    fn generate_historic_data(&mut self, in_place: bool) -> Result<AssetHistData, DigiFiError>;
+    /// 
+    /// # Input
+    /// - `in_place`: If true, uses generated data to update the asset history data 
+    fn generate_historic_data(&mut self, in_place: bool) -> Result<Option<AssetHistData>, DigiFiError> {
+        match self.stochastic_model() {
+            Some(sm) => {
+                let prices: Array1<f64> = sm.get_paths()?.remove(0);
+                let time_array: Array1<f64> = self.get_time_array();
+                let new_data: AssetHistData = AssetHistData::build(
+                    prices, Array1::from_vec(vec![0.0; time_array.len()]), time_array
+                )?;
+                if in_place {
+                    self.update_historical_data(&new_data);
+                }
+                Ok(Some(new_data))
+            },
+            None => Ok(None)
+        }
+    }
 }
 
 
@@ -118,11 +154,9 @@ where
 
 
 pub trait Payoff: PayoffClone {
-    /// # Description
     /// Payoff function.
     fn payoff(&self, s: &Array1<f64>) -> Array1<f64>;
 
-    /// # Description
     /// Validation of payoff object to satisfy the computational requirements.
     /// 
     /// # Input
@@ -131,18 +165,19 @@ pub trait Payoff: PayoffClone {
         let s: Array1<f64> = Array1::from_vec(vec![1.0; val_length]);
         let result: Array1<f64> = self.payoff(&s);
         if result.len() != val_length {
-            return Err(DigiFiError::ValidationError { title: "Validate Payoff".to_owned(), details: format!("The payoff does not produce an array of length {}.", val_length), });
+            return Err(DigiFiError::ValidationError {
+                title: "Validate Payoff".to_owned(),
+                details: format!("The payoff does not produce an array of length {}.", val_length),
+            });
         }
         Ok(())
     }
 
-    /// # Description
     /// Profit function.
     /// 
     /// Profit = Payoff - Cost
     fn profit(&self, s: &Array1<f64>) -> Array1<f64>;
 
-    /// # Description
     /// Updates the cost/premium of the instrument.
     ///
     /// # Input
@@ -153,7 +188,6 @@ pub trait Payoff: PayoffClone {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Long call payoff and profit.
 pub struct LongCall {
     /// Strike price
@@ -163,7 +197,6 @@ pub struct LongCall {
 }
 
 impl Payoff for LongCall {
-    //// # Description
     /// Long call option payoff.
     /// 
     /// # Input
@@ -192,7 +225,6 @@ impl Payoff for LongCall {
         (s - self.k).map(| p | p.max(0.0))
     }
 
-    /// # Description
     /// Long call option profit.
     /// 
     /// # Input
@@ -215,7 +247,6 @@ impl Payoff for LongCall {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Short call payoff and profit.
 pub struct ShortCall {
     /// Strike price
@@ -225,7 +256,6 @@ pub struct ShortCall {
 }
 
 impl Payoff for ShortCall {
-    /// # Description
     /// Short call option payoff.
     /// 
     /// # Input
@@ -254,7 +284,6 @@ impl Payoff for ShortCall {
         (self.k - s).map(| p | p.min(0.0))
     }
 
-    /// # Description
     /// Short call option profit.
     /// 
     /// # Input
@@ -277,7 +306,6 @@ impl Payoff for ShortCall {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Long put payoff and profit.
 pub struct LongPut {
     /// Strike price
@@ -287,7 +315,6 @@ pub struct LongPut {
 }
 
 impl Payoff for LongPut {
-    /// # Description
     /// Long put option payoff.
     /// 
     /// # Input
@@ -316,7 +343,6 @@ impl Payoff for LongPut {
         (self.k - s).map(| p | p.max(0.0))
     }
 
-    /// # Description
     /// Long put option profit.
     /// 
     /// # Input
@@ -339,7 +365,6 @@ impl Payoff for LongPut {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Short put payoff and profit.
 pub struct ShortPut {
     /// Strike price
@@ -349,7 +374,6 @@ pub struct ShortPut {
 }
 
 impl Payoff for ShortPut {
-    /// # Description
     /// Short put option payoff.
     /// 
     /// # Input
@@ -378,7 +402,6 @@ impl Payoff for ShortPut {
         (s - self.k).map(| p | p.min(0.0))
     }
 
-    /// # Description
     /// Short put option profit.
     /// 
     /// # Input
@@ -401,7 +424,6 @@ impl Payoff for ShortPut {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Bull collar strategy payoff and profit.
 /// 
 /// Bull Collar = Asset + Long Put + Short Call.
@@ -417,7 +439,6 @@ pub struct BullCollar {
 }
 
 impl BullCollar {
-    /// # Description
     /// Creates a new `BullCollar` instance.
     /// 
     /// # Input
@@ -428,16 +449,18 @@ impl BullCollar {
     /// 
     /// # Errors
     /// - Returns an error if the long put strike price is larger than the short call strike price.
-    pub fn new(k_p: f64, k_c: f64, cost: f64, cost_s: f64) -> Result<Self, DigiFiError> {
+    pub fn build(k_p: f64, k_c: f64, cost: f64, cost_s: f64) -> Result<Self, DigiFiError> {
         if k_c < k_p {
-            return Err(DigiFiError::ParameterConstraint { title: "Bull Collar".to_owned(), constraint: "The argument `k_p` must be smaller or equal to `k_c`.".to_owned(), });
+            return Err(DigiFiError::ParameterConstraint {
+                title: "Bull Collar".to_owned(),
+                constraint: "The argument `k_p` must be smaller or equal to `k_c`.".to_owned(),
+            });
         }
         Ok(BullCollar { k_p, k_c, cost, cost_s })
     }
 }
 
 impl Payoff for BullCollar {
-    /// # Description
     /// Bull collar strategy payoff.
     /// 
     /// # Input
@@ -458,7 +481,7 @@ impl Payoff for BullCollar {
     ///
     /// let s: Array1<f64> = Array1::range(3.0, 7.0, 0.5);
     ///
-    /// let bull_collar: BullCollar = BullCollar::new(4.0, 6.0, 0.0, 5.0).unwrap();
+    /// let bull_collar: BullCollar = BullCollar::build(4.0, 6.0, 0.0, 5.0).unwrap();
     ///
     /// assert!((bull_collar.payoff(&s) - Array1::from_vec(vec![-1.0, -1.0, -1.0, -0.5, 0.0, 0.5, 1.0, 1.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     /// ```
@@ -466,7 +489,6 @@ impl Payoff for BullCollar {
         s - self.cost_s + (self.k_p - s).map(| p | p.max(0.0)) + (self.k_c - s).map(| p | p.min(0.0))
     }
 
-    /// # Description
     /// Bull collar strategy profit.
     /// 
     /// # Input
@@ -489,7 +511,6 @@ impl Payoff for BullCollar {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Bear collar strategy payoff and profit.
 /// 
 /// Bear Collar = - Asset + Short Put + Long Call.
@@ -505,7 +526,6 @@ pub struct BearCollar {
 }
 
 impl BearCollar {
-    /// # Description
     /// Creates a new `BearCollar` instance.
     /// 
     /// # Input
@@ -516,16 +536,18 @@ impl BearCollar {
     /// 
     /// # Errors
     /// - Returns an error if the short put strike price is larger than the long call strike price.
-    pub fn new(k_p: f64, k_c: f64, cost: f64, cost_s: f64) -> Result<Self, DigiFiError> {
+    pub fn build(k_p: f64, k_c: f64, cost: f64, cost_s: f64) -> Result<Self, DigiFiError> {
         if k_c < k_p {
-            return Err(DigiFiError::ParameterConstraint { title: "Bear Collar".to_owned(), constraint: "The argument `k_p` must be smaller or equal to `k_c`.".to_owned(), });
+            return Err(DigiFiError::ParameterConstraint {
+                title: "Bear Collar".to_owned(), 
+                constraint: "The argument `k_p` must be smaller or equal to `k_c`.".to_owned(),
+            });
         }
         Ok(BearCollar { k_p, k_c, cost, cost_s })
     }
 }
 
 impl Payoff for BearCollar {
-    /// # Description
     /// Bear collar strategy payoff.
     /// 
     /// # Input
@@ -546,7 +568,7 @@ impl Payoff for BearCollar {
     ///
     /// let s: Array1<f64> = Array1::range(3.0, 7.0, 0.5);
     ///
-    /// let bear_collar: BearCollar = BearCollar::new(4.0, 6.0, 0.0, 5.0).unwrap();
+    /// let bear_collar: BearCollar = BearCollar::build(4.0, 6.0, 0.0, 5.0).unwrap();
     ///
     /// assert!((bear_collar.payoff(&s) - Array1::from_vec(vec![1.0, 1.0, 1.0, 0.5, 0.0, -0.5, -1.0, -1.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     /// ```
@@ -554,7 +576,6 @@ impl Payoff for BearCollar {
         self.cost_s - s + (s - self.k_p).map(| p | p.min(0.0)) + (s - self.k_c).map(| p | p.max(0.0))
     }
 
-     /// # Description
     /// Bear collar strategy profit.
     /// 
     /// # Input
@@ -577,7 +598,6 @@ impl Payoff for BearCollar {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Bull spread option payoff and profit.
 /// 
 /// Bull Spread = Long Call + Short Call
@@ -591,7 +611,6 @@ pub struct BullSpread {
 }
 
 impl BullSpread {
-    /// # Description
     /// Creates a new `BullSpread` instance.
     /// 
     /// # Input
@@ -601,16 +620,18 @@ impl BullSpread {
     /// 
     /// # Errors
     /// - Returns an error if the short call strike price is smaller than the long call strike price.
-    pub fn new(k_l: f64, k_s: f64, cost: f64) -> Result<Self, DigiFiError> {
+    pub fn build(k_l: f64, k_s: f64, cost: f64) -> Result<Self, DigiFiError> {
         if k_s < k_l {
-            return Err(DigiFiError::ParameterConstraint { title: "Bull Spread".to_owned(), constraint: "The argument `k_l` must be smaller or equal to `k_s`.".to_owned() });
+            return Err(DigiFiError::ParameterConstraint {
+                title: "Bull Spread".to_owned(),
+                constraint: "The argument `k_l` must be smaller or equal to `k_s`.".to_owned(),
+            });
         }
         Ok(BullSpread { k_l, k_s, cost })
     }
 }
 
 impl Payoff for BullSpread {
-    /// # Description
     /// Bull spread option payoff.
     /// 
     /// # Input
@@ -631,7 +652,7 @@ impl Payoff for BullSpread {
     ///
     /// let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
     ///
-    /// let bull_spread: BullSpread = BullSpread::new(4.0, 6.0, 1.0).unwrap();
+    /// let bull_spread: BullSpread = BullSpread::build(4.0, 6.0, 1.0).unwrap();
     ///
     /// assert!((bull_spread.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, 1.0, 2.0, 2.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     /// ```
@@ -639,7 +660,6 @@ impl Payoff for BullSpread {
         (s - self.k_l).map(| p | p.max(0.0)) + (self.k_s - s).map(| p | p.min(0.0))
     }
 
-    /// # Description
     /// Bull spread option profit.
     /// 
     /// # Input
@@ -662,7 +682,6 @@ impl Payoff for BullSpread {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Bear spread option payoff and profit.
 /// 
 /// Bear Spread = Long Short + Short Short
@@ -676,7 +695,6 @@ pub struct BearSpread {
 }
 
 impl BearSpread {
-    /// # Description
     /// Creates a new `BearSpread` instance.
     /// 
     /// # Input
@@ -686,16 +704,18 @@ impl BearSpread {
     /// 
     /// # Errors
     /// - Returns an error if the long put strike price is smaller than the short put strike price.
-    pub fn new(k_l: f64, k_s: f64, cost: f64) -> Result<Self, DigiFiError> {
+    pub fn build(k_l: f64, k_s: f64, cost: f64) -> Result<Self, DigiFiError> {
         if k_l < k_s {
-            return Err(DigiFiError::ParameterConstraint { title: "Bear Spread".to_owned(), constraint: "The argument `k_s` must be smaller or equal to `k_l`.".to_owned(), });
+            return Err(DigiFiError::ParameterConstraint {
+                title: "Bear Spread".to_owned(),
+                constraint: "The argument `k_s` must be smaller or equal to `k_l`.".to_owned(),
+            });
         }
         Ok(BearSpread { k_l, k_s, cost })
     }
 }
 
 impl Payoff for BearSpread {
-    /// # Description
     /// Bear spread option payoff.
     /// 
     /// # Input
@@ -716,7 +736,7 @@ impl Payoff for BearSpread {
     ///
     /// let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
     ///
-    /// let bear_spread: BearSpread = BearSpread::new(6.0, 4.0, 1.0).unwrap();
+    /// let bear_spread: BearSpread = BearSpread::build(6.0, 4.0, 1.0).unwrap();
     ///
     /// assert!((bear_spread.payoff(&s) - Array1::from_vec(vec![2.0, 2.0, 1.0, 0.0, 0.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     /// ```
@@ -724,7 +744,6 @@ impl Payoff for BearSpread {
         (self.k_l - s).map(| p | p.max(0.0)) + (s - self.k_s).map(| p | p.min(0.0))
     }
 
-    /// # Description
     /// Bear spread option profit.
     /// 
     /// # Input
@@ -747,7 +766,6 @@ impl Payoff for BearSpread {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Butterfly spread option payoff and profit.
 /// 
 /// Buttefly Spread = Smaller Long Call + 2*Short Call + Larger Long Call
@@ -763,7 +781,6 @@ pub struct LongButterfly {
 }
 
 impl LongButterfly {
-    /// # Description
     /// Creates a new `LongButterfly` instance.
     /// 
     /// # Input
@@ -774,21 +791,26 @@ impl LongButterfly {
     /// 
     /// # Errors
     /// - Returns an error if the long put strike price is smaller than the short put strike price.
-    pub fn new(k1_c: f64, k2_c: f64, k_p: f64, cost: f64) -> Result<Self, DigiFiError> {
+    pub fn build(k1_c: f64, k2_c: f64, k_p: f64, cost: f64) -> Result<Self, DigiFiError> {
         let error_title: String = String::from("Long Butterfly");
         // Check that k1_c <= k_p <= k2_c
         if k2_c < k_p {
-            return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument `k_p` must be smaller or equal to `k1_c`.".to_owned(), });
+            return Err(DigiFiError::ParameterConstraint {
+                title: error_title,
+                constraint: "The argument `k_p` must be smaller or equal to `k1_c`.".to_owned(),
+            });
         }
         if k_p < k1_c {
-            return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument `k1_c` must be smaller or equal to `k_p`.".to_owned(), });
+            return Err(DigiFiError::ParameterConstraint {
+                title: error_title,
+                constraint: "The argument `k1_c` must be smaller or equal to `k_p`.".to_owned(),
+            });
         }
         Ok(LongButterfly { k1_c, k2_c, k_p, cost })
     }
 }
 
 impl Payoff for LongButterfly {
-    /// # Description
     /// Long butterfly option payoff.
     /// 
     /// # Input
@@ -809,7 +831,7 @@ impl Payoff for LongButterfly {
     ///
     /// let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
     ///
-    /// let long_butterfly: LongButterfly = LongButterfly::new(4.0, 6.0, 5.0, 1.0).unwrap();
+    /// let long_butterfly: LongButterfly = LongButterfly::build(4.0, 6.0, 5.0, 1.0).unwrap();
     ///
     /// assert!((long_butterfly.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, 1.0, 0.0, 0.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     /// ```
@@ -817,7 +839,6 @@ impl Payoff for LongButterfly {
         (s - self.k1_c).map(| p | p.max(0.0)) + 2.0*(self.k_p - s).map(| p | p.min(0.0)) + (s - self.k2_c).map(| p | p.max(0.0))
     }
 
-    /// # Description
     /// Long butterfly option profit.
     /// 
     /// # Input
@@ -840,7 +861,6 @@ impl Payoff for LongButterfly {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Box spread option payoff and profit.
 /// 
 /// Box Spread = Long Call + Short Call + Long Put + Short Put = Bull Spread + Bear Spread
@@ -854,7 +874,6 @@ pub struct BoxSpread {
 }
 
 impl BoxSpread {
-    /// # Description
     /// Creates a new `BoxSpread` instance.
     /// 
     /// # Input
@@ -864,16 +883,18 @@ impl BoxSpread {
     /// 
     /// # Errors
     /// - Returns an error if the k_2 strike price is smaller than the k_1 strike price.
-    pub fn new(k_1: f64, k_2: f64, cost: f64) -> Result<Self, DigiFiError> {
+    pub fn build(k_1: f64, k_2: f64, cost: f64) -> Result<Self, DigiFiError> {
         if k_2 < k_1 {
-            return Err(DigiFiError::ParameterConstraint { title: "Box Spread".to_owned(), constraint: "The argument `k_1` must be smaller or equal to `k_2`.".to_owned(), });
+            return Err(DigiFiError::ParameterConstraint {
+                title: "Box Spread".to_owned(),
+                constraint: "The argument `k_1` must be smaller or equal to `k_2`.".to_owned(),
+            });
         }
         Ok(BoxSpread { k_1, k_2, cost })
     }
 }
 
 impl Payoff for BoxSpread {
-    /// # Description
     /// Box spread option payoff.
     /// 
     /// # Input
@@ -894,7 +915,7 @@ impl Payoff for BoxSpread {
     ///
     /// let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
     ///
-    /// let box_spread: BoxSpread = BoxSpread::new(4.0, 6.0, 1.0).unwrap();
+    /// let box_spread: BoxSpread = BoxSpread::build(4.0, 6.0, 1.0).unwrap();
     ///
     /// assert!((box_spread.payoff(&s) - Array1::from_vec(vec![2.0, 2.0, 2.0, 2.0, 2.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     /// ```
@@ -902,7 +923,6 @@ impl Payoff for BoxSpread {
         (s - self.k_1).map(| p | p.max(0.0)) + (self.k_2 - s).map(| p | p.min(0.0)) + (self.k_2 - s).map(| p | p.max(0.0)) + (s - self.k_1).map(| p | p.min(0.0))
     }
 
-    /// # Description
     /// Box spread option profit.
     /// 
     /// # Input
@@ -925,7 +945,6 @@ impl Payoff for BoxSpread {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Straddle option payoff.
 /// 
 /// Straddle = Long Call + Long Put
@@ -937,7 +956,6 @@ pub struct Straddle {
 }
 
 impl Payoff for Straddle {
-    /// # Description
     /// Straddle option payoff.
     /// 
     /// # Input
@@ -966,7 +984,6 @@ impl Payoff for Straddle {
         (s - self.k).map(| p | p.max(0.0)) + (self.k - s).map(| p | p.max(0.0))
     }
 
-    /// # Description
     /// Straddle option profit.
     /// 
     /// # Input
@@ -989,7 +1006,6 @@ impl Payoff for Straddle {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Strangle option payoff.
 /// 
 /// Strangle = Long Call + Long Put
@@ -1003,7 +1019,6 @@ pub struct Strangle {
 }
 
 impl Strangle {
-    /// # Description
     /// Creates a new `Strangle` instance.
     /// 
     /// # Input
@@ -1013,16 +1028,18 @@ impl Strangle {
     /// 
     /// # Errors
     /// - Returns an error if the `k_c` strike price is smaller or equal to the `k_p` strike price.
-    pub fn new(k_c: f64, k_p: f64, cost: f64) -> Result<Self, DigiFiError> {
+    pub fn build(k_c: f64, k_p: f64, cost: f64) -> Result<Self, DigiFiError> {
         if k_c <= k_p {
-            return Err(DigiFiError::ParameterConstraint { title: "Strangle".to_owned(), constraint: "The argument `k_p` must be smaller than `k_c`.".to_owned(), });
+            return Err(DigiFiError::ParameterConstraint {
+                title: "Strangle".to_owned(),
+                constraint: "The argument `k_p` must be smaller than `k_c`.".to_owned(),
+            });
         }
         Ok(Strangle { k_c, k_p, cost })
     }
 }
 
 impl Payoff for Strangle {
-    /// # Description
     /// Strangle option payoff.
     /// 
     /// # Input
@@ -1043,7 +1060,7 @@ impl Payoff for Strangle {
     ///
     /// let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
     ///
-    /// let strangle: Strangle = Strangle::new(6.0, 4.0, 1.0).unwrap();
+    /// let strangle: Strangle = Strangle::build(6.0, 4.0, 1.0).unwrap();
     ///
     /// assert!((strangle.payoff(&s) - Array1::from_vec(vec![1.0, 0.0, 0.0, 0.0, 1.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     /// ```
@@ -1051,7 +1068,6 @@ impl Payoff for Strangle {
         (s - self.k_c).map(| p | p.max(0.0)) + (self.k_p - s).map(| p | p.max(0.0))
     }
 
-    /// # Description
     /// Strangle option profit.
     /// 
     /// # Input
@@ -1074,7 +1090,6 @@ impl Payoff for Strangle {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Strip option payoff.
 /// 
 /// Strip = Long Call + 2*Long Put
@@ -1086,7 +1101,6 @@ pub struct Strip {
 }
 
 impl Payoff for Strip {
-    /// # Description
     /// Strip option payoff.
     /// 
     /// # Input
@@ -1115,7 +1129,6 @@ impl Payoff for Strip {
         (s - self.k).map(| p | p.max(0.0)) + 2.0*(self.k - s).map(| p | p.max(0.0))
     }
 
-    /// # Description
     /// Strip option profit.
     /// 
     /// # Input
@@ -1138,7 +1151,6 @@ impl Payoff for Strip {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Strap option payoff.
 /// 
 /// Strap = 2*Long Call + Long Put
@@ -1150,7 +1162,6 @@ pub struct Strap {
 }
 
 impl Payoff for Strap {
-    /// # Description
     /// Strap option payoff.
     /// 
     /// # Input
@@ -1179,7 +1190,6 @@ impl Payoff for Strap {
         2.0*(s - self.k).map(| p | p.max(0.0)) + (self.k - s).map(| p | p.max(0.0))
     }
 
-    /// # Description
     /// Strap option profit.
     /// 
     /// # Input
@@ -1201,7 +1211,6 @@ impl Payoff for Strap {
 
 
 #[cfg(feature = "plotly")]
-/// # Description
 /// Plots the payoff function.
 ///
 /// # Input
@@ -1215,7 +1224,7 @@ impl Payoff for Strap {
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```rust,ignore
 /// use digifi::financial_instruments::Strangle;
 ///
 /// #[cfg(feature = "plotly")]
@@ -1223,7 +1232,7 @@ impl Payoff for Strap {
 ///     use plotly::Plot;
 ///     use digifi::plots::plot_payoff;
 ///     
-///     let payoff_obj: Strangle = Strangle::new(6.0, 4.0, 1.0).unwrap();
+///     let payoff_obj: Strangle = Strangle::build(6.0, 4.0, 1.0).unwrap();
 ///     let payoff_plot: Plot = plot_payoff(&payoff_obj, 0.0, 10.0, 21);
 ///     payoff_plot.show();
 /// }
@@ -1242,7 +1251,6 @@ pub fn plot_payoff(payoff_obj: &impl Payoff, start_price: f64, stop_price: f64, 
 
 
 #[cfg(feature = "plotly")]
-/// # Description
 /// Plots the profit function.
 ///
 /// # Input
@@ -1256,7 +1264,7 @@ pub fn plot_payoff(payoff_obj: &impl Payoff, start_price: f64, stop_price: f64, 
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```rust,ignore
 /// use digifi::financial_instruments::Strangle;
 ///
 /// #[cfg(feature = "plotly")]
@@ -1264,7 +1272,7 @@ pub fn plot_payoff(payoff_obj: &impl Payoff, start_price: f64, stop_price: f64, 
 ///     use plotly::Plot;
 ///     use digifi::plots::plot_profit;
 ///     
-///     let payoff_obj: Strangle = Strangle::new(6.0, 4.0, 1.0).unwrap();
+///     let payoff_obj: Strangle = Strangle::build(6.0, 4.0, 1.0).unwrap();
 ///     let profit_plot: Plot = plot_profit(&payoff_obj, 0.0, 10.0, 21);
 ///     profit_plot.show();
 /// }
@@ -1326,7 +1334,7 @@ mod tests {
     fn unit_test_bull_collar() -> () {
         use crate::financial_instruments::BullCollar;
         let s: Array1<f64> = Array1::range(3.0, 7.0, 0.5);
-        let bull_collar: BullCollar = BullCollar::new(4.0, 6.0, 0.0, 5.0).unwrap();
+        let bull_collar: BullCollar = BullCollar::build(4.0, 6.0, 0.0, 5.0).unwrap();
         println!("{}", bull_collar.profit(&s));
         assert!((bull_collar.payoff(&s) - Array1::from_vec(vec![-1.0, -1.0, -1.0, -0.5, 0.0, 0.5, 1.0, 1.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
@@ -1335,7 +1343,7 @@ mod tests {
     fn unit_test_bear_collar() -> () {
         use crate::financial_instruments::BearCollar;
         let s: Array1<f64> = Array1::range(3.0, 7.0, 0.5);
-        let bear_collar: BearCollar = BearCollar::new(4.0, 6.0, 0.0, 5.0).unwrap();
+        let bear_collar: BearCollar = BearCollar::build(4.0, 6.0, 0.0, 5.0).unwrap();
         assert!((bear_collar.payoff(&s) - Array1::from_vec(vec![1.0, 1.0, 1.0, 0.5, 0.0, -0.5, -1.0, -1.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
@@ -1343,7 +1351,7 @@ mod tests {
     fn unit_test_bull_spread() -> () {
         use crate::financial_instruments::BullSpread;
         let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
-        let bull_spread: BullSpread = BullSpread::new(4.0, 6.0, 1.0).unwrap();
+        let bull_spread: BullSpread = BullSpread::build(4.0, 6.0, 1.0).unwrap();
         assert!((bull_spread.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, 1.0, 2.0, 2.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
@@ -1351,7 +1359,7 @@ mod tests {
     fn unit_test_bear_spread() -> () {
         use crate::financial_instruments::BearSpread;
         let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
-        let bear_spread: BearSpread = BearSpread::new(6.0, 4.0, 1.0).unwrap();
+        let bear_spread: BearSpread = BearSpread::build(6.0, 4.0, 1.0).unwrap();
         assert!((bear_spread.payoff(&s) - Array1::from_vec(vec![2.0, 2.0, 1.0, 0.0, 0.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
@@ -1359,7 +1367,7 @@ mod tests {
     fn unit_test_long_butterfly() -> () {
         use crate::financial_instruments::LongButterfly;
         let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
-        let long_butterfly: LongButterfly = LongButterfly::new(4.0, 6.0, 5.0, 1.0).unwrap();
+        let long_butterfly: LongButterfly = LongButterfly::build(4.0, 6.0, 5.0, 1.0).unwrap();
         assert!((long_butterfly.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, 1.0, 0.0, 0.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
@@ -1367,7 +1375,7 @@ mod tests {
     fn unit_test_box_spread() -> () {
         use crate::financial_instruments::BoxSpread;
         let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
-        let box_spread: BoxSpread = BoxSpread::new(4.0, 6.0, 1.0).unwrap();
+        let box_spread: BoxSpread = BoxSpread::build(4.0, 6.0, 1.0).unwrap();
         assert!((box_spread.payoff(&s) - Array1::from_vec(vec![2.0, 2.0, 2.0, 2.0, 2.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
@@ -1383,7 +1391,7 @@ mod tests {
     fn unit_test_strangle() -> () {
         use crate::financial_instruments::Strangle;
         let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
-        let strangle: Strangle = Strangle::new(6.0, 4.0, 1.0).unwrap();
+        let strangle: Strangle = Strangle::build(6.0, 4.0, 1.0).unwrap();
         assert!((strangle.payoff(&s) - Array1::from_vec(vec![1.0, 0.0, 0.0, 0.0, 1.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
@@ -1405,6 +1413,7 @@ mod tests {
 
     #[cfg(feature = "plotly")]
     #[test]
+    #[ignore]
     fn unit_test_long_call_plot() -> () {
         use crate::financial_instruments::{LongCall, plot_payoff, plot_profit};
         let payoff_obj: LongCall = LongCall { k: 50.0, cost: 1.0 };
@@ -1416,6 +1425,7 @@ mod tests {
 
     #[cfg(feature = "plotly")]
     #[test]
+    #[ignore]
     fn unit_test_short_call_plot() -> () {
         use crate::financial_instruments::{ShortCall, plot_payoff, plot_profit};
         let payoff_obj: ShortCall = ShortCall { k: 50.0, cost: 1.0 };
@@ -1427,6 +1437,7 @@ mod tests {
 
     #[cfg(feature = "plotly")]
     #[test]
+    #[ignore]
     fn unit_test_long_put_plot() -> () {
         use crate::financial_instruments::{LongPut, plot_payoff, plot_profit};
         let payoff_obj: LongPut = LongPut { k: 50.0, cost: 1.0 };
@@ -1438,6 +1449,7 @@ mod tests {
 
     #[cfg(feature = "plotly")]
     #[test]
+    #[ignore]
     fn unit_test_short_put_plot() -> () {
         use crate::financial_instruments::{ShortPut, plot_payoff, plot_profit};
         let payoff_obj: ShortPut = ShortPut { k: 50.0, cost: 1.0 };
@@ -1449,9 +1461,10 @@ mod tests {
 
     #[cfg(feature = "plotly")]
     #[test]
+    #[ignore]
     fn unit_test_bull_collar_plot() -> () {
         use crate::financial_instruments::{BullCollar, plot_payoff, plot_profit};
-        let payoff_obj: BullCollar = BullCollar::new(4.0, 6.0, 1.0, 5.0).unwrap();
+        let payoff_obj: BullCollar = BullCollar::build(4.0, 6.0, 1.0, 5.0).unwrap();
         let payoff_plot: Plot = plot_payoff(&payoff_obj, 0.0, 10.0, 21);
         payoff_plot.show();
         let profit_plot: Plot = plot_profit(&payoff_obj, 0.0, 10.0, 21);
@@ -1460,9 +1473,10 @@ mod tests {
 
     #[cfg(feature = "plotly")]
     #[test]
+    #[ignore]
     fn unit_test_bear_collar_plot() -> () {
         use crate::financial_instruments::{BearCollar, plot_payoff, plot_profit};
-        let payoff_obj: BearCollar = BearCollar::new(4.0, 6.0, 1.0, 5.0).unwrap();
+        let payoff_obj: BearCollar = BearCollar::build(4.0, 6.0, 1.0, 5.0).unwrap();
         let payoff_plot: Plot = plot_payoff(&payoff_obj, 0.0, 10.0, 21);
         payoff_plot.show();
         let profit_plot: Plot = plot_profit(&payoff_obj, 0.0, 10.0, 21);
@@ -1471,9 +1485,10 @@ mod tests {
 
     #[cfg(feature = "plotly")]
     #[test]
+    #[ignore]
     fn unit_test_bull_spread_plot() -> () {
         use crate::financial_instruments::{BullSpread, plot_payoff, plot_profit};
-        let payoff_obj: BullSpread = BullSpread::new(4.0, 6.0, 1.0).unwrap();
+        let payoff_obj: BullSpread = BullSpread::build(4.0, 6.0, 1.0).unwrap();
         let payoff_plot: Plot = plot_payoff(&payoff_obj, 0.0, 10.0, 21);
         payoff_plot.show();
         let profit_plot: Plot = plot_profit(&payoff_obj, 0.0, 10.0, 21);
@@ -1482,9 +1497,10 @@ mod tests {
 
     #[cfg(feature = "plotly")]
     #[test]
+    #[ignore]
     fn unit_test_bear_spread_plot() -> () {
         use crate::financial_instruments::{BearSpread, plot_payoff, plot_profit};
-        let payoff_obj: BearSpread = BearSpread::new(6.0, 4.0, 1.0).unwrap();
+        let payoff_obj: BearSpread = BearSpread::build(6.0, 4.0, 1.0).unwrap();
         let payoff_plot: Plot = plot_payoff(&payoff_obj, 0.0, 10.0, 21);
         payoff_plot.show();
         let profit_plot: Plot = plot_profit(&payoff_obj, 0.0, 10.0, 21);
@@ -1493,9 +1509,10 @@ mod tests {
 
     #[cfg(feature = "plotly")]
     #[test]
+    #[ignore]
     fn unit_test_long_butterfly_plot() -> () {
         use crate::financial_instruments::{LongButterfly, plot_payoff, plot_profit};
-        let payoff_obj: LongButterfly = LongButterfly::new(4.0, 6.0, 5.0, 1.0).unwrap();
+        let payoff_obj: LongButterfly = LongButterfly::build(4.0, 6.0, 5.0, 1.0).unwrap();
         let payoff_plot: Plot = plot_payoff(&payoff_obj, 0.0, 10.0, 21);
         payoff_plot.show();
         let profit_plot: Plot = plot_profit(&payoff_obj, 0.0, 10.0, 21);
@@ -1504,9 +1521,10 @@ mod tests {
 
     #[cfg(feature = "plotly")]
     #[test]
+    #[ignore]
     fn unit_test_box_spread_plot() -> () {
         use crate::financial_instruments::{BoxSpread, plot_payoff, plot_profit};
-        let payoff_obj: BoxSpread = BoxSpread::new(4.0, 6.0, 1.0).unwrap();
+        let payoff_obj: BoxSpread = BoxSpread::build(4.0, 6.0, 1.0).unwrap();
         let payoff_plot: Plot = plot_payoff(&payoff_obj, 0.0, 10.0, 21);
         payoff_plot.show();
         let profit_plot: Plot = plot_profit(&payoff_obj, 0.0, 10.0, 21);
@@ -1515,6 +1533,7 @@ mod tests {
 
     #[cfg(feature = "plotly")]
     #[test]
+    #[ignore]
     fn unit_test_straddle_plot() -> () {
         use crate::financial_instruments::{Straddle, plot_payoff, plot_profit};
         let payoff_obj: Straddle = Straddle { k: 5.0, cost: 1.0 };
@@ -1526,9 +1545,10 @@ mod tests {
 
     #[cfg(feature = "plotly")]
     #[test]
+    #[ignore]
     fn unit_test_strangle_plot() -> () {
         use crate::financial_instruments::{Strangle, plot_payoff, plot_profit};
-        let payoff_obj: Strangle = Strangle::new(6.0, 4.0, 1.0).unwrap();
+        let payoff_obj: Strangle = Strangle::build(6.0, 4.0, 1.0).unwrap();
         let payoff_plot: Plot = plot_payoff(&payoff_obj, 0.0, 10.0, 21);
         payoff_plot.show();
         let profit_plot: Plot = plot_profit(&payoff_obj, 0.0, 10.0, 21);
@@ -1537,6 +1557,7 @@ mod tests {
 
     #[cfg(feature = "plotly")]
     #[test]
+    #[ignore]
     fn unit_test_strip_plot() -> () {
         use crate::financial_instruments::{Strip, plot_payoff, plot_profit};
         let payoff_obj: Strip = Strip { k: 5.0, cost: 1.0 };
@@ -1548,6 +1569,7 @@ mod tests {
 
     #[cfg(feature = "plotly")]
     #[test]
+    #[ignore]
     fn unit_test_strap_plot() -> () {
         use crate::financial_instruments::{Strap, plot_payoff, plot_profit};
         let payoff_obj: Strap = Strap { k: 5.0, cost: 1.0 };

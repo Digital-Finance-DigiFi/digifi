@@ -10,7 +10,6 @@ use crate::statistics::continuous_distributions::GammaDistribution;
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Model used to reproduce the volatility smile effect.
 /// 
 /// # LaTeX Formula
@@ -30,7 +29,7 @@ use crate::statistics::continuous_distributions::GammaDistribution;
 /// let n_paths: usize = 100;
 /// let n_steps: usize = 200;
 ///
-/// let cev: ConstantElasticityOfVariance = ConstantElasticityOfVariance::new(1.0, 0.4, 0.5, n_paths, n_steps, 1.0, 100.0).unwrap();
+/// let cev: ConstantElasticityOfVariance = ConstantElasticityOfVariance::build(1.0, 0.4, 0.5, n_paths, n_steps, 1.0, 100.0).unwrap();
 /// let paths: Vec<Array1<f64>> = cev.get_paths().unwrap();
 ///
 /// assert_eq!(paths.len(), n_paths);
@@ -65,7 +64,6 @@ pub struct ConstantElasticityOfVariance {
 }
 
 impl ConstantElasticityOfVariance {
-    /// # Description
     /// Creates a new `ConstantElasticityOfVariance` instance.
     /// 
     /// # Input
@@ -76,16 +74,18 @@ impl ConstantElasticityOfVariance {
     /// - `n_steps`: Number of steps
     /// - `t_f`: Final time step
     /// - `s_0`: Initial value of the stochastic process
-    pub fn new(mu: f64, sigma: f64, gamma: f64, n_paths: usize, n_steps: usize, t_f: f64, s_0: f64) -> Result<Self, DigiFiError> {
+    pub fn build(mu: f64, sigma: f64, gamma: f64, n_paths: usize, n_steps: usize, t_f: f64, s_0: f64) -> Result<Self, DigiFiError> {
         if gamma < 0.0 {
-            return Err(DigiFiError::ParameterConstraint { title: "Constant Elasticity of Variance".to_owned(), constraint: "Tha value of argument `gamma` cannot be smaller than `0`.".to_owned(), });
+            return Err(DigiFiError::ParameterConstraint {
+                title: "Constant Elasticity of Variance".to_owned(),
+                constraint: "Tha value of argument `gamma` cannot be smaller than `0`.".to_owned(),
+            });
         }
         let dt: f64 = t_f / (n_steps as f64);
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
         Ok(ConstantElasticityOfVariance { mu, sigma, gamma, n_paths, n_steps, t_f, s_0, dt, t })
     }
 
-    /// # Description
     /// Calculates the expected path of the CEV process.
     ///
     /// # Output
@@ -111,7 +111,6 @@ impl StochasticProcess for ConstantElasticityOfVariance {
         self.t_f
     }
 
-    /// # Description
     /// Generates simulation paths for the Constant Elasticity of Variance (CEV) process.
     ///
     /// # Output
@@ -136,7 +135,6 @@ impl StochasticProcess for ConstantElasticityOfVariance {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Model describes the evolution of stock price and its volatility.
 /// 
 /// # LaTeX Formula
@@ -199,7 +197,6 @@ pub struct HestonStochasticVolatility {
 }
 
 impl HestonStochasticVolatility {
-    /// # Description
     /// Creates a new `HestonStochasticVolatility` instance.
     /// 
     /// # Input
@@ -219,7 +216,6 @@ impl HestonStochasticVolatility {
         HestonStochasticVolatility { mu, k, theta, epsilon, rho, n_paths, n_steps, t_f, s_0, v_0, dt, t }
     }
 
-    /// # Description
     /// Calculates the expected path of the Heston Stochastic Volatility process.
     ///
     /// # Output
@@ -245,7 +241,6 @@ impl StochasticProcess for HestonStochasticVolatility {
         self.t_f
     }
 
-    /// # Description
     /// Generates simulation paths for the Heston Stochastic Volatility process.
     ///
     /// # Output
@@ -280,7 +275,6 @@ impl StochasticProcess for HestonStochasticVolatility {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Model used in option pricing.
 /// 
 /// # LaTeX Formula
@@ -328,7 +322,6 @@ pub struct VarianceGammaProcess {
 }
 
 impl VarianceGammaProcess {
-    /// # Description
     /// Creates a new `VarianceGammaProcess` instance.
     /// 
     /// # Input
@@ -344,7 +337,6 @@ impl VarianceGammaProcess {
         VarianceGammaProcess { mu, sigma, kappa, n_paths, n_steps, t_f, s_0, dt, t }
     }
 
-    /// # Description
     /// Calculates the expected path of the Variance Gamma process.
     ///
     /// # Output
@@ -356,7 +348,6 @@ impl VarianceGammaProcess {
         self.s_0 + self.mu * &self.t
     }
 
-    /// # Description
     /// Calculates the variance of the Variance Gamma process.
     ///
     /// # Output
@@ -382,7 +373,6 @@ impl StochasticProcess for VarianceGammaProcess {
         self.t_f
     }
 
-    /// # Description
     /// Generates simulation paths for the Variance Gamma process.
     ///
     /// # Output
@@ -393,7 +383,7 @@ impl StochasticProcess for VarianceGammaProcess {
     fn get_paths(&self) -> Result<Vec<Array1<f64>>, DigiFiError> {
         let mut paths: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
         for _ in 0..self.n_paths {
-            let gamma_dist: GammaDistribution = GammaDistribution::new(self.dt*self.kappa, 1.0/self.kappa)?;
+            let gamma_dist: GammaDistribution = GammaDistribution::build(self.dt*self.kappa, 1.0/self.kappa)?;
             let dg: Array1<f64> = inverse_transform(&gamma_dist, self.t.len())?;
             let dg: Array1<f64> = dg.map(|v| { if v.is_nan() { 0.0 } else { *v } } );
             let n: Array1<f64> = StandardNormalInverseTransform::new_shuffle(self.t.len())?.generate()?;
@@ -419,7 +409,9 @@ mod tests {
         use crate::stochastic_processes::stochastic_volatility_models::ConstantElasticityOfVariance;
         let n_paths: usize = 100;
         let n_steps: usize = 200;
-        let cev: ConstantElasticityOfVariance = ConstantElasticityOfVariance::new(1.0, 0.4, 0.5, n_paths, n_steps, 1.0, 100.0).unwrap();
+        let cev: ConstantElasticityOfVariance = ConstantElasticityOfVariance::build(
+            1.0, 0.4, 0.5, n_paths, n_steps, 1.0, 100.0
+        ).unwrap();
         let paths: Vec<Array1<f64>> = cev.get_paths().unwrap();
         assert_eq!(paths.len(), n_paths);
         assert_eq!(paths[0].len(), n_steps+1);
@@ -437,7 +429,9 @@ mod tests {
         use crate::stochastic_processes::stochastic_volatility_models::HestonStochasticVolatility;
         let n_paths: usize = 100;
         let n_steps: usize = 200;
-        let hsv: HestonStochasticVolatility = HestonStochasticVolatility::new(0.1, 5.0, 0.07, 0.2, 0.0, n_paths, n_steps, 1.0, 100.0, 0.03);
+        let hsv: HestonStochasticVolatility = HestonStochasticVolatility::new(
+            0.1, 5.0, 0.07, 0.2, 0.0, n_paths, n_steps, 1.0, 100.0, 0.03
+        );
         let paths: Vec<Array1<f64>> = hsv.get_paths().unwrap();
         assert_eq!(paths.len(), n_paths);
         assert_eq!(paths[0].len(), n_steps+1);

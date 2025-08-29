@@ -3,11 +3,9 @@ use crate::error::DigiFiError;
 use crate::utilities::compare_array_len;
 
 
-/// # Description
 /// Trait for defining a loss function.
 pub trait LossFunction {
 
-    /// # Description
     /// Measures an error between observed and predicted values.
     ///
     /// # Input
@@ -18,7 +16,6 @@ pub trait LossFunction {
     /// - An error/loss
     fn loss(&self, observed_value: f64, predicted_value: f64) -> f64;
 
-    /// # Description
     /// Measures an error between observed and predicted values.
     ///
     /// # Input
@@ -31,7 +28,6 @@ pub trait LossFunction {
 }
 
 
-/// # Description
 /// Measures an error between paired observations (Usually, empirical observations vs simulated observations).
 ///
 /// # LaTeX Formula
@@ -48,7 +44,6 @@ impl LossFunction for MAE {
         (observed_value - predicted_value).abs()
     }
 
-    /// # Description
     /// Measures an error between observed and predicted values.
     ///
     /// # Input
@@ -67,7 +62,6 @@ impl LossFunction for MAE {
 }
 
 
-/// # Description
 /// Measures an error between paired observations (Usually, empirical observations vs simulated observations).
 ///
 /// # LaTeX Formula
@@ -84,7 +78,6 @@ impl LossFunction for MSE {
         (observed_value - predicted_value).powi(2)
     }
 
-    /// # Description
     /// Measures an error between observed and predicted values.
     ///
     /// # Input
@@ -103,7 +96,6 @@ impl LossFunction for MSE {
 }
 
 
-/// # Description
 /// Measures an error between paired observations (Usually, empirical observations vs simulated observations).
 ///
 /// # LaTeX Formula
@@ -120,7 +112,6 @@ impl LossFunction for SSE {
         (observed_value - predicted_value).powi(2)
     }
 
-    /// # Description
     /// Measures an error between observed and predicted values.
     ///
     /// # Input
@@ -139,7 +130,6 @@ impl LossFunction for SSE {
 }
 
 
-/// # Description
 /// Measures an error between paired observations (Usually, empirical observations vs simulated observations).
 ///
 /// # LaTeX Formula
@@ -157,7 +147,6 @@ impl LossFunction for StraddleLoss {
         (delta - 1.0).abs() + (1.0  - delta).abs()
     }
 
-    /// # Description
     /// Measures an error between observed and predicted values.
     ///
     /// # Input

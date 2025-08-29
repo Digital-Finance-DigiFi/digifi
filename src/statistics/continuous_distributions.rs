@@ -12,7 +12,6 @@ use crate::statistics::{
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Methods and properties of continuous uniform distribution.
 /// 
 /// # Links
@@ -26,7 +25,7 @@ use crate::statistics::{
 /// use digifi::utilities::TEST_ACCURACY;
 /// use digifi::statistics::{ProbabilityDistribution, ContinuousUniformDistribution};
 ///
-/// let dist: ContinuousUniformDistribution = ContinuousUniformDistribution::new(0.0, 1.0).unwrap();
+/// let dist: ContinuousUniformDistribution = ContinuousUniformDistribution::build(0.0, 1.0).unwrap();
 /// let x: Array1<f64> = arr1(&[0.6]);
 ///
 /// // PDF test
@@ -51,7 +50,6 @@ pub struct ContinuousUniformDistribution {
 }
 
 impl ContinuousUniformDistribution {
-    /// # Description
     /// Creates a new `ContinuousUniformDistribution` instance.
     /// 
     /// # Input
@@ -60,9 +58,12 @@ impl ContinuousUniformDistribution {
     /// 
     /// # Errors
     /// - Returns an error if the value of `a` is larger or equal to `b`.
-    pub fn new(a: f64, b: f64) -> Result<Self, DigiFiError> {
+    pub fn build(a: f64, b: f64) -> Result<Self, DigiFiError> {
         if b <= a {
-            return Err(DigiFiError::ParameterConstraint { title: "Continuous Uniform Distribution".to_owned(), constraint: "The argument `a` must be smaller or equal to the argument `b`.".to_owned(), });
+            return Err(DigiFiError::ParameterConstraint {
+                title: "Continuous Uniform Distribution".to_owned(),
+                constraint: "The argument `a` must be smaller or equal to the argument `b`.".to_owned(),
+            });
         }
         Ok(ContinuousUniformDistribution { a, b, _distribution_type: ProbabilityDistributionType::Continuous })
     }
@@ -97,7 +98,6 @@ impl ProbabilityDistribution for ContinuousUniformDistribution {
         Ok((self.b - self.a).ln())
     }
 
-    /// # Description
     /// Calculates the Probability Density Function (PDF) for a continuous uniform distribution.
     /// 
     /// # Input
@@ -113,7 +113,6 @@ impl ProbabilityDistribution for ContinuousUniformDistribution {
         Ok(x.map(|x_| if (self.a <= *x_) && ( *x_ <= self.b) {1.0 / (self.b - self.a) } else { 0.0 } ))
     }
 
-    /// # Description
     /// Computes the Cumulative Distribution Function (CDF) for a continuous uniform distribution.
     /// 
     /// # Input
@@ -129,7 +128,6 @@ impl ProbabilityDistribution for ContinuousUniformDistribution {
         Ok(x.map(|x_| if self.a <= *x_ { ((x_ - self.a) / (self.b - self.a)).min(1.0) } else { 0.0 } ))
     }
 
-    /// # Description
     /// Calculates the Inverse Cumulative Distribution Function (Inverse CDF) for a continuous uniform distribution.
     /// 
     /// # Input
@@ -142,7 +140,6 @@ impl ProbabilityDistribution for ContinuousUniformDistribution {
         Ok(self.a + p * (self.b - self.a))
     }
 
-    /// # Description
     /// Computes the Moment Generating Function (MGF) for a continuous uniform distribution.
     /// 
     /// # Input
@@ -161,7 +158,6 @@ impl ProbabilityDistribution for ContinuousUniformDistribution {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Methods and properties of normal distribution.
 /// 
 /// # Links
@@ -175,7 +171,7 @@ impl ProbabilityDistribution for ContinuousUniformDistribution {
 /// use digifi::utilities::TEST_ACCURACY;
 /// use digifi::statistics::{ProbabilityDistribution, NormalDistribution};
 ///
-/// let dist: NormalDistribution = NormalDistribution::new(0.0, 1.0).unwrap();
+/// let dist: NormalDistribution = NormalDistribution::build(0.0, 1.0).unwrap();
 /// let x: Array1<f64> = arr1(&[0.6]);
 ///
 /// // PDF test
@@ -200,7 +196,6 @@ pub struct NormalDistribution {
 }
 
 impl NormalDistribution {
-    /// # Description
     /// Creates a new `NormalDistribution` instance.
     /// 
     /// # Input
@@ -209,9 +204,12 @@ impl NormalDistribution {
     /// 
     /// # Errors
     /// - Returns an error if `sigma` is negative.
-    pub fn new(mu: f64, sigma: f64) -> Result<Self, DigiFiError> {
+    pub fn build(mu: f64, sigma: f64) -> Result<Self, DigiFiError> {
         if sigma < 0.0 {
-            return Err(DigiFiError::ParameterConstraint { title: "Normal Distribution".to_owned(), constraint: "The argument `sigma` must be non-negative.".to_owned(), });
+            return Err(DigiFiError::ParameterConstraint {
+                title: "Normal Distribution".to_owned(),
+                constraint: "The argument `sigma` must be non-negative.".to_owned(),
+            });
         }
         Ok(NormalDistribution { mu, sigma, _distribution_type: ProbabilityDistributionType::Continuous })
     }
@@ -246,7 +244,6 @@ impl ProbabilityDistribution for NormalDistribution {
         Ok((2.0 * std::f64::consts::PI * std::f64::consts::E * self.sigma.powi(2)).ln() / 2.0)
     }
 
-    /// # Description
     /// Calculates the Probability Density Function (PDF) of a normal distribution.
     /// 
     /// # Input
@@ -264,7 +261,6 @@ impl ProbabilityDistribution for NormalDistribution {
         } ))
     }
 
-    /// # Description
     /// Computes the Cumulative Distribution Function (CDF) for a normal distribution.
     /// 
     /// # Input
@@ -280,7 +276,6 @@ impl ProbabilityDistribution for NormalDistribution {
         Ok((1.0 + ((x - self.mu) / (self.sigma * 2.0_f64.sqrt())).map(|x_| erf(*x_, None) )) / 2.0)
     }
 
-    /// # Description
     /// Computes the Inverse Cumulative Distribution Function (Inverse CDF) for a normal distribution.
     /// 
     /// # Input
@@ -293,7 +288,6 @@ impl ProbabilityDistribution for NormalDistribution {
         Ok(self.mu + self.sigma * 2.0_f64.sqrt() * p.map(|p_| erfinv(2.0 * *p_ - 1.0, Some(30)) ))
     }
 
-    /// # Description
     /// Calculates the Moment Generating Function (MGF) for a normal distribution.
     /// 
     /// # Input
@@ -312,7 +306,6 @@ impl ProbabilityDistribution for NormalDistribution {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Methods and properties of exponential distribution.
 /// 
 /// # Links
@@ -326,7 +319,7 @@ impl ProbabilityDistribution for NormalDistribution {
 /// use digifi::utilities::TEST_ACCURACY;
 /// use digifi::statistics::{ProbabilityDistribution, ExponentialDistribution};
 ///
-/// let dist: ExponentialDistribution = ExponentialDistribution::new(0.5).unwrap();
+/// let dist: ExponentialDistribution = ExponentialDistribution::build(0.5).unwrap();
 /// let x: Array1<f64> = arr1(&[0.6]);
 ///
 /// // PDF test
@@ -349,7 +342,6 @@ pub struct ExponentialDistribution {
 }
 
 impl ExponentialDistribution {
-    /// # Description
     /// Creates a new `ExponentialDistribution` instance.
     /// 
     /// # Input
@@ -357,9 +349,12 @@ impl ExponentialDistribution {
     /// 
     /// # Errors
     /// - Returns an error if `lambda` is not positive.
-    pub fn new(lambda: f64) -> Result<Self, DigiFiError> {
+    pub fn build(lambda: f64) -> Result<Self, DigiFiError> {
         if lambda <= 0.0 {
-            return Err(DigiFiError::ParameterConstraint { title: "Exponential Distribution".to_owned(), constraint: "The argument `lambda` must be positive.".to_owned(), });
+            return Err(DigiFiError::ParameterConstraint {
+                title: "Exponential Distribution".to_owned(),
+                constraint: "The argument `lambda` must be positive.".to_owned(),
+            });
         }
         Ok(ExponentialDistribution { lambda, _distribution_type: ProbabilityDistributionType::Continuous })
     }
@@ -394,7 +389,6 @@ impl ProbabilityDistribution for ExponentialDistribution {
         Ok(1.0 - self.lambda.ln())
     }
 
-    /// # Description
     /// Calculates the Probability Density Function (PDF) for an exponential distribution.
     /// 
     /// # Input
@@ -410,7 +404,6 @@ impl ProbabilityDistribution for ExponentialDistribution {
         Ok(x.map(|x_| self.lambda * (-self.lambda * x_).exp() ))
     }
 
-    /// # Description
     /// Computes the Cumulative Distribution Function (CDF) for an exponential distribution.
     /// 
     /// # Input
@@ -426,7 +419,6 @@ impl ProbabilityDistribution for ExponentialDistribution {
         Ok(x.map(|x_| 1.0 - (-self.lambda * x_).exp() ))
     }
 
-    /// # Description
     /// Calculates the Inverse Cumulative Distribution Function (Inverse CDF) for an exponential distribution.
     /// 
     /// # Input
@@ -439,7 +431,6 @@ impl ProbabilityDistribution for ExponentialDistribution {
         Ok(p.map(|p_| (1.0 - p_).ln() / -self.lambda ))
     }
 
-    /// # Description
     /// Computes the Moment Generating Function (MGF) for an exponential distribution.
     /// 
     /// # Input
@@ -455,7 +446,6 @@ impl ProbabilityDistribution for ExponentialDistribution {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Methods and properties of Laplace distribution.
 /// 
 /// # Links
@@ -469,7 +459,7 @@ impl ProbabilityDistribution for ExponentialDistribution {
 /// use digifi::utilities::TEST_ACCURACY;
 /// use digifi::statistics::{ProbabilityDistribution, LaplaceDistribution};
 ///
-/// let dist: LaplaceDistribution = LaplaceDistribution::new(1.0, 2.0).unwrap();
+/// let dist: LaplaceDistribution = LaplaceDistribution::build(1.0, 2.0).unwrap();
 /// let x: Array1<f64> = arr1(&[0.6]);
 ///
 /// // PDF test
@@ -494,13 +484,12 @@ pub struct LaplaceDistribution {
 }
 
 impl LaplaceDistribution {
-    /// # Description
     /// Creates a new `LaplaceDistribution` instance.
     ///
     /// # Input
     /// - `mu`: Location parameter, which is the peak of the distribution
     /// - `b`: Scale parameter, which controls the spread of the distribution
-    pub fn new(mu: f64, b: f64) -> Result<Self, DigiFiError> {
+    pub fn build(mu: f64, b: f64) -> Result<Self, DigiFiError> {
         Ok(LaplaceDistribution { mu, b, _distribution_type: ProbabilityDistributionType::Continuous })
     }
 }
@@ -534,7 +523,6 @@ impl ProbabilityDistribution for LaplaceDistribution {
         Ok((2.0 * self.b * std::f64::consts::E).ln())
     }
 
-    /// # Description
     /// Calculates the Probability Density Function (PDF) for a Laplace distribution.
     /// 
     /// # Input
@@ -550,7 +538,6 @@ impl ProbabilityDistribution for LaplaceDistribution {
         Ok(x.map(|x_| (-(x_ - self.mu).abs() / self.b).exp() / (2.0 * self.b) ))
     }
 
-    /// # Description
     /// Computes the Cumulative Distribution Function (CDF) for a Laplace distribution.
     /// 
     /// # Input
@@ -566,7 +553,6 @@ impl ProbabilityDistribution for LaplaceDistribution {
         Ok(x.map(|x_| if *x_ <= self.b { 0.5 * ((x_ - self.mu) / self.b).exp() } else { 1.0 - 0.5 * (-(x_ - self.mu) / self.b).exp() } ))
     }
 
-    /// # Description
     /// Computes the Inverse Cumulative Distribution Function (Inverse CDF) for a Laplace distribution.
     /// 
     /// # Input
@@ -579,7 +565,6 @@ impl ProbabilityDistribution for LaplaceDistribution {
         Ok(p.map(|p_| self.mu - self.b * (p_ - 0.5).signum() * (1.0 - 2.0*(p_ - 0.5).abs()).ln() ))
     }
 
-    /// # Description
     /// Calculates the Moment Generating Function (MGF) for a Laplace distribution.
     /// 
     /// # Input
@@ -598,7 +583,6 @@ impl ProbabilityDistribution for LaplaceDistribution {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Methods and properties of Gamma distribution.
 /// 
 /// # Links
@@ -612,7 +596,7 @@ impl ProbabilityDistribution for LaplaceDistribution {
 /// use digifi::utilities::TEST_ACCURACY;
 /// use digifi::statistics::{ProbabilityDistribution, GammaDistribution};
 ///
-/// let dist: GammaDistribution = GammaDistribution::new(0.5, 2.0).unwrap();
+/// let dist: GammaDistribution = GammaDistribution::build(0.5, 2.0).unwrap();
 /// let x: Array1<f64> = arr1(&[0.6]);
 ///
 /// // PDF test
@@ -637,19 +621,18 @@ pub struct GammaDistribution {
 }
 
 impl GammaDistribution {
-    /// # Description
     /// Creates a new `GammaDistribution` instance.
     ///
     /// # Input
     /// - `k`: Shape parameter, which controls the shape of the distribution
     /// - `theta`: Scale parameter, which controls the spread of the distribution
-    pub fn new(k: f64, theta: f64) -> Result<Self, DigiFiError> {
+    pub fn build(k: f64, theta: f64) -> Result<Self, DigiFiError> {
         let error_title: String = String::from("Gamma Distribution");
         if k <= 0.0 {
-            return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument `k` must be positive.".to_owned(), });
+            return Err(DigiFiError::ParameterConstraint { title: error_title, constraint: "The argument `k` must be positive.".to_owned(), });
         }
         if theta <= 0.0 {
-            return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument `theta` must be positive.".to_owned(), });
+            return Err(DigiFiError::ParameterConstraint { title: error_title, constraint: "The argument `theta` must be positive.".to_owned(), });
         }
         Ok(GammaDistribution { k, theta, _distribution_type: ProbabilityDistributionType::Continuous })
     }
@@ -689,7 +672,6 @@ impl ProbabilityDistribution for GammaDistribution {
         Ok(self.k + self.theta.ln() + gamma(self.k).ln() + (1.0 - self.k) * derivative(f, self.k, 0.00000001))
     }
 
-    /// # Description
     /// Calculates the Probability Density Function (PDF) for a Gamma distribution.
     /// 
     /// # Input
@@ -702,7 +684,6 @@ impl ProbabilityDistribution for GammaDistribution {
         Ok(x_.map(|v| v.powf(self.k - 1.0) * (-v / self.theta).exp() / (gamma(self.k) * self.theta.powf(self.k)) ))
     }
 
-    /// # Description
     /// Computes the Cumulative Distribution Function (CDF) for a Gamma distribution.
     /// 
     /// # Input
@@ -719,7 +700,6 @@ impl ProbabilityDistribution for GammaDistribution {
         Ok(Array1::from_vec(y))
     }
 
-    /// # Description
     /// Computes the Inverse Cumulative Distribution Function (Inverse CDF) for a Gamma distribution.
     /// 
     /// # Input
@@ -738,7 +718,6 @@ impl ProbabilityDistribution for GammaDistribution {
         Ok(Array1::from_vec(y))
     }
 
-    /// # Description
     /// Calculates the Moment Generating Function (MGF) for a Gamma distribution.
     /// 
     /// # Input
@@ -756,7 +735,6 @@ impl ProbabilityDistribution for GammaDistribution {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Methods and properties of Student's t-distribution.
 /// 
 /// # Links
@@ -770,7 +748,7 @@ impl ProbabilityDistribution for GammaDistribution {
 /// use digifi::utilities::TEST_ACCURACY;
 /// use digifi::statistics::{ProbabilityDistribution, StudentsTDistribution};
 ///
-/// let dist: StudentsTDistribution = StudentsTDistribution::new(2.0).unwrap();
+/// let dist: StudentsTDistribution = StudentsTDistribution::build(2.0).unwrap();
 /// let x: Array1<f64> = arr1(&[-2.0, -1.0, 0.0, 1.0, 2.0]);
 /// 
 /// // PDF test (Values obtained using t.pdf() from SciPy)
@@ -789,7 +767,7 @@ impl ProbabilityDistribution for GammaDistribution {
 /// 
 /// 
 /// // Moderate degrees of freedom test (Central values)
-/// let dist: StudentsTDistribution = StudentsTDistribution::new(6.0).unwrap();
+/// let dist: StudentsTDistribution = StudentsTDistribution::build(6.0).unwrap();
 /// let x: Array1<f64> = Array1::from_vec(vec![0.75, 0.8, 0.85]);
 /// let tested_values: Array1<f64> = Array1::from_vec(vec![0.718, 0.906, 1.134]);
 /// let icdf_v: Array1<f64> = dist.inverse_cdf(&x).unwrap();
@@ -803,7 +781,7 @@ impl ProbabilityDistribution for GammaDistribution {
 /// 
 /// 
 /// // Large degrees of freedom (Approaching 30 degrees of freedom, df = 29)
-/// let dist: StudentsTDistribution = StudentsTDistribution::new(29.0).unwrap();
+/// let dist: StudentsTDistribution = StudentsTDistribution::build(29.0).unwrap();
 /// let x: Array1<f64> = arr1(&[-2.0, -1.0, 0.0, 1.0, 2.0]);
 /// 
 /// // PDF test (Values obtained using t.pdf() from SciPy)
@@ -822,7 +800,7 @@ impl ProbabilityDistribution for GammaDistribution {
 /// 
 /// 
 /// // Very large degrees of freedom (df = 124)
-/// let dist: StudentsTDistribution = StudentsTDistribution::new(124.0).unwrap();
+/// let dist: StudentsTDistribution = StudentsTDistribution::build(124.0).unwrap();
 /// let x: Array1<f64> = arr1(&[-2.0, -1.0, 0.0, 1.0, 2.0]);
 /// 
 /// // PDF test (Values obtained using t.pdf() from SciPy)
@@ -847,15 +825,16 @@ pub struct StudentsTDistribution {
 }
 
 impl StudentsTDistribution {
-    /// # Description
     /// Creates a new `StudentsTDistribution` instance.
     ///
     /// # Input
     /// - `v`: Degrees of freedom
-    pub fn new(v: f64) -> Result<Self, DigiFiError> {
-        let error_title: String = String::from("Student's T Distribution Distribution");
+    pub fn build(v: f64) -> Result<Self, DigiFiError> {
         if v <= 0.0 {
-            return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument `v` must be positive.".to_owned(), });
+            return Err(DigiFiError::ParameterConstraint {
+                title: "Student's T Distribution Distribution".to_owned(),
+                constraint: "The argument `v` must be positive.".to_owned(),
+            });
         }
         Ok(StudentsTDistribution { v, _distribution_type: ProbabilityDistributionType::Continuous })
     }
@@ -892,7 +871,6 @@ impl ProbabilityDistribution for StudentsTDistribution {
         Ok(part_1 + part_2)
     }
 
-    /// # Description
     /// Calculates the Probability Density Function (PDF) for a Student's t-distribution.
     /// 
     /// # Input
@@ -909,7 +887,6 @@ impl ProbabilityDistribution for StudentsTDistribution {
         } ))
     }
 
-    /// # Description
     /// Computes the Cumulative Distribution Function (CDF) for a Student's t-distribution.
     /// 
     /// # Input
@@ -933,7 +910,6 @@ impl ProbabilityDistribution for StudentsTDistribution {
         Ok(Array1::from_vec(y))
     }
 
-    /// # Description
     /// Computes the Inverse Cumulative Distribution Function (Inverse CDF) for a Student's t-distribution.
     /// 
     /// # Input
@@ -958,7 +934,7 @@ impl ProbabilityDistribution for StudentsTDistribution {
                 y.push(sign * 2.0 * (q - 1.0).sqrt());
             } else if self.v < 30.0 {
                 // Cornish-Fisher extension
-                let dist: NormalDistribution = NormalDistribution::new(0.0, 1.0)?;
+                let dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
                 let z: f64 = dist.inverse_cdf(&arr1(&[p_]))?[0];
                 let result: f64 = z + z*(z.powi(2) + 1.0)/(4.0 * self.v) + z*(5.0 * z.powi(4) + 16.0 * z.powi(2) + 3.0)/(96.0 * self.v.powi(2))
                     + z*(3.0 * z.powi(7) + 19.0 * z.powi(5) + 17.0 * z.powi(3) - 16.0 * z)/(384.0 * self.v.powi(3))
@@ -966,14 +942,13 @@ impl ProbabilityDistribution for StudentsTDistribution {
                 y.push(result);
             } else {
                 // Approximation via Normal distribution for high number of degrees of freedom
-                let dist: NormalDistribution = NormalDistribution::new(0.0, 1.0)?;
+                let dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
                 y.push(dist.inverse_cdf(&arr1(&[p_]))?[0]);
             }
         }
         Ok(Array1::from_vec(y))
     }
 
-    /// # Description
     /// Calculates the Moment Generating Function (MGF) for a Student's t-distribution.
     /// Note: Since MGF is not defined this function will always return undefined values.
     /// 
@@ -998,7 +973,7 @@ mod tests {
     #[test]
     fn unit_test_continuous_uniform_distribution() -> () {
         use crate::statistics::continuous_distributions::ContinuousUniformDistribution;
-        let dist: ContinuousUniformDistribution = ContinuousUniformDistribution::new(0.0, 1.0).unwrap();
+        let dist: ContinuousUniformDistribution = ContinuousUniformDistribution::build(0.0, 1.0).unwrap();
         let x: Array1<f64> = arr1(&[0.6]);
         // PDF test
         let pdf_v: f64 = dist.pdf(&x).unwrap()[0];
@@ -1014,7 +989,7 @@ mod tests {
     #[test]
     fn unit_test_normal_distribution() -> () {
         use crate::statistics::continuous_distributions::NormalDistribution;
-        let dist: NormalDistribution = NormalDistribution::new(0.0, 1.0).unwrap();
+        let dist: NormalDistribution = NormalDistribution::build(0.0, 1.0).unwrap();
         let x: Array1<f64> = arr1(&[0.6]);
         // PDF test
         let pdf_v: f64 = dist.pdf(&x).unwrap()[0];
@@ -1030,7 +1005,7 @@ mod tests {
     #[test]
     fn unit_test_exponential_distribution() -> () {
         use crate::statistics::continuous_distributions::ExponentialDistribution;
-        let dist: ExponentialDistribution = ExponentialDistribution::new(0.5).unwrap();
+        let dist: ExponentialDistribution = ExponentialDistribution::build(0.5).unwrap();
         let x: Array1<f64> = arr1(&[0.6]);
         // PDF test
         let pdf_v: f64 = dist.pdf(&x).unwrap()[0];
@@ -1046,7 +1021,7 @@ mod tests {
     #[test]
     fn unit_test_laplace_distribution() -> () {
         use crate::statistics::continuous_distributions::LaplaceDistribution;
-        let dist: LaplaceDistribution = LaplaceDistribution::new(1.0, 2.0).unwrap();
+        let dist: LaplaceDistribution = LaplaceDistribution::build(1.0, 2.0).unwrap();
         let x: Array1<f64> = arr1(&[0.6]);
         // PDF test
         let pdf_v: f64 = dist.pdf(&x).unwrap()[0];
@@ -1062,7 +1037,7 @@ mod tests {
     #[test]
     fn unit_test_gamma_distribution() -> () {
         use crate::statistics::continuous_distributions::GammaDistribution;
-        let dist: GammaDistribution = GammaDistribution::new(0.5, 2.0).unwrap();
+        let dist: GammaDistribution = GammaDistribution::build(0.5, 2.0).unwrap();
         let x: Array1<f64> = arr1(&[0.6]);
         // PDF test
         let pdf_v: f64 = dist.pdf(&x).unwrap()[0];
@@ -1078,7 +1053,7 @@ mod tests {
     #[test]
     fn unit_test_students_t_distribution() -> () {
         use crate::statistics::continuous_distributions::StudentsTDistribution;
-        let dist: StudentsTDistribution = StudentsTDistribution::new(2.0).unwrap();
+        let dist: StudentsTDistribution = StudentsTDistribution::build(2.0).unwrap();
         let x: Array1<f64> = arr1(&[-2.0, -1.0, 0.0, 1.0, 2.0]);
         // PDF test (Values obtained using t.pdf() from SciPy)
         let pdf_v: Array1<f64> = dist.pdf(&x).unwrap();
@@ -1093,7 +1068,7 @@ mod tests {
         assert!((icdf_v - x).fold(true, |test, i| if *i < 10.0 * TEST_ACCURACY && test { true } else { false } ));
 
         // Moderate degrees of freedom test (Central values)
-        let dist: StudentsTDistribution = StudentsTDistribution::new(6.0).unwrap();
+        let dist: StudentsTDistribution = StudentsTDistribution::build(6.0).unwrap();
         let x: Array1<f64> = Array1::from_vec(vec![0.75, 0.8, 0.85]);
         let tested_values: Array1<f64> = Array1::from_vec(vec![0.718, 0.906, 1.134]);
         let icdf_v: Array1<f64> = dist.inverse_cdf(&x).unwrap();
@@ -1105,7 +1080,7 @@ mod tests {
         assert!((icdf_v - &tested_values).fold(true, |test, i| if *i < 1_000_000.0 * TEST_ACCURACY && test { true } else { false } ));
 
         // Large degrees of freedom (Approaching 30 degrees of freedom, df = 29)
-        let dist: StudentsTDistribution = StudentsTDistribution::new(29.0).unwrap();
+        let dist: StudentsTDistribution = StudentsTDistribution::build(29.0).unwrap();
         let x: Array1<f64> = arr1(&[-2.0, -1.0, 0.0, 1.0, 2.0]);
         // PDF test (Values obtained using t.pdf() from SciPy)
         let pdf_v: Array1<f64> = dist.pdf(&x).unwrap();
@@ -1120,7 +1095,7 @@ mod tests {
         assert!((icdf_v - x).fold(true, |test, i| if *i < 1_000_000.0 * TEST_ACCURACY && test { true } else { false } ));
 
         // Very large degrees of freedom (df = 124)
-        let dist: StudentsTDistribution = StudentsTDistribution::new(124.0).unwrap();
+        let dist: StudentsTDistribution = StudentsTDistribution::build(124.0).unwrap();
         let x: Array1<f64> = arr1(&[-2.0, -1.0, 0.0, 1.0, 2.0]);
         // PDF test (Values obtained using t.pdf() from SciPy)
         let pdf_v: Array1<f64> = dist.pdf(&x).unwrap();

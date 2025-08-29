@@ -158,11 +158,15 @@ impl NelderMead {
     /// Shrinkage requires n function evaluations.
     #[inline]
     fn shrink<F>(&self, simplex: &mut Simplex, f: &mut WrappedFunction<F>, sigma: f64, centroid: &mut Array1<f64>) -> Result<(), DigiFiError>
-    where F: FnMut(&Array1<f64>) -> f64 {
+        where F: FnMut(&Array1<f64>) -> f64
+    {
         {
             let mut iter = simplex.iter_mut();
             let (_, x0) = iter.next()
-                .ok_or(DigiFiError::Other { title: "Nelder-Mead Numerical Engine".to_owned(), details: "Could not grab next element from the simplex.".to_owned(), })?;
+                .ok_or(DigiFiError::Other {
+                    title: "Nelder-Mead Numerical Engine".to_owned(),
+                    details: "Could not grab next element from the simplex.".to_owned(),
+                })?;
             for (fi, xi) in iter {
                 *xi *= sigma;
                 *xi += &((1.0 - sigma) * &x0.view());
@@ -197,7 +201,6 @@ impl NelderMead {
 }
 
 
-/// # Description
 /// A minimizer for a scalar function of one or more variables using the Nelder-Mead algorithm.
 ///
 /// # Input
@@ -215,8 +218,9 @@ impl NelderMead {
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Nelder-Mead_method>
 /// - Original Source: <https://doi.org/10.1093/comjnl/8.1.27>
-pub fn nelder_mead<F: FnMut(&[f64]) -> f64>(mut f: F, initial_guess: Vec<f64>, max_iterations: Option<u64>, max_fun_calls: Option<u64>, adaptive: Option<bool>,
-                      xtol: Option<f64>, ftol: Option<f64>) -> Result<Array1<f64>, DigiFiError> {
+pub fn nelder_mead<F: FnMut(&[f64]) -> f64>(
+    mut f: F, initial_guess: Vec<f64>, max_iterations: Option<u64>, max_fun_calls: Option<u64>, adaptive: Option<bool>, xtol: Option<f64>, ftol: Option<f64>
+) -> Result<Array1<f64>, DigiFiError> {
     let minimizer: NelderMead = NelderMead::new(max_iterations, max_fun_calls, adaptive, xtol, ftol);
     minimizer.minimize(|x: &Array1<f64>| { f(&x.to_vec()) }, Array1::from_vec(initial_guess))
 }

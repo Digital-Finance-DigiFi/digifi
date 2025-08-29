@@ -11,7 +11,6 @@ pub trait PortfolioTaxonomy {
 
 impl PortfolioTaxonomy for Portfolio {
 
-    /// # Description
     /// Computes the minimal-spanning tree for the portfolio of assets based on the distance (i.e., weights) metric provided.
     /// 
     /// # Input
@@ -38,13 +37,13 @@ impl PortfolioTaxonomy for Portfolio {
     ///     let dummy_array: Array1<f64> = Array1::from_vec(vec![0.0; time.len()]);
     ///     let mut assets: HashMap<String, Asset> = HashMap::<String, Asset>::new();
     ///     for (k, v) in data.into_iter() {
-    ///         let hist_data: AssetHistData = AssetHistData::new(v, dummy_array.clone(), dummy_array.clone()).unwrap();
+    ///         let hist_data: AssetHistData = AssetHistData::build(v, dummy_array.clone(), dummy_array.clone()).unwrap();
     ///         assets.insert(k, Asset { hist_data, weight, });
     ///     }
     ///     let performance_metric: Box<SharpeRatio> = Box::new(SharpeRatio { rf: 0.02 });
     ///
     ///     // Portfolio definition and optimization
-    ///     let mut portfolio: Portfolio = Portfolio::new(assets, None, None, None, performance_metric).unwrap();
+    ///     let mut portfolio: Portfolio = Portfolio::build(assets, None, None, None, performance_metric).unwrap();
     ///
     ///     // Minimal-spanning tree
     ///     let (asset_names, distance_matrix) = portfolio.minimal_spanning_tree(&MSTDistance::MantegnaDistance).unwrap();
@@ -99,12 +98,12 @@ mod tests {
         let dummy_array: Array1<f64> = Array1::from_vec(vec![0.0; time.len()]);
         let mut assets: HashMap<String, Asset> = HashMap::<String, Asset>::new();
         for (k, v) in data.into_iter() {
-            let hist_data: AssetHistData = AssetHistData::new(v, dummy_array.clone(), dummy_array.clone()).unwrap();
+            let hist_data: AssetHistData = AssetHistData::build(v, dummy_array.clone(), dummy_array.clone()).unwrap();
             assets.insert(k, Asset { hist_data, weight, });
         }
         let performance_metric: Box<SharpeRatio> = Box::new(SharpeRatio { rf: 0.02 });
         // Portfolio definition
-        let portfolio: Portfolio = Portfolio::new(assets, None, None, None, performance_metric).unwrap();
+        let portfolio: Portfolio = Portfolio::build(assets, None, None, None, performance_metric).unwrap();
         // Minimal-spanning tree
         let (asset_names, distance_matrix) = portfolio.minimal_spanning_tree(&MSTDistance::MantegnaDistance).unwrap();
         println!("Asset Names: {:?}", asset_names);

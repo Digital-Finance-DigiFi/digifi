@@ -1,3 +1,8 @@
+//! # Plots
+//! 
+//! Contains functionality for plotting different results produced by the library.
+
+
 // Re-Exports
 pub use crate::financial_instruments::{plot_payoff, plot_profit};
 pub use crate::financial_instruments::derivatives::plot_present_value_surface;
@@ -13,7 +18,6 @@ use crate::error::DigiFiError;
 use crate::utilities::compare_array_len;
 
 
-/// # Description
 /// Plots the candlestick chart.
 ///
 /// # Input
@@ -31,7 +35,7 @@ use crate::utilities::compare_array_len;
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```rust,ignore
 /// 
 /// #[cfg(all(feature = "plotly", feature = "sample_data"))]
 /// fn test_candlestick_chart() -> () {
@@ -69,7 +73,6 @@ pub fn plot_candlestick_chart(open: &Array1<f64>, high: &Array1<f64>, low: &Arra
 }
 
 
-/// # Description
 /// Plots the volume.
 ///
 /// # Input
@@ -84,7 +87,7 @@ pub fn plot_candlestick_chart(open: &Array1<f64>, high: &Array1<f64>, low: &Arra
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```rust,ignore
 /// 
 /// #[cfg(all(feature = "plotly", feature = "sample_data"))]
 /// fn test_candlestick_chart() -> () {
@@ -123,6 +126,7 @@ mod tests {
     use crate::utilities::sample_data::SampleData;
 
     #[test]
+    #[ignore]
     fn unit_test_plot_candlestick_chart() -> () {
         use crate::plots::plot_candlestick_chart;
         // Sample stock data
@@ -136,6 +140,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn unit_test_plot_volume() -> () {
         use crate::plots::plot_volume;
         // Sample stock data

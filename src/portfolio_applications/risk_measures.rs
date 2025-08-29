@@ -4,7 +4,6 @@ use crate::utilities::maths_utils::definite_integral;
 use crate::statistics::ProbabilityDistribution;
 
 
-/// # Description
 /// Measure of the risk of a portfolio estimating how much a portfolio can lose in a specified period.
 /// 
 /// Note: This function uses the convention where 5% V@R of $1 million is the 0.05 probability that the portfolio will go down by $1 million.
@@ -33,19 +32,21 @@ use crate::statistics::ProbabilityDistribution;
 /// use digifi::statistics::{ProbabilityDistribution, NormalDistribution};
 /// use digifi::portfolio_applications::value_at_risk;
 ///
-/// let norm_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0).unwrap();
+/// let norm_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0).unwrap();
 ///
 /// assert!((value_at_risk(0.1, &norm_dist).unwrap() - 1.28).abs() < 1_000_000.0 * TEST_ACCURACY);
 /// ```
 pub fn value_at_risk(alpha: f64, returns_distribution: &impl ProbabilityDistribution) -> Result<f64, DigiFiError> {
     if (alpha < 0.0) || (1.0 < alpha) {
-        return Err(DigiFiError::ParameterConstraint { title: "Value at Risk".to_owned(), constraint: "The argument `alpha` must be in the range `[0, 1]`.".to_owned(), });
+        return Err(DigiFiError::ParameterConstraint {
+            title: "Value at Risk".to_owned(),
+            constraint: "The argument `alpha` must be in the range `[0, 1]`.".to_owned(),
+        });
     }
     Ok(-returns_distribution.inverse_cdf(&Array1::from_vec(vec![alpha]))?[0])
 }
 
 
-/// # Description
 /// Measure of the risk of a portfolio that evaluates the expected return of a portfolio in the worst percentage of cases.
 /// 
 /// Note: This function uses the convention where ES at 5% is the expected shortfall of the 5% of worst cases.
@@ -72,7 +73,7 @@ pub fn value_at_risk(alpha: f64, returns_distribution: &impl ProbabilityDistribu
 /// use digifi::statistics::{ProbabilityDistribution, NormalDistribution};
 /// use digifi::portfolio_applications::expected_shortfall;
 ///
-/// let norm_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0).unwrap();
+/// let norm_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0).unwrap();
 ///
 /// let es: f64 = expected_shortfall(0.1, &norm_dist).unwrap();
 ///
@@ -81,7 +82,10 @@ pub fn value_at_risk(alpha: f64, returns_distribution: &impl ProbabilityDistribu
 /// ```
 pub fn expected_shortfall(alpha: f64, returns_distribution: &impl ProbabilityDistribution) -> Result<f64, DigiFiError> {
     if (alpha < 0.0) || (1.0 < alpha) {
-        return Err(DigiFiError::ParameterConstraint { title: "Expected Shortfall".to_owned(), constraint: "The argument `alpha` must be in the range `[0, 1]`.".to_owned() });
+        return Err(DigiFiError::ParameterConstraint {
+            title: "Expected Shortfall".to_owned(),
+            constraint: "The argument `alpha` must be in the range `[0, 1]`.".to_owned(),
+        });
     }
     let f = |p| { value_at_risk(p, returns_distribution).unwrap() };
     Ok(definite_integral(f, 0.0, alpha, 1_000_000) / alpha)
@@ -98,14 +102,14 @@ mod tests {
     #[test]
     fn unit_test_value_at_risk() -> () {
         use crate::portfolio_applications::risk_measures::value_at_risk;
-        let norm_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0).unwrap();
+        let norm_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0).unwrap();
         assert!((value_at_risk(0.1, &norm_dist).unwrap() - 1.28).abs() < 1_000_000.0 * TEST_ACCURACY);
     }
 
     #[test]
     fn unit_test_expected_shortfall() -> () {
         use crate::portfolio_applications::risk_measures::expected_shortfall;
-        let norm_dist: NormalDistribution = NormalDistribution::new(0.0, 1.0).unwrap();
+        let norm_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0).unwrap();
         let es: f64 = expected_shortfall(0.1, &norm_dist).unwrap();
         let theor: f64 = (-norm_dist.inverse_cdf(&arr1(&[0.1])).unwrap()[0].powi(2) / 2.0).exp() / (2.0 * std::f64::consts::PI).sqrt() / 0.1;
         assert!((es - theor).abs() < 10_000_000.0 * TEST_ACCURACY);

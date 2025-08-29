@@ -8,7 +8,6 @@ use crate::statistics::{self, stat_tests};
 
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// The data relevant to the specific linear regression feature.
 pub struct LinearRegressionFeatureResult {
     /// Value of the coefficient
@@ -42,7 +41,6 @@ pub struct LinearRegressionFeatureResult {
 
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// The data resulting from linear regression analysis.
 pub struct LinearRegressionResult {
     /// Trained values of the linear regression moel (in the same order as the features that were input into the model)
@@ -64,7 +62,6 @@ pub struct LinearRegressionResult {
 
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Settings of the linear regression analysis.
 pub struct LinearRegressionSettings {
     /// Whether to add a constant (i.e., intercept) to the linear regression model
@@ -97,26 +94,26 @@ pub struct LinearRegressionSettings {
 
 impl LinearRegressionSettings {
 
-    /// # Description
     /// Returns linear regression settings with all settings enabled.
     /// 
     /// Note: This is a short cut to construct the settings for the full linear regression analysis.
     pub fn enable_all() -> Self {
         LinearRegressionSettings {
-            add_constant: true, enable_sse: true, enable_r_squared: true, enable_adjusted_r_squared: true, enable_se: true, enable_cov: true, enable_pearson_corr: true,
+            add_constant: true, enable_sse: true, enable_r_squared: true, enable_adjusted_r_squared: true, enable_se: true, enable_cov: true,
+            enable_pearson_corr: true,
             enable_t_test: true, t_test_cl: Some(stat_tests::ConfidenceLevel::default()), t_test_h0s: None,
             enable_cointegration: true, cointegration_cl: Some(stat_tests::ConfidenceLevel::default()),
             enable_vif: true,
         }
     }
 
-    /// # Description
     /// Returns linear regression settings with all settings disabled.
     /// 
     /// Note: This is a short cut to construct the settings for the minimalistic linear regression analysis.
     pub fn disable_all() -> Self {
         LinearRegressionSettings {
-            add_constant: false, enable_sse: false, enable_r_squared: false, enable_adjusted_r_squared: false, enable_se: false, enable_cov: false, enable_pearson_corr: false,
+            add_constant: false, enable_sse: false, enable_r_squared: false, enable_adjusted_r_squared: false, enable_se: false, enable_cov: false,
+            enable_pearson_corr: false,
             enable_t_test: false, t_test_cl: Some(stat_tests::ConfidenceLevel::default()), t_test_h0s: None,
             enable_cointegration: false, cointegration_cl: Some(stat_tests::ConfidenceLevel::default()),
             enable_vif: false,
@@ -127,7 +124,6 @@ impl LinearRegressionSettings {
 
 #[derive(Debug, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Set of tools for constructing a linear regression model and performing a further analysis of it.
 /// 
 /// Note: This tool combines other functions and methods from a library underr one implementation that is easy ton set up.
@@ -138,7 +134,6 @@ pub struct LinearRegressionAnalysis {
 
 impl LinearRegressionAnalysis {
 
-    /// # Description
     /// Constructs a new instance of `LinearRegressionAnalysis`.
     /// 
     /// # Input
@@ -147,7 +142,6 @@ impl LinearRegressionAnalysis {
         LinearRegressionAnalysis { settings, }
     }
 
-    /// # Description
     /// Validates the input data for the linear regression analysis.
     fn validate_input(&self, x: &Vec<Array1<f64>>, y: &Array1<f64>) -> Result<(), DigiFiError> {
         let error_title: String = String::from("Linear Regression Analysis");
@@ -155,7 +149,7 @@ impl LinearRegressionAnalysis {
         let x_len: usize = x.len();
         // Input validation
         if y.is_empty() {
-            return Err(DigiFiError::ValidationError { title: error_title.clone(), details: "Array `y` must not be empty.".to_owned() ,});
+            return Err(DigiFiError::ValidationError { title: error_title, details: "Array `y` must not be empty.".to_owned() ,});
         }
         for v in x {
             if v.len() != y_len {
@@ -163,7 +157,7 @@ impl LinearRegressionAnalysis {
             }
         }
         if (!self.settings.add_constant && y_len < x_len) || (self.settings.add_constant && y_len < x_len + 1) {
-            return Err(DigiFiError::Other { title: error_title.clone(), details: "There are fewer data points in `y` array than `ddof`.".to_owned() });
+            return Err(DigiFiError::Other { title: error_title, details: "There are fewer data points in `y` array than `ddof`.".to_owned() });
         }
         if self.settings.enable_t_test {
             match &self.settings.t_test_h0s {
@@ -176,7 +170,6 @@ impl LinearRegressionAnalysis {
         Ok(())
     }
 
-    /// # Description
     /// Runs linear regression model along with the configured tests.
     /// 
     /// # Input
@@ -190,7 +183,10 @@ impl LinearRegressionAnalysis {
         let x_len: usize = x.len();
         self.validate_input(x, y)?;
         // Linear regression model
-        let (mut shape, mut x_matrix) = ((x_len, y_len), x.iter().fold(vec![], |mut prev, next| { prev.append(&mut next.to_vec()); prev } ));
+        let (mut shape, mut x_matrix) = (
+            (x_len, y_len),
+            x.iter().fold(vec![], |mut prev, next| { prev.append(&mut next.to_vec()); prev } )
+        );
         let mut ddof: usize = x_len;
         if self.settings.add_constant {
             shape.0 += 1;

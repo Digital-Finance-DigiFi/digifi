@@ -3,11 +3,9 @@ use crate::error::DigiFiError;
 use crate::utilities::{compare_array_len, Time, ParameterType, time_value_utils::{internal_rate_of_return, CompoundingType, Compounding, Cashflow}};
 use crate::financial_instruments::{FinancialInstrument, FinancialInstrumentId};
 use crate::portfolio_applications::{AssetHistData, PortfolioInstrument};
-use crate::statistics::covariance;
-use crate::stochastic_processes::{StochasticProcess, standard_stochastic_models::BrownianBridge};
+use crate::stochastic_processes::StochasticProcess;
 
 
-/// # Description
 /// Spot rate computation for the given list of bonds.
 ///
 /// # Input
@@ -88,7 +86,6 @@ pub enum YtMMethod {
 
 
 #[derive(Debug)]
-/// # Description
 /// Type of bond that specifies the structure of the cashflow payoffs.
 pub enum BondType {
     /// Bond with a regularly paid coupon
@@ -100,7 +97,6 @@ pub enum BondType {
 }
 
 
-/// # Description
 /// Bond financial instrument and its methods.
 ///
 /// # Links
@@ -117,15 +113,15 @@ pub enum BondType {
 ///
 /// // Bond definition
 /// let compounding_type: CompoundingType = CompoundingType::Continuous;
-/// let financial_instrument_id: FinancialInstrumentId = FinancialInstrumentId {instrument_type: FinancialInstrumentType::CashInstrument,
-///                                                                             asset_class: AssetClass::DebtBasedInstrument,
-///                                                                             identifier: String::from("32198407128904") };
-/// let asset_historical_data: AssetHistData = AssetHistData::new(Array1::from_vec(vec![0.4, 0.5]),
-///                                                               Array1::from_vec(vec![0.0, 0.0]),
-///                                                               Array1::from_vec(vec![0.0, 1.0])).unwrap();
+/// let financial_instrument_id: FinancialInstrumentId = FinancialInstrumentId {
+///     instrument_type: FinancialInstrumentType::CashInstrument, asset_class: AssetClass::DebtBasedInstrument, identifier: String::from("32198407128904"),
+/// };
+/// let asset_historical_data: AssetHistData = AssetHistData::build(
+///     Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]), Array1::from_vec(vec![0.0, 1.0])
+/// ).unwrap();
 /// let bond_type: BondType = BondType::AnnuityBond { principal: 100.0, coupon_rate: 0.05, maturity: 5.0, first_coupon_time: Some(1.0) };
 /// let discount_rate: ParameterType = ParameterType::Value { value: 0.02 };
-/// let bond: Bond = Bond::new(bond_type, discount_rate, 101.0, compounding_type, Some(0.0), financial_instrument_id, asset_historical_data, None).unwrap();
+/// let bond: Bond = Bond::build(bond_type, discount_rate, 101.0, compounding_type, Some(0.0), financial_instrument_id, asset_historical_data, None).unwrap();
 ///
 /// // Theoretical value
 /// let cashflow: Array1<f64>  =Array1::from_vec(vec![5.0, 5.0, 5.0, 5.0, 105.0]);
@@ -154,7 +150,7 @@ pub struct Bond {
     /// Time series asset data
     asset_historical_data: AssetHistData,
     /// Stochastic model to use for price paths generation
-    stochastic_model: Box<dyn StochasticProcess>,
+    stochastic_model: Option<Box<dyn StochasticProcess>>,
     /// Nominal coupon value
     coupon: f64,
     /// Time series of cashflow payoffs (Excluding principal)
@@ -163,7 +159,6 @@ pub struct Bond {
 
 impl Bond {
 
-    /// # Description
     /// Creates a new `Bond` instance.
     /// 
     /// # Input
@@ -175,8 +170,9 @@ impl Bond {
     /// - `financial_instrument_id`: Parameters for defining regulatory categorization of an instrument
     /// - `asset_historical_data`: Time series asset data
     /// - `stochastic_model`: Stochastic model to use for price paths generation
-    pub fn new(bond_type: BondType, discount_rate: ParameterType, initial_price: f64, compounding_type: CompoundingType, inflation_rate: Option<f64>,
-               financial_instrument_id: FinancialInstrumentId, asset_historical_data: AssetHistData, stochastic_model: Option<Box<dyn StochasticProcess>>) -> Result<Self, DigiFiError> {
+    pub fn build(bond_type: BondType, discount_rate: ParameterType, initial_price: f64, compounding_type: CompoundingType, inflation_rate: Option<f64>,
+        financial_instrument_id: FinancialInstrumentId, asset_historical_data: AssetHistData, stochastic_model: Option<Box<dyn StochasticProcess>>
+    ) -> Result<Self, DigiFiError> {
         let principal_: f64;
         let coupon_rate_: f64;
         let maturity_: f64;
@@ -212,7 +208,7 @@ impl Bond {
         let coupon: f64 = principal_ * coupon_rate_ / compounding_frequency;
         let time: Time = Time::Range { initial_time: first_coupon_time_, final_time: maturity_, time_step: 1.0 / compounding_frequency };
         let inflation_rate: f64 = match inflation_rate { Some(v) => v, None => 0.0, };
-        let cashflow: Cashflow = Cashflow::new(ParameterType::Value { value: coupon}, time, coupon_growth_rate_, inflation_rate)?;
+        let cashflow: Cashflow = Cashflow::build(ParameterType::Value { value: coupon}, time, coupon_growth_rate_, inflation_rate)?;
         let discount_rate: Array1<f64> = match discount_rate {
             ParameterType::Value { value } => Array1::from_vec(vec![value; cashflow.cashflow().len()]),
             ParameterType::TimeSeries { values } => {
@@ -220,24 +216,12 @@ impl Bond {
                 values
             },
         };
-        let stochastic_model_: Box<dyn StochasticProcess> = match stochastic_model {
-            Some(model) => model,
-            None => {
-                // Default stochastic model for the case when the user doesn't provide one
-                let end_index: usize = asset_historical_data.time_array.len() - 1;
-                let prices: Array1<f64> = asset_historical_data.get_price(end_index, None)?;
-                let sigma: f64 = covariance(&prices, &prices, 0)?;
-                Box::new(BrownianBridge::new(initial_price, principal_, sigma, 1, asset_historical_data.time_array.len() - 1,
-                                                      maturity_))
-            },
-        };
         Ok(Bond {
             bond_type, principal: principal_, discount_rate, maturity: maturity_, initial_price: initial_price, compounding_type, compounding_frequency,
-            financial_instrument_id, asset_historical_data: asset_historical_data, stochastic_model: stochastic_model_, coupon, cashflow,
+            financial_instrument_id, asset_historical_data: asset_historical_data, stochastic_model: stochastic_model, coupon, cashflow,
         })
     }
 
-    /// # Description
     /// Estimated total rate of return of the bond from current time to its maturity.
     ///
     /// # Input
@@ -263,7 +247,6 @@ impl Bond {
         }
     }
 
-    /// # Description
     /// Estimated total rate of return of a callable bond until it is called.
     ///
     /// # Input
@@ -278,7 +261,6 @@ impl Bond {
         internal_rate_of_return(0.0, &cashflow, self.cashflow.time(), &self.compounding_type)
     }
 
-    /// # Description
     /// Spot rate of a bond computed based on cashflows of the bond discounted with the provided spot rates.
     ///
     /// # Input
@@ -299,7 +281,10 @@ impl Bond {
             _ => {
                 let spot_rates: Array1<f64> = match spot_rates {
                     Some(v) => v,
-                    None => return Err(DigiFiError::ValidationError { title: error_title.clone(), details: "The argument `spot_rates` must be an array if the bond type is not `ZeroCouponBond`.".to_owned() }),
+                    None => return Err(DigiFiError::ValidationError {
+                        title: error_title,
+                        details: "The argument `spot_rates` must be an array if the bond type is not `ZeroCouponBond`.".to_owned(),
+                    }),
                 };
                 if spot_rates.len() != (self.cashflow.cashflow().len() - 1) {
                     return Err(DigiFiError::UnmatchingLength { array_1: "spot_rate".to_owned(), array_2: "cashflow (without the last element)".to_owned(), });
@@ -324,7 +309,6 @@ impl Bond {
         }
     }
 
-    /// # Description
     /// Estimated rate of return of the bond assuming that its market price is equal to its principal.
     ///
     /// # Output
@@ -343,7 +327,6 @@ impl Bond {
         self.compounding_frequency * (self.principal * (1.0 - discount_terms)) / discount_terms
     }
 
-    /// # Description
     /// Weigthted average of the times when bond's payoffs are made.
     ///
     /// Note: This method computes Macaulay duration.
@@ -384,7 +367,6 @@ impl Bond {
         Ok(duration)
     }
 
-    /// # Description
     /// Measure of the curvature in relationship between bond's prices and yields.
     ///
     /// # Input
@@ -433,7 +415,6 @@ impl Bond {
         Ok(convexity)
     }
 
-    /// # Description
     /// Amount of coupon accumulated before the purchase of the bond.
     ///
     /// # Input
@@ -453,7 +434,6 @@ impl Bond {
         (self.coupon / self.compounding_frequency) * (time_since_last_coupon / time_separation)
     }
 
-    /// # Description
     /// Frequency with which the failure of bond repayment occurs.
     ///
     /// Note: It is assumed that the excess yield is the compensation for the possibility of default.
@@ -476,7 +456,6 @@ impl Bond {
         yield_spread / (1.0 + recovery_rate)
     }
 
-    /// # Description
     /// Bond pricing via Taylor series expansion of bond price assuming it only depends on the yield.
     /// This method prices the bond at the next time step (i.e., next time step of coupon or principal payout).
     ///
@@ -502,7 +481,6 @@ impl Bond {
 
 impl FinancialInstrument for Bond {
 
-    /// # Description
     /// Present values of the bond.
     ////
     /// # Output
@@ -525,7 +503,6 @@ impl FinancialInstrument for Bond {
         Ok(present_value)
     }
 
-    /// # Description
     /// Net present value of the bond.
     ///
     /// # Output
@@ -534,7 +511,6 @@ impl FinancialInstrument for Bond {
         Ok(self.present_value()? - self.initial_price)
     }
 
-    /// # Description
     /// Future value of the bond.
     ///
     /// # Output
@@ -549,7 +525,6 @@ impl FinancialInstrument for Bond {
         Ok(self.present_value()? * future_multiplicator)
     }
 
-    /// # Description
     /// Returns an array of bond prices.
     ///
     /// # Input
@@ -559,7 +534,6 @@ impl FinancialInstrument for Bond {
         self.asset_historical_data.get_price(end_index, start_index)
     }
 
-    /// # Description
     /// Returns an array of predictable incomes for the bond (i.e., coupons).
     ///
     /// # Input
@@ -569,44 +543,19 @@ impl FinancialInstrument for Bond {
         self.asset_historical_data.get_predictable_income(end_index, start_index)
     }
 
-    /// # Description
     /// Returns an array of time steps at which the asset price and predictable_income are recorded.
     fn get_time_array(&self) -> Array1<f64> {
         self.asset_historical_data.time_array.clone()
     }
 
-    /// # Description
-    /// Updates the number of paths the stochastic model will produce when called.
-    ///
-    /// # Input
-    /// - `n_paths`: New number of paths to use
-    fn update_n_stochastic_paths(&mut self, n_paths: usize) -> () {
-        self.stochastic_model.update_n_paths(n_paths)
+    /// Updates historical data of the asset with the newly generated data.
+    fn update_historical_data(&mut self, new_data: &AssetHistData) -> () {
+        self.asset_historical_data = new_data.clone();
     }
 
-    /// # Description
-    /// Simulated stochastic paths of the bond.
-    /// 
-    /// # Output
-    /// - Simulated spot prices of the bond
-    fn stochastic_simulation(&self) -> Result<Vec<Array1<f64>>, DigiFiError> {
-        self.stochastic_model.get_paths()
-    }
-
-    /// # Description
-    /// Generates an array of prices and predictable income, and updates the `asset_historical_data`.
-    /// 
-    /// # Input
-    /// - `in_place`: If true, uses generated data to update the asset history data 
-    fn generate_historic_data(&mut self, in_place: bool) -> Result<AssetHistData, DigiFiError> {
-        let prices: Array1<f64> = self.stochastic_model.get_paths()?.remove(0);
-        let new_data: AssetHistData = AssetHistData::new(prices,
-                                                         Array1::from_vec(vec![0.0; self.asset_historical_data.time_array.len()]),
-                                                         self.asset_historical_data.time_array.clone())?;
-        if in_place {
-            self.asset_historical_data = new_data.clone();
-        }
-        Ok(new_data)
+    /// Returns a mutable reference to the stochastic process that simulates price action.
+    fn stochastic_model(&mut self) -> &mut Option<Box<dyn StochasticProcess>> {
+        &mut self.stochastic_model
     }
 }
 
@@ -648,16 +597,18 @@ mod tests {
         use crate::portfolio_applications::AssetHistData;
         // Bond definition
         let compounding_type: CompoundingType = CompoundingType::Continuous;
-        let financial_instrument_id: FinancialInstrumentId = FinancialInstrumentId {instrument_type: FinancialInstrumentType::CashInstrument,
-                                                                                    asset_class: AssetClass::DebtBasedInstrument,
-                                                                                    identifier: String::from("32198407128904") };
-        let asset_historical_data: AssetHistData = AssetHistData::new(Array1::from_vec(vec![0.4, 0.5]),
-                                                                      Array1::from_vec(vec![0.0, 0.0]),
-                                                                      Array1::from_vec(vec![0.0, 1.0])).unwrap();
+        let financial_instrument_id: FinancialInstrumentId = FinancialInstrumentId {
+            instrument_type: FinancialInstrumentType::CashInstrument, asset_class: AssetClass::DebtBasedInstrument, identifier: String::from("32198407128904"),
+        };
+        let asset_historical_data: AssetHistData = AssetHistData::build(
+            Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]), Array1::from_vec(vec![0.0, 1.0])
+        ).unwrap();
         let bond_type: BondType = BondType::AnnuityBond { principal: 100.0, coupon_rate: 0.05, maturity: 5.0, first_coupon_time: Some(1.0) };
         let discount_rate: ParameterType = ParameterType::Value { value: 0.02 };
-        let bond: Bond = Bond::new(bond_type, discount_rate, 101.0, compounding_type, Some(0.0), financial_instrument_id,
-                                   asset_historical_data, None).unwrap();
+        let bond: Bond = Bond::build(
+            bond_type, discount_rate, 101.0, compounding_type, Some(0.0), financial_instrument_id,
+            asset_historical_data, None
+        ).unwrap();
         // Theoretical value
         let cashflow: Array1<f64>  =Array1::from_vec(vec![5.0, 5.0, 5.0, 5.0, 105.0]);
         let time: Time = Time::Range { initial_time: 1.0, final_time: 5.0, time_step: 1.0 };

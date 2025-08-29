@@ -8,11 +8,13 @@ use crate::statistics::{
     ProbabilityDistribution, linear_regression, se_lr_coefficient,
     continuous_distributions::StudentsTDistribution,
 };
+// TODO: Add Baron and Kenny mediation analysis
+// TODO: Add Sobel's mediation test
+// TODO: Add moderation/mediation test that determines whether the relationship is moderated mediation or mediated moderation
 
 
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Confidence interval for different tests.
 pub enum ConfidenceLevel {
     /// 0.1 Confidence interval
@@ -40,7 +42,6 @@ impl ConfidenceLevel {
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Type of augmented Dickey-Fuller test.
 pub enum ADFType {
     /// Adds constant term to the regression
@@ -53,7 +54,6 @@ pub enum ADFType {
 
 impl ADFType {
 
-    /// # Description
     /// Returns that critical value from the Dickey-Fuller table that is used as a confidence interval to test Dickey-Fuller statistic against.
     /// 
     /// # Input
@@ -204,7 +204,6 @@ impl ADFType {
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Result of the augmented Dickey-Fuller test.
 pub struct ADFResult {
     /// Result of the augmented Dickey-Fuller test
@@ -229,25 +228,33 @@ pub struct ADFResult {
 
 impl ADFResult {
 
-    /// # Description
     /// Constructs `ADFResult` from parameters of the linear regression.
-    pub fn new(params: &Array1<f64>, unit_root_exists: bool, df_statistic: Option<f64>, critical_value: Option<f64>, se_gamma: Option<f64>, adf_type: &ADFType) -> Result<Self, DigiFiError> {
+    pub fn build(params: &Array1<f64>, unit_root_exists: bool, df_statistic: Option<f64>, critical_value: Option<f64>, se_gamma: Option<f64>, adf_type: &ADFType) -> Result<Self, DigiFiError> {
         let error_title: String = String::from("ADFResult From Params");
         match adf_type {
             ADFType::Simple => {
                 let mut deltas: Vec<f64> = params.to_vec();
-                let gamma: f64 = deltas.pop().ok_or(DigiFiError::Other { title: error_title.clone(), details: "Parameters of the linear regression were empty.".to_owned() })?;
+                let gamma: f64 = deltas.pop().ok_or(DigiFiError::Other {
+                    title: error_title,
+                    details: "Parameters of the linear regression were empty.".to_owned(),
+                })?;
                 Ok(ADFResult { unit_root_exists, df_statistic, critical_value, se_gamma, gamma, deltas, beta: None, alpha: None, adf_type: adf_type.clone(), })
             },
             ADFType::Constant => {
                 let mut deltas: Vec<f64> = params.to_vec();
-                let gamma: f64 = deltas.pop().ok_or(DigiFiError::Other { title: error_title.clone(), details: "Parameters of the linear regression were empty.".to_owned() })?;
+                let gamma: f64 = deltas.pop().ok_or(DigiFiError::Other {
+                    title: error_title,
+                    details: "Parameters of the linear regression were empty.".to_owned(),
+                })?;
                 let alpha: Option<f64> = deltas.pop();
                 Ok(ADFResult { unit_root_exists, df_statistic, critical_value, se_gamma, gamma, deltas, beta: None, alpha, adf_type: adf_type.clone(), })
             },
             ADFType::ConstantAndTrend => {
                 let mut deltas: Vec<f64> = params.to_vec();
-                let gamma: f64 = deltas.pop().ok_or(DigiFiError::Other { title: error_title.clone(), details: "Parameters of the linear regression were empty.".to_owned() })?;
+                let gamma: f64 = deltas.pop().ok_or(DigiFiError::Other {
+                    title: error_title,
+                    details: "Parameters of the linear regression were empty.".to_owned(),
+                })?;
                 let alpha: Option<f64> = deltas.pop();
                 let beta: Option<f64> = deltas.pop();
                 Ok(ADFResult { unit_root_exists, df_statistic, critical_value, se_gamma, gamma, deltas, beta, alpha, adf_type: adf_type.clone(), })
@@ -257,7 +264,6 @@ impl ADFResult {
 }
 
 
-/// # Description
 /// Augmented Dickey–Fuller test (ADF) tests the null hypothesis that a unit root is present in a time series sample.
 /// The alternative hypothesis depends on which version of the test is used, but is usually stationarity or trend-stationarity.
 /// 
@@ -347,7 +353,7 @@ pub fn adf(x: &Array1<f64>, lag: Option<usize>, adf_type: &ADFType, cl: Option<C
     // If gamma is positive no unit root exists as the process is not stationary
     let gamma: f64 = params[params.len()-1];
     if 0.0 < gamma {
-        return ADFResult::new(&params, false, None, None, None, adf_type);
+        return ADFResult::build(&params, false, None, None, None, adf_type);
     }
     // Compute standard error for estimated gamma
     let prediction: Array1<f64> = data_matrix.t().dot(&params);
@@ -357,13 +363,12 @@ pub fn adf(x: &Array1<f64>, lag: Option<usize>, adf_type: &ADFType, cl: Option<C
     let cl: ConfidenceLevel = match cl { Some(cl) => cl, None => ConfidenceLevel::default(), };
     let critical_value: f64 = adf_type.get_critical_value(x_len, &cl);
     let unit_root_exists: bool = if df_statistic < critical_value { false } else { true };
-    ADFResult::new(&params, unit_root_exists, Some(df_statistic), Some(critical_value), Some(se_gamma), adf_type)
+    ADFResult::build(&params, unit_root_exists, Some(df_statistic), Some(critical_value), Some(se_gamma), adf_type)
 }
 
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Result of the cointegration test.
 pub struct CointegrationResult {
     pub cointegrated: bool,
@@ -371,7 +376,6 @@ pub struct CointegrationResult {
 }
 
 
-/// # Description
 /// Cointegration is a statistical property describing a long-term, stable relationship between two or more time series variables,
 /// even if those variables themselves are individually non-stationary (i.e., they have trends). This means that despite their individual fluctuations,
 /// the variables move together in the long run, anchored by an underlying equilibrium relationship.
@@ -436,7 +440,6 @@ pub fn cointegration(x: &Array1<f64>, y: &Array1<f64>, cl: Option<ConfidenceLeve
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Result of the t-test.
 pub struct TTestResult {
     /// Whether to reject the null hypothesis
@@ -454,7 +457,6 @@ pub struct TTestResult {
 
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// # Description
 /// Variant of the two sample t-test.
 /// 
 /// Note: `EqualVariance` assumes that the samples are drawn from the distributions that have the same variance, but it does not explicitly check for that to hold.
@@ -475,7 +477,6 @@ impl TTestTwoSampleCase {
         sample_1.std(1.0) / sample_2.std(1.0)
     }
 
-    /// # Description
     /// Selects two sample t-test that best fits the data.
     /// 
     /// # Input
@@ -501,7 +502,10 @@ impl TTestTwoSampleCase {
     fn validate(&self, sample_1: &Array1<f64>, sample_2: &Array1<f64>) -> Result<(), DigiFiError> {
         let error_title: String = String::from("T-test (Two Sample) Validation");
         if sample_1.len() < 1 || sample_2.len() < 1 {
-            return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "Both samples must contain at least one data point.".to_owned(), })
+            return Err(DigiFiError::ParameterConstraint {
+                title: error_title,
+                constraint: "Both samples must contain at least one data point.".to_owned(),
+            });
         }
         let unbiased_std_ratio: f64 = TTestTwoSampleCase::unbiased_std_ratio(sample_1, sample_2);
         match self {
@@ -513,7 +517,7 @@ impl TTestTwoSampleCase {
             TTestTwoSampleCase::SimilarVariance => {
                 if unbiased_std_ratio < 0.5 || 2.0 < unbiased_std_ratio {
                     return Err(DigiFiError::ParameterConstraint {
-                        title: error_title.clone(),
+                        title: error_title,
                         constraint: "The unbiased estimators of variance of `sample_1` and `sample_2` have to satisfy the unequality `0.5 < s^{2}_{1} / s^{2}_{2} < 2` to use `SimilarVariance` two sample t-test case.".to_owned(),
                     })
                 }
@@ -521,7 +525,7 @@ impl TTestTwoSampleCase {
             TTestTwoSampleCase::UnequalVariance => {
                 if 0.5 <= unbiased_std_ratio && unbiased_std_ratio <= 2.0 {
                     return Err(DigiFiError::ParameterConstraint {
-                        title: error_title.clone(),
+                        title: error_title,
                         constraint: "The unbiased estimators of variance of `sample_1` and `sample_2` have to satisfy either the unequality `s_{1} > 2s_{2}` or `2s_{1} < s_{2}` to use `UnequalVariance` two sample t-test case.".to_owned(),
                     })
                 }
@@ -532,7 +536,6 @@ impl TTestTwoSampleCase {
 }
 
 
-/// # Description
 /// Two sample t-test. It is used to test whether two samples have an equal mean. The null hypothesis is that the populations of both samples have equal mean.
 /// 
 /// # Input
@@ -579,7 +582,7 @@ pub fn t_test_two_sample(sample_1: &Array1<f64>, sample_2: &Array1<f64>, cl: Opt
     let sample_1_len: f64 = sample_1.len() as f64;
     let sample_2_len: f64 = sample_2.len() as f64;
     let mean_1: f64 = sample_1.mean().ok_or(DigiFiError::MeanCalculation { title: error_title.clone(), series: "series_1".to_owned(), })?;
-    let mean_2: f64 = sample_2.mean().ok_or(DigiFiError::MeanCalculation { title: error_title.clone(), series: "series_2".to_owned(), })?;
+    let mean_2: f64 = sample_2.mean().ok_or(DigiFiError::MeanCalculation { title: error_title, series: "series_2".to_owned(), })?;
     let unbiased_var_1: f64 = sample_1.var(1.0);
     let unbiased_var_2: f64 = sample_2.var(1.0);
     let (t_score, dof) = match case {
@@ -605,7 +608,7 @@ pub fn t_test_two_sample(sample_1: &Array1<f64>, sample_2: &Array1<f64>, cl: Opt
         },
     };
     // Obtain confidence interval value
-    let dist: StudentsTDistribution = StudentsTDistribution::new(dof)?;
+    let dist: StudentsTDistribution = StudentsTDistribution::build(dof)?;
     let p_value: f64 = 1.0 - dist.cdf(&arr1(&[t_score]))?[0];
     let p_cl: f64 = match cl { Some(v) => 1.0 - v.get_p(), None => 1.0 - ConfidenceLevel::default().get_p() };
     let reject_h0: bool = if p_cl < p_value { true } else { false };
@@ -613,7 +616,6 @@ pub fn t_test_two_sample(sample_1: &Array1<f64>, sample_2: &Array1<f64>, cl: Opt
 }
 
 
-/// # Description
 /// T-test for the coefficient of a regression model. It is used to test whether an assumption about the value of the coefficient is
 /// supported by the empirical data.
 /// 
@@ -654,7 +656,7 @@ pub fn t_test_two_sample(sample_1: &Array1<f64>, sample_2: &Array1<f64>, cl: Opt
 ///     let market_return: Array1<f64> = sample_data.remove("Market").unwrap();
 ///     let rf: Array1<f64> = sample_data.remove("RF").unwrap();
 ///     let solution_type: CAPMSolutionType = CAPMSolutionType::LinearRegression;
-///     let capm: CAPM = CAPM::new(market_return.clone(), rf.clone(), capm_type, solution_type).unwrap();
+///     let capm: CAPM = CAPM::build(market_return.clone(), rf.clone(), capm_type, solution_type).unwrap();
 ///     let y: Array1<f64> = sample_data.remove("Stock Returns").unwrap();
 ///     let params: CAPMParams = capm.get_parameters(&y).unwrap();
 /// 
@@ -681,9 +683,13 @@ pub fn t_test_lr(beta: f64, beta_0: Option<f64>, y: &Array1<f64>, y_prediction: 
     let se_beta: f64 = se_lr_coefficient(y, y_prediction, x, ddof)?;
     let t_score: f64 = (beta - beta_0) / se_beta;
     // Obtain confidence interval value
-    let dof: f64 = y.len().checked_sub(ddof)
-        .ok_or(DigiFiError::Other { title: "T-test (Linear Regression)".to_owned(), details: "There are fewer data points in `y` array than `ddof`.".to_owned() })? as f64;
-    let dist: StudentsTDistribution = StudentsTDistribution::new(dof)?;
+    let dof: f64 = y.len()
+        .checked_sub(ddof)
+        .ok_or(DigiFiError::Other {
+            title: "T-test (Linear Regression)".to_owned(),
+            details: "There are fewer data points in `y` array than `ddof`.".to_owned(),
+        })? as f64;
+    let dist: StudentsTDistribution = StudentsTDistribution::build(dof)?;
     let p_value: f64 = 1.0 - dist.cdf(&arr1(&[t_score]))?[0];
     let p_cl: f64 = match cl { Some(v) => v.get_p(), None => ConfidenceLevel::default().get_p() };
     let reject_h0: bool = if p_value < p_cl { true } else { false };
@@ -726,7 +732,9 @@ mod tests {
         let jpm: Array1<f64> = sample_data.remove("JPM").unwrap();
         let gs: Array1<f64> = sample_data.remove("GS").unwrap();
         // Test whether jpm and gs have equal mean
-        let test_result: TTestResult = t_test_two_sample(&jpm, &gs, Some(ConfidenceLevel::Five), Some(TTestTwoSampleCase::EqualVariance)).unwrap();
+        let test_result: TTestResult = t_test_two_sample(
+            &jpm, &gs, Some(ConfidenceLevel::Five), Some(TTestTwoSampleCase::EqualVariance)
+        ).unwrap();
         assert_eq!(test_result.reject_h0, true);
     }
 
@@ -746,7 +754,7 @@ mod tests {
         let market_return: Array1<f64> = sample_data.remove("Market").unwrap();
         let rf: Array1<f64> = sample_data.remove("RF").unwrap();
         let solution_type: CAPMSolutionType = CAPMSolutionType::LinearRegression;
-        let capm: CAPM = CAPM::new(market_return.clone(), rf.clone(), capm_type, solution_type).unwrap();
+        let capm: CAPM = CAPM::build(market_return.clone(), rf.clone(), capm_type, solution_type).unwrap();
         let y: Array1<f64> = sample_data.remove("Stock Returns").unwrap();
         let params: CAPMParams = capm.get_parameters(&y).unwrap();
         // t-test

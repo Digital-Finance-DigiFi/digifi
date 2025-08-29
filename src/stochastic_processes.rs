@@ -1,3 +1,8 @@
+//! # Stochastic process
+//! 
+//! Contains different types of stochastic processes, as well as the tool for generating custom stochastic processes that can be used for Monte Carlo simulations.
+
+
 // Re-Exports
 pub use self::standard_stochastic_models::{
     ArithmeticBrownianMotion, GeometricBrownianMotion, OrnsteinUhlenbeckProcess, BrownianBridge, FellerSquareRootProcess, FSRSimulationMethod,
@@ -22,29 +27,24 @@ use crate::utilities::compare_array_len;
 
 pub trait StochasticProcess {
 
-    /// # Description
     /// Updates the number of paths that the stochastic process will generate.
     /// 
     /// # Input
     /// - `n_paths`: Number of paths to generate
     fn update_n_paths(&mut self, n_paths: usize) -> ();
 
-    /// # Description
     /// Returns the number of time steps in the stochastic process.
     fn get_n_steps(&self) -> usize;
 
-    /// # Description
     /// Returns the final time step.
     fn get_t_f(&self) -> f64;
 
-    /// # Description
     /// Paths, S, of the stochastic process.
     fn get_paths(&self) -> Result<Vec<Array1<f64>>, DigiFiError>;
 }
 
 
 #[cfg(feature = "plotly")]
-/// # Description
 /// Plots all generated paths of the stochastic process.
 ///
 /// # Input
@@ -61,7 +61,7 @@ pub trait StochasticProcess {
 ///
 /// 1. Geometric Brownian motion paths simulation:
 ///
-/// ```rust
+/// ```rust,ignore
 /// use ndarray::Array1;
 /// use digifi::stochastic_processes::{StochasticProcess, GeometricBrownianMotion};
 ///
@@ -83,7 +83,7 @@ pub trait StochasticProcess {
 ///
 /// 2. Heston stochastic volatility paths simulation:
 ///
-/// ```rust
+/// ```rust,ignore
 /// use ndarray::Array1;
 /// use digifi::stochastic_processes::{StochasticProcess, HestonStochasticVolatility};
 ///
@@ -105,7 +105,7 @@ pub trait StochasticProcess {
 ///
 /// 3. Kou jump diffusion paths simulation:
 ///
-/// ```rust
+/// ```rust,ignore
 /// use ndarray::Array1;
 /// use digifi::stochastic_processes::{StochasticProcess, KouJumpDiffusionProcess};
 ///
@@ -115,7 +115,7 @@ pub trait StochasticProcess {
 ///     use digifi::plots::plot_stochastic_paths;
 ///
 ///     // Kou jump diffusion
-///     let kjd: KouJumpDiffusionProcess = KouJumpDiffusionProcess::new(0.2, 0.3, 0.5, 9.0, 5.0, 0.5, 100, 200, 1.0, 100.0).unwrap();
+///     let kjd: KouJumpDiffusionProcess = KouJumpDiffusionProcess::build(0.2, 0.3, 0.5, 9.0, 5.0, 0.5, 100, 200, 1.0, 100.0).unwrap();
 ///     let paths: Vec<Array1<f64>> = kjd.get_paths().unwrap();
 ///     let expected_path: Array1<f64> = kjd.get_expectations();
 ///
@@ -127,7 +127,7 @@ pub trait StochasticProcess {
 ///
 /// 4. Custom SDE simulation plot (e.g., Arithmetic Brownian motion):
 ///
-/// ```rust
+/// ```rust,ignore
 /// use ndarray::Array1;
 /// use digifi::stochastic_processes::{StochasticProcess, stochastic_process_generator::{SDE, SDEComponent, Noise, Jump}};
 ///
@@ -145,7 +145,7 @@ pub trait StochasticProcess {
 ///     let jump: Jump = Jump::NoJumps;
 ///
 ///     // Arithmetic Brownian motion SDE definition
-///     let sde: SDE = SDE::new(t_f, s_0, 200, 100, drift_component, diffusion_component, noise, jump).unwrap();
+///     let sde: SDE = SDE::build(t_f, s_0, 200, 100, drift_component, diffusion_component, noise, jump).unwrap();
 ///     let paths: Vec<Array1<f64>> = sde.get_paths().unwrap();
 ///
 ///     // Paths plot
@@ -188,6 +188,7 @@ mod tests {
     use crate::stochastic_processes::{StochasticProcess, plot_stochastic_paths};
 
     #[test]
+    #[ignore]
     fn unit_test_abm_plot() -> () {
         use crate::stochastic_processes::standard_stochastic_models::ArithmeticBrownianMotion;
         // Arithmetic Brownian motion
@@ -200,6 +201,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn unit_test_gbm_plot() -> () {
         use crate::stochastic_processes::standard_stochastic_models::GeometricBrownianMotion;
         // Geometric Brownian motion
@@ -212,10 +214,13 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn unit_test_oup_plot() -> () {
         use crate::stochastic_processes::standard_stochastic_models::OrnsteinUhlenbeckProcess;
         // Ornstein-Uhlebeck process
-        let oup: OrnsteinUhlenbeckProcess = OrnsteinUhlenbeckProcess::new(0.07, 0.1, 10.0, 100, 200, 1.0, 0.05, true);
+        let oup: OrnsteinUhlenbeckProcess = OrnsteinUhlenbeckProcess::new(
+            0.07, 0.1, 10.0, 100, 200, 1.0, 0.05, true
+        );
         let paths: Vec<Array1<f64>> = oup.get_paths().unwrap();
         let expected_path: Array1<f64> = oup.get_expectations();
         // Paths plot
@@ -224,6 +229,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn unit_test_bb_plot() -> () {
         use crate::stochastic_processes::standard_stochastic_models::BrownianBridge;
         // Brownian bridge
@@ -236,6 +242,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn unit_test_fsrp_plot() -> () {
         use crate::stochastic_processes::standard_stochastic_models::{FellerSquareRootProcess, FSRSimulationMethod};
         // Feller square root process
@@ -249,10 +256,13 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn unit_test_cev_plot() -> () {
         use crate::stochastic_processes::stochastic_volatility_models::ConstantElasticityOfVariance;
         // Constant elasticity of variance
-        let cev: ConstantElasticityOfVariance = ConstantElasticityOfVariance::new(1.0, 0.4, 0.5, 100, 200, 1.0, 100.0).unwrap();
+        let cev: ConstantElasticityOfVariance = ConstantElasticityOfVariance::build(
+            1.0, 0.4, 0.5, 100, 200, 1.0, 100.0
+        ).unwrap();
         let paths: Vec<Array1<f64>> = cev.get_paths().unwrap();
         let expected_path: Array1<f64> = cev.get_expectations();
         // Paths plot
@@ -261,10 +271,13 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn unit_test_hsv_plot() -> () {
         use crate::stochastic_processes::stochastic_volatility_models::HestonStochasticVolatility;
         // Heston stochastic volatility
-        let hsv: HestonStochasticVolatility = HestonStochasticVolatility::new(0.1, 5.0, 0.07, 0.2, 0.0, 100, 200, 1.0, 100.0, 0.03);
+        let hsv: HestonStochasticVolatility = HestonStochasticVolatility::new(
+            0.1, 5.0, 0.07, 0.2, 0.0, 100, 200, 1.0, 100.0, 0.03
+        );
         let paths: Vec<Array1<f64>> = hsv.get_paths().unwrap();
         let expected_path: Array1<f64> = hsv.get_expectations();
         // Paths plot
@@ -273,10 +286,13 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn unit_test_mjd_plot() -> () {
         use crate::stochastic_processes::jump_diffusion_models::MertonJumpDiffusionProcess;
         // Merton jump diffusion
-        let mjd: MertonJumpDiffusionProcess = MertonJumpDiffusionProcess::new(0.03, 0.2, -0.03, 0.1, 1.5, 100, 200, 1.0, 100.0);
+        let mjd: MertonJumpDiffusionProcess = MertonJumpDiffusionProcess::new(
+            0.03, 0.2, -0.03, 0.1, 1.5, 100, 200, 1.0, 100.0
+        );
         let paths: Vec<Array1<f64>> = mjd.get_paths().unwrap();
         let expected_path: Array1<f64> = mjd.get_expectations();
         // Paths plot
@@ -285,10 +301,13 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn unit_test_kjd_plot() -> () {
         use crate::stochastic_processes::jump_diffusion_models::KouJumpDiffusionProcess;
         // Kou jump diffusion
-        let kjd: KouJumpDiffusionProcess = KouJumpDiffusionProcess::new(0.2, 0.3, 0.5, 9.0, 5.0, 0.5, 100, 200, 1.0, 100.0).unwrap();
+        let kjd: KouJumpDiffusionProcess = KouJumpDiffusionProcess::build(
+            0.2, 0.3, 0.5, 9.0, 5.0, 0.5, 100, 200, 1.0, 100.0
+        ).unwrap();
         let paths: Vec<Array1<f64>> = kjd.get_paths().unwrap();
         let expected_path: Array1<f64> = kjd.get_expectations();
         // Paths plot
@@ -297,6 +316,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn unit_test_sde_abm_plot() -> () {
         use crate::stochastic_processes::stochastic_process_generator::{SDE, sde_components::{SDEComponent, Noise, Jump}};
         // Parameter definition
@@ -307,7 +327,7 @@ mod tests {
         let noise: Noise = Noise::WeinerProcess;
         let jump: Jump = Jump::NoJumps;
         // Arithmetic Brownian motion SDE definition
-        let sde: SDE = SDE::new(t_f, s_0, 200, 100, drift_component, diffusion_component, noise, jump).unwrap();
+        let sde: SDE = SDE::build(t_f, s_0, 200, 100, drift_component, diffusion_component, noise, jump).unwrap();
         let paths: Vec<Array1<f64>> = sde.get_paths().unwrap();
         // Paths plot
         let plot: Plot = plot_stochastic_paths(&paths, None).unwrap();

@@ -4,7 +4,6 @@ use crate::consts;
 use crate::statistics::gamma::{ln_gamma, gamma};
 
 
-/// # Description
 /// Natural logarithm of the Beta function.
 /// 
 /// # Input
@@ -24,16 +23,15 @@ use crate::statistics::gamma::{ln_gamma, gamma};
 pub fn ln_beta(a: f64, b: f64) -> Result<f64, DigiFiError> {
     let error_title: String = String::from("Regularized Incomplete Beta function");
     if a <= 0.0 {
-        return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument `a` must be positive.".to_owned(), });
+        return Err(DigiFiError::ParameterConstraint { title: error_title, constraint: "The argument `a` must be positive.".to_owned(), });
     }
     if b <= 0.0 {
-        return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument `b` must be positive.".to_owned(), });
+        return Err(DigiFiError::ParameterConstraint { title: error_title, constraint: "The argument `b` must be positive.".to_owned(), });
     }
     Ok(ln_gamma(a) + ln_gamma(b) - ln_gamma(a + b))
 }
 
 
-/// # Description
 /// Beta function (or Euler integral of the first kind) is a special function that is closely related to the gamma function and to
 /// binomial coefficients.
 ///
@@ -72,7 +70,6 @@ pub fn beta(a: f64, b: f64) -> Result<f64, DigiFiError> {
 }
 
 
-/// # Description
 /// Generalization of Beta function with an upper integral bound that can be set.
 ///
 /// # Input
@@ -99,7 +96,6 @@ pub fn incomplete_beta(x: f64, a: f64, b: f64) -> Result<f64, DigiFiError> {
 }
 
 
-/// # Description
 /// Regularized incomplete Beta function acts as a cumulative distribution of the Beta distribution.
 ///
 /// # Input
@@ -143,13 +139,13 @@ pub fn incomplete_beta(x: f64, a: f64, b: f64) -> Result<f64, DigiFiError> {
 pub fn regularized_incomplete_beta(x: f64, a: f64, b: f64) -> Result<f64, DigiFiError> {
     let error_title: String = String::from("Regularized Incomplete Beta function");
     if a <= 0.0 {
-        return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument `a` must be positive.".to_owned(), });
+        return Err(DigiFiError::ParameterConstraint { title: error_title, constraint: "The argument `a` must be positive.".to_owned(), });
     }
     if b <= 0.0 {
-        return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument `b` must be positive.".to_owned(), });
+        return Err(DigiFiError::ParameterConstraint { title: error_title, constraint: "The argument `b` must be positive.".to_owned(), });
     }
     if !(0.0..=1.0).contains(&x) {
-        return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument `x` must contain values in the range `[0, 1]`.".to_owned(), })
+        return Err(DigiFiError::ParameterConstraint { title: error_title, constraint: "The argument `x` must contain values in the range `[0, 1]`.".to_owned(), })
     }
     let bt: f64 = if x == 0.0 || x == 1.0 {
         0.0
@@ -201,7 +197,6 @@ pub fn regularized_incomplete_beta(x: f64, a: f64, b: f64) -> Result<f64, DigiFi
 }
 
 
-/// # Description
 /// Extension of the Beta function with more than two arguments.
 /// 
 /// # Input
@@ -222,7 +217,10 @@ pub fn regularized_incomplete_beta(x: f64, a: f64, b: f64) -> Result<f64, DigiFi
 pub fn multivariate_beta(a: &Array1<f64>) -> Result<f64, DigiFiError> {
     for a_ in a.iter() {
         if a_ <= &0.0 {
-            return Err(DigiFiError::ParameterConstraint { title: "Multivariate Beta Function".to_owned(), constraint: "The argument `a` must be positive.".to_owned(), });
+            return Err(DigiFiError::ParameterConstraint {
+                title: "Multivariate Beta Function".to_owned(),
+                constraint: "The argument `a` must be positive.".to_owned(),
+            });
         }
     }
     let a_cum: f64 = a.iter().fold(0.0, |prev, next| prev + next );

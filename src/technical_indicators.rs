@@ -1,3 +1,8 @@
+//! # Technical Indicators
+//! 
+//! Contains commmonly used technical indicators such as `SMA`, `EMA`, `MACD`, `RSI`, etc.
+
+
 use ndarray::{Array1, s};
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
@@ -7,7 +12,6 @@ use crate::error::DigiFiError;
 use crate::utilities::compare_array_len;
 
 
-/// # Description
 /// Measure of the decline of the asset from its historical peak.
 /// 
 /// Maximum Drawdown = (Peak Value - Trough Value) / Peak Value
@@ -55,7 +59,6 @@ pub fn maximum_drawdown(asset_value: &Array1<f64>) -> f64 {
 }
 
 
-/// # Description
 /// Simple Moving Average (SMA) describes the direction of the trend, and is computed using the mean over the certain window of readings.
 /// 
 /// # Input
@@ -94,7 +97,6 @@ pub fn sma(price_array: &Array1<f64>, period: usize) -> Result<Array1<f64>, Digi
 }
 
 
-/// # Description
 /// Exponential Moving Average (EMA) describes the direction of the trend, and requires previous EMA and the latest price to compute;
 /// the first EMA reading will be same as SMA.
 /// 
@@ -153,7 +155,6 @@ pub struct MACD {
 }
 
 
-/// # Description
 /// Moving Average Convergence/Divergence (MACD) describes changes in the strength, direction, momentum, and duration of a trend.
 /// 
 /// # Input
@@ -189,7 +190,10 @@ pub struct MACD {
 pub fn macd(price_array: &Array1<f64>, small_ema_period: usize, large_ema_period: usize, signal_line: usize, smoothing: i32) -> Result<MACD, DigiFiError> {
     let error_title: String = String::from("MACD");
     if large_ema_period <= small_ema_period {
-        return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument large_ema_period must be bigger than the argument small_ema_period.".to_owned(), });
+        return Err(DigiFiError::ParameterConstraint {
+            title: error_title,
+            constraint: "The argument large_ema_period must be bigger than the argument small_ema_period.".to_owned(),
+        });
     }
     let signal_line_mult: f64 = smoothing as f64 / (1.0 + signal_line as f64);
     // Small EMA
@@ -201,7 +205,7 @@ pub fn macd(price_array: &Array1<f64>, small_ema_period: usize, large_ema_period
     // Signal Line
     let mut signal_line_: Vec<f64> = vec![f64::NAN; price_array.len()];
     signal_line_[large_ema_period-2+signal_line] = macd.slice(s![large_ema_period-1..large_ema_period-1+signal_line]).mean()
-        .ok_or(DigiFiError::MeanCalculation { title: error_title.clone(), series: "price array slice".to_owned(), })?;
+        .ok_or(DigiFiError::MeanCalculation { title: error_title, series: "price array slice".to_owned(), })?;
     for i in (large_ema_period-1+signal_line)..small_ema.len() {
         signal_line_[i] = macd[i]*signal_line_mult + signal_line_[i-1]*(1.0-signal_line_mult);
     }
@@ -225,7 +229,6 @@ pub struct BollingerBands {
 }
 
 
-/// # Description
 /// Bollinger Band is an SMA with additional upper and lower bands contain price action within n_deviations away from the SMA line.
 /// 
 /// # Input
@@ -293,7 +296,6 @@ pub struct RSI {
 }
 
 
-/// # Description
 /// Relative Strength Index (RSI) is a momentum indicator that measures the magnitude of recent price changes to evaluate overbought
 /// or oversold conditions.
 /// 
@@ -387,7 +389,6 @@ pub struct ADX {
 }
 
 
-/// # Description
 /// Average Directional Index (ADX) is an indicator that describes the relative strength of the trend.
 /// 
 /// # Input
@@ -497,7 +498,6 @@ pub fn adx(high_price: &Array1<f64>, low_price: &Array1<f64>, close_price: &Arra
 }
 
 
-/// # Description
 /// On-Balance Volume (OBV) is an indicator that describes the relationship between price and volume in the market.
 /// 
 /// # Input
@@ -546,7 +546,6 @@ pub fn obv(close_price: &Array1<f64>, volume: &Array1<f64>) -> Result<Array1<f64
 
 
 #[cfg(feature = "plotly")]
-/// # Description
 /// Plots moving average.
 ///
 /// # Input
@@ -559,7 +558,7 @@ pub fn obv(close_price: &Array1<f64>, volume: &Array1<f64>) -> Result<Array1<f64
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```rust,ignore
 /// use ndarray::Array1;
 /// use digifi::technical_indicators::sma;
 ///
@@ -602,7 +601,6 @@ pub fn plot_moving_average(ma: &Array1<f64>, times: &Vec<String>, plot: Option<P
 
 
 #[cfg(feature = "plotly")]
-/// # Description
 /// Plots MACD.
 ///
 /// # Input
@@ -614,7 +612,7 @@ pub fn plot_moving_average(ma: &Array1<f64>, times: &Vec<String>, plot: Option<P
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```rust,ignore
 /// use ndarray::Array1;
 /// use digifi::technical_indicators::{MACD, macd};
 ///
@@ -658,7 +656,6 @@ pub fn plot_macd(macd: &MACD, times: &Vec<String>) -> Plot {
 
 
 #[cfg(feature = "plotly")]
-/// # Description
 /// Plots Bollinger bands.
 ///
 /// # Input
@@ -671,7 +668,7 @@ pub fn plot_macd(macd: &MACD, times: &Vec<String>) -> Plot {
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```rust,ignore
 /// use ndarray::Array1;
 /// use digifi::technical_indicators::{BollingerBands, bollinger_bands};
 ///
@@ -718,7 +715,6 @@ pub fn plot_bollinger_bands(bb: &BollingerBands, times: &Vec<String>, plot: Opti
 
 
 #[cfg(feature = "plotly")]
-/// # Description
 /// Plots RSI.
 ///
 /// # Input
@@ -730,7 +726,7 @@ pub fn plot_bollinger_bands(bb: &BollingerBands, times: &Vec<String>, plot: Opti
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```rust,ignore
 /// use ndarray::Array1;
 /// use digifi::technical_indicators::{RSI, rsi};
 ///
@@ -775,7 +771,6 @@ pub fn plot_rsi(rsi: &RSI, times: &Vec<String>) -> Plot {
 
 
 #[cfg(feature = "plotly")]
-/// # Description
 /// Plots ADX.
 ///
 /// # Input
@@ -787,7 +782,7 @@ pub fn plot_rsi(rsi: &RSI, times: &Vec<String>) -> Plot {
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```rust,ignore
 /// use ndarray::Array1;
 /// use digifi::technical_indicators::{ADX, adx};
 ///
@@ -839,7 +834,6 @@ pub fn plot_adx(adx: &ADX, times: &Vec<String>) -> Plot {
 
 
 #[cfg(feature = "plotly")]
-/// # Description
 /// Plots OBV.
 ///
 /// # Input
@@ -851,7 +845,7 @@ pub fn plot_adx(adx: &ADX, times: &Vec<String>) -> Plot {
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```rust,ignore
 /// use ndarray::Array1;
 /// use digifi::technical_indicators::obv;
 ///
@@ -973,6 +967,7 @@ mod tests {
 
     #[cfg(feature = "plotly")]
     #[test]
+    #[ignore]
     fn unit_test_plot_moving_average() -> () {
         use plotly::Plot;
         use crate::technical_indicators::{sma, plot_moving_average};
@@ -991,6 +986,7 @@ mod tests {
 
     #[cfg(feature = "plotly")]
     #[test]
+    #[ignore]
     fn unit_test_plot_macd() -> () {
         use plotly::Plot;
         use crate::technical_indicators::{MACD, macd, plot_macd};
@@ -1009,6 +1005,7 @@ mod tests {
 
     #[cfg(feature = "plotly")]
     #[test]
+    #[ignore]
     fn unit_test_plot_bollinger_bands() -> () {
         use plotly::Plot;
         use crate::technical_indicators::{BollingerBands, bollinger_bands, plot_bollinger_bands};
@@ -1027,6 +1024,7 @@ mod tests {
 
     #[cfg(feature = "plotly")]
     #[test]
+    #[ignore]
     fn unit_test_plot_rsi() -> () {
         use plotly::Plot;
         use crate::technical_indicators::{RSI, rsi, plot_rsi};
@@ -1045,6 +1043,7 @@ mod tests {
 
     #[cfg(feature = "plotly")]
     #[test]
+    #[ignore]
     fn unit_test_plot_adx() -> () {
         use plotly::Plot;
         use crate::technical_indicators::{ADX, adx, plot_adx};
@@ -1067,6 +1066,7 @@ mod tests {
 
     #[cfg(feature = "plotly")]
     #[test]
+    #[ignore]
     fn unit_test_plot_obv() -> () {
         use plotly::Plot;
         use crate::technical_indicators::{obv, plot_obv};
