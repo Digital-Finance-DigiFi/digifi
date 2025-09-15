@@ -38,15 +38,14 @@ pub fn binomial_tree_nodes(s_0: f64, u: f64, d: f64, n_steps: usize) -> Result<V
             constraint: "The arguments `u` and `d` must be positive multiplicative factors of the binomial model.".to_owned(),
         });
     }
-    let mut binomial_tree: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
-    for layer in 0..(n_steps as i32 + 1) {
-        let mut current_layer: Vec<f64> = Vec::<f64>::new();
-        for i in 0..(layer + 1) {
-            let node: f64 = s_0 * u.powi(i) * d.powi(layer-i);
-            current_layer.push(node);
-        }
-        binomial_tree.push(Array1::from_vec(current_layer));
-    }
+    let binomial_tree: Vec<Array1<f64>> = (0..(n_steps as i32 + 1)).into_iter().fold(Vec::with_capacity(n_steps + 1), |mut bt, layer| {
+        let current_layer: Vec<f64> = (0..(layer + 1)).into_iter().fold(Vec::with_capacity(layer as usize + 1), |mut cl, i| {
+            cl.push(s_0 * u.powi(i) * d.powi(layer-i));
+            cl
+        } );
+        bt.push(Array1::from_vec(current_layer));
+        bt
+    } );
     Ok(binomial_tree)
 }
 
@@ -123,40 +122,38 @@ pub fn binomial_model(payoff_object: &dyn Payoff, s_0: f64, u: f64, d: f64, p_u:
             constraint: "The argument `p_u` must be a defined over a range `[0,1]`.".to_owned(),
         });
     }
-    let exercise_time_steps_: Vec<bool>;
-    match exercise_time_steps {
+    let exercise_time_steps: Vec<bool> = match exercise_time_steps {
         Some(exercise_time_steps_vec) => {
             if exercise_time_steps_vec.len() != n_steps {
-                return Err(DigiFiError::ParameterConstraint {
-                    title: error_title,
-                    constraint: "The argument `exercise_time_steps` should be of length `n_steps`.".to_owned(),
-                });
+                return Err(DigiFiError::WrongLength { title: error_title, arg: "exercise_time_steps".to_owned(), len: n_steps, });
             }
-            exercise_time_steps_ = exercise_time_steps_vec
+            exercise_time_steps_vec
         },
-        None => { exercise_time_steps_ = vec![true; n_steps]; },
-    }
+        None => vec![true; n_steps],
+    };
     // Binomial model
-    let mut binomial_tree: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
-    let mut layer: Vec<f64> = Vec::<f64>::new();
-    // Final layer
-    for i in 0..(n_steps as i32 + 1) {
-        let value: f64 = payoff_object.payoff(&Array1::from_vec(vec![s_0 * u.powi(i) * d.powi(n_steps as i32 - i)]))[0];
-        layer.push(value);
-    }
-    binomial_tree.push(Array1::from_vec(layer));
-    // Layers before the final layer
+    let mut binomial_tree: Vec<Array1<f64>> = Vec::with_capacity(n_steps + 1);
+    // Final layer (First payoff is computed)
+    let final_layer: Vec<f64> = (0..(n_steps as i32) + 1).into_iter()
+        .fold(Vec::with_capacity(n_steps + 1), |mut fl, i| {
+            fl.push(payoff_object.payoff(s_0 * u.powi(i) * d.powi(n_steps as i32 - i)));
+            fl
+        } );
+    binomial_tree.push(Array1::from_vec(final_layer));
+    // Previous layers
     for j in (0..n_steps).rev() {
-        let mut layer: Vec<f64> = Vec::<f64>::new();
-        for i in 0..(j+1) {
-            let value: f64 = p_u * binomial_tree[binomial_tree.len()-1][i+1] + (1.0-p_u) * binomial_tree[binomial_tree.len()-1][i];
-            if exercise_time_steps_[j] {
-                let exercise: f64 = payoff_object.payoff(&Array1::from_vec(vec![s_0 * u.powi(i as i32) * d.powi((j-i) as i32)]))[0];
-                layer.push(value.max(exercise));
-            } else {
-                layer.push(value);
-            }
-        }
+        let layer: Vec<f64> = (0..(j + 1)).into_iter()
+            .fold(Vec::with_capacity(j + 1), |mut layer, i| {
+                let value: f64 = p_u * binomial_tree[binomial_tree.len()-1][i+1] + (1.0-p_u) * binomial_tree[binomial_tree.len()-1][i];
+                match exercise_time_steps[i] {
+                    true => {
+                        let exercise: f64 = payoff_object.payoff(s_0 * u.powi(i as i32) * d.powi((j-i) as i32));
+                        layer.push(value.max(exercise));
+                    },
+                    false => layer.push(value),
+                }
+                layer
+            } );
         binomial_tree.push(Array1::from_vec(layer));
     }
     Ok(binomial_tree[binomial_tree.len()-1][0])
@@ -243,18 +240,19 @@ impl LatticeModel for BrownianMotionBinomialModel {
     fn european(&self) -> Result<f64, DigiFiError> {
         let p_u: f64 = ((-self.q*self.dt).exp() - (-self.r*self.dt).exp()*self.d) / (self.u - self.d);
         let p_d: f64 = (-self.r*self.dt).exp() - p_u;
-        let mut binomial_tree: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
-        let mut layer: Vec<f64> = Vec::<f64>::new();
-        for i in 0..(self.n_steps as i32 + 1) {
-            layer.push(self.payoff_object.payoff(&Array1::from_vec(vec![self.s_0 * self.u.powi(i) * self.d.powi(self.n_steps as i32 - i)]))[0]);
-        }
+        let mut binomial_tree: Vec<Array1<f64>> = Vec::with_capacity(self.n_steps + 1);
+        let layer: Vec<f64> = (0..(self.n_steps as i32 + 1)).into_iter()
+            .fold(Vec::with_capacity(self.n_steps + 1), |mut layer, i| {
+                layer.push(self.payoff_object.payoff(self.s_0 * self.u.powi(i) * self.d.powi(self.n_steps as i32 - i)));
+                layer
+            } );
         binomial_tree.push(Array1::from_vec(layer));
         for j in (0..self.n_steps).rev() {
-            let mut layer: Vec<f64> = Vec::<f64>::new();
-            for i in 0..(j + 1) {
-                let value: f64 = p_u*binomial_tree[binomial_tree.len()-1][i+1] + p_d*binomial_tree[binomial_tree.len()-1][i];
-                layer.push(value);
-            }
+            let layer: Vec<f64> = (0..(j + 1)).into_iter()
+                .fold(Vec::with_capacity(j + 1), |mut layer, i| {
+                    layer.push(p_u*binomial_tree[binomial_tree.len()-1][i+1] + p_d*binomial_tree[binomial_tree.len()-1][i]);
+                    layer
+                } );
             binomial_tree.push(Array1::from_vec(layer));
         }
         Ok(binomial_tree[binomial_tree.len()-1][0] * (-self.r * self.time_to_maturity).exp())
@@ -265,11 +263,7 @@ impl LatticeModel for BrownianMotionBinomialModel {
     /// # Output
     /// - The present value of an instrument with the American exercise style
     fn american(&self) -> Result<f64, DigiFiError> {
-        let mut exercise_time_steps: Vec<bool> = Vec::<bool>::new();
-        for _ in 0..self.n_steps {
-            exercise_time_steps.push(true);
-        }
-        self.bermudan(&exercise_time_steps)
+        self.bermudan(&vec![true; self.n_steps])
     }
 
     /// Binomial model that computes the payoffs for each node in the binomial tree to determine the initial payoff value.
@@ -284,30 +278,30 @@ impl LatticeModel for BrownianMotionBinomialModel {
     /// - Returns an error if the length of `exercise_time_steps` is not of length `n_steps`
     fn bermudan(&self, exercise_time_steps: &Vec<bool>) -> Result<f64, DigiFiError> {
         if exercise_time_steps.len() != self.n_steps {
-            return Err(DigiFiError::ParameterConstraint {
-                title: "Brownian Motion Binomial Model".to_owned(),
-                constraint: "The argument `exercise_time_steps` should be of length `n_steps`.".to_owned(),
-            });
+            return Err(DigiFiError::WrongLength { title: "Brownian Motion Binomial Model".to_owned(), arg: "exercise_time_steps".to_owned(), len: self.n_steps });
         }
         let p_u: f64 = ((-self.q*self.dt).exp() - (-self.r*self.dt).exp()*self.d) / (self.u - self.d);
         let p_d: f64 = (-self.r*self.dt).exp() - p_u;
-        let mut binomial_tree: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
-        let mut layer: Vec<f64> = Vec::<f64>::new();
-        for i in 0..(self.n_steps as i32 + 1) {
-            layer.push(self.payoff_object.payoff(&Array1::from_vec(vec![self.s_0 * self.u.powi(i) * self.d.powi(self.n_steps as i32 - i)]))[0]);
-        }
+        let mut binomial_tree: Vec<Array1<f64>> = Vec::with_capacity(self.n_steps + 1);
+        let layer: Vec<f64> = (0..(self.n_steps as i32 + 1)).into_iter()
+            .fold(Vec::with_capacity(self.n_steps + 1), |mut layer, i| {
+                layer.push(self.payoff_object.payoff(self.s_0 * self.u.powi(i) * self.d.powi(self.n_steps as i32 - i)));
+                layer
+            } );
         binomial_tree.push(Array1::from_vec(layer));
         for j in (0..self.n_steps).rev() {
-            let mut layer: Vec<f64> = Vec::<f64>::new();
-            for i in 0..(j + 1) {
-                let value: f64 = p_u*binomial_tree[binomial_tree.len()-1][i+1] + p_d*binomial_tree[binomial_tree.len()-1][i];
-                if exercise_time_steps[self.n_steps - j] {
-                    let exercise: f64 = self.payoff_object.payoff(&Array1::from_vec(vec![self.s_0 * (self.u.powi(i as i32)) * (self.d.powi((j-i) as i32))]))[0];
-                    layer.push(value.max(exercise));
-                } else {
-                    layer.push(value);
-                }
-            }
+            let layer: Vec<f64> = (0..(j + 1)).into_iter()
+                .fold(Vec::with_capacity(j + 1), |mut layer, i| {
+                    let value: f64 = p_u*binomial_tree[binomial_tree.len()-1][i+1] + p_d*binomial_tree[binomial_tree.len()-1][i];
+                    match exercise_time_steps[self.n_steps - j] {
+                        true => {
+                           let exercise: f64 = self.payoff_object.payoff(self.s_0 * (self.u.powi(i as i32)) * (self.d.powi((j-i) as i32)));
+                            layer.push(value.max(exercise)); 
+                        },
+                        false => layer.push(value),
+                    }
+                    layer
+                } );
             binomial_tree.push(Array1::from_vec(layer));
         }
         Ok(binomial_tree[binomial_tree.len()-1][0] * (-self.r * self.time_to_maturity).exp())

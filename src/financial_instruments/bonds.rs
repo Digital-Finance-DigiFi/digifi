@@ -1,6 +1,7 @@
+use std::convert::From;
 use ndarray::Array1;
-use crate::error::DigiFiError;
-use crate::utilities::{compare_array_len, Time, ParameterType, time_value_utils::{internal_rate_of_return, CompoundingType, Compounding, Cashflow}};
+use crate::error::{DigiFiError, ErrorTitle};
+use crate::utilities::{compare_len, Time, ParameterType, time_value_utils::{internal_rate_of_return, CompoundingType, Compounding, Cashflow}};
 use crate::financial_instruments::{FinancialInstrument, FinancialInstrumentId};
 use crate::portfolio_applications::{AssetHistData, PortfolioInstrument};
 use crate::stochastic_processes::StochasticProcess;
@@ -41,41 +42,43 @@ use crate::stochastic_processes::StochasticProcess;
 /// assert!((spot_rates - theor).map(|v| v.abs() ).sum() < 10_000.0 * TEST_ACCURACY);
 /// ```
 pub fn bootstrap(principals: Array1<f64>, maturities: Array1<f64>, coupons: Array1<f64>, prices: Array1<f64>, coupon_dt: Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
-    compare_array_len(&principals, &maturities, "principals", "maturities")?;
-    compare_array_len(&principals, &coupons, "principals", "coupons")?;
-    compare_array_len(&principals, &prices, "principals", "prices")?;
-    compare_array_len(&principals, &coupon_dt, "principals", "coupon_dt")?;
+    compare_len(&principals.iter(), &maturities.iter(), "principals", "maturities")?;
+    compare_len(&principals.iter(), &coupons.iter(), "principals", "coupons")?;
+    compare_len(&principals.iter(), &prices.iter(), "principals", "prices")?;
+    compare_len(&principals.iter(), &coupon_dt.iter(), "principals", "coupon_dt")?;
     for dt in &coupon_dt {
         if (dt < &0.0) || (&1.0 < dt) {
-            return Err(DigiFiError::ParameterConstraint { title: "Bootstrap".to_owned(), constraint: "The argument `coupon_dt` must contain values in the range `[0, 1]`.".to_owned(), });
+            return Err(DigiFiError::ParameterConstraint {
+                title: "Bootstrap".to_owned(),
+                constraint: "The argument `coupon_dt` must contain values in the range `[0, 1]`.".to_owned(),
+            });
         }
     }
-    let mut spot_rates: Vec<f64> = Vec::<f64>::new();
+    let mut spot_rates: Vec<f64> = Vec::with_capacity(principals.len());
     for i in 0..principals.len() {
-        let payment_times_before_maturity: Array1<f64> = Array1::range(coupon_dt[i], maturities[i], coupon_dt[i]);
-        let mut discount_term: f64 = 0.0;
-        for time_step in payment_times_before_maturity {
+        let time: Time = Time::new_from_range(coupon_dt[i], maturities[i] - coupon_dt[i], coupon_dt[i]);
+        let discount_term: f64 = time.time_array().iter().fold(0.0, |discount_term, time_step| {
             // Find the correct choice of spot rate based on time step
             let mut spot_rate_choice: usize = 0;
             for j in 0..maturities.len() {
-                if maturities[j] == time_step {
+                if maturities[j] == *time_step {
                     spot_rate_choice = j;
                     break;
-                } else if time_step < maturities[j] {
+                } else if *time_step < maturities[j] {
                     spot_rate_choice = j-1;
                     break;
                 }
             }
-            discount_term += (-time_step * spot_rates[spot_rate_choice]).exp();
-        }
-        let spot_rate: f64 = -((prices[i] - coupons[i]*coupon_dt[i]*discount_term) / (principals[i] + coupons[i]*coupon_dt[i])).ln() / maturities[i];
+            discount_term + (-time_step * spot_rates[spot_rate_choice]).exp()
+        } );
+        let spot_rate: f64 = -((prices[i] - coupons[i] * coupon_dt[i] * discount_term) / (principals[i] + coupons[i] * coupon_dt[i])).ln() / maturities[i];
         spot_rates.push(spot_rate);
     }
     Ok(Array1::from_vec(spot_rates))
 }
 
 
-/// # Descpition
+#[derive(Clone, Copy, Debug)]
 /// Method for computing yield-to-maturity of a bond.
 pub enum YtMMethod {
     /// Uses internal rate of return numerical solver
@@ -85,7 +88,7 @@ pub enum YtMMethod {
 }
 
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 /// Type of bond that specifies the structure of the cashflow payoffs.
 pub enum BondType {
     /// Bond with a regularly paid coupon
@@ -94,6 +97,37 @@ pub enum BondType {
     GrowingAnnuityBond { principal: f64, coupon_rate: f64, maturity: f64, coupon_growth_rate: f64, first_coupon_time: Option<f64>, },
     /// Zero-coupon bond
     ZeroCouponBond { principal: f64, maturity: f64, },
+}
+
+
+struct BondTypeInfo {
+    principal: f64,
+    coupon_rate: f64,
+    maturity: f64,
+    coupon_growth_rate: f64,
+    first_coupon_time: f64,
+}
+
+impl From<&BondType> for BondTypeInfo {
+    fn from(value: &BondType) -> Self {
+        match value {
+            BondType::AnnuityBond { principal, coupon_rate, maturity, first_coupon_time } => {
+                BondTypeInfo {
+                    principal: *principal, coupon_rate: *coupon_rate, maturity: *maturity,
+                    coupon_growth_rate: 0.0, first_coupon_time: match first_coupon_time { Some(v) => *v, None => 1.0, },
+                }
+            },
+            BondType::GrowingAnnuityBond { principal, coupon_rate, maturity, coupon_growth_rate, first_coupon_time } => {
+                BondTypeInfo {
+                    principal: *principal, coupon_rate: *coupon_rate, maturity: *maturity,
+                    coupon_growth_rate: *coupon_growth_rate, first_coupon_time: match first_coupon_time { Some(v) => *v, None => 1.0, },
+                }
+            },
+            BondType::ZeroCouponBond { principal, maturity } => {
+                BondTypeInfo { principal: *principal, coupon_rate: 0.0, maturity: *maturity, coupon_growth_rate: 0.0, first_coupon_time: 0.0, }
+            },
+        }
+    }
 }
 
 
@@ -117,16 +151,16 @@ pub enum BondType {
 ///     instrument_type: FinancialInstrumentType::CashInstrument, asset_class: AssetClass::DebtBasedInstrument, identifier: String::from("32198407128904"),
 /// };
 /// let asset_historical_data: AssetHistData = AssetHistData::build(
-///     Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]), Array1::from_vec(vec![0.0, 1.0])
+///     Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]), Time::new(Array1::from_vec(vec![0.0, 1.0]))
 /// ).unwrap();
 /// let bond_type: BondType = BondType::AnnuityBond { principal: 100.0, coupon_rate: 0.05, maturity: 5.0, first_coupon_time: Some(1.0) };
 /// let discount_rate: ParameterType = ParameterType::Value { value: 0.02 };
 /// let bond: Bond = Bond::build(bond_type, discount_rate, 101.0, compounding_type, Some(0.0), financial_instrument_id, asset_historical_data, None).unwrap();
 ///
 /// // Theoretical value
-/// let cashflow: Array1<f64>  =Array1::from_vec(vec![5.0, 5.0, 5.0, 5.0, 105.0]);
-/// let time: Time = Time::Range { initial_time: 1.0, final_time: 5.0, time_step: 1.0 };
-/// let pv: f64 = present_value(&cashflow, &time, ParameterType::Value { value: 0.02 }, &CompoundingType::Continuous).unwrap();
+/// let cashflow: Vec<f64> = vec![5.0, 5.0, 5.0, 5.0, 105.0];
+/// let time: Time = Time::new_from_range(1.0, 5.0, 1.0);
+/// let pv: f64 = present_value(cashflow.iter(), &time, ParameterType::Value { value: 0.02 }, &CompoundingType::Continuous).unwrap();
 ///
 /// assert!((bond.present_value().unwrap() - pv).abs() < TEST_ACCURACY);
 /// ```
@@ -173,51 +207,15 @@ impl Bond {
     pub fn build(bond_type: BondType, discount_rate: ParameterType, initial_price: f64, compounding_type: CompoundingType, inflation_rate: Option<f64>,
         financial_instrument_id: FinancialInstrumentId, asset_historical_data: AssetHistData, stochastic_model: Option<Box<dyn StochasticProcess>>
     ) -> Result<Self, DigiFiError> {
-        let principal_: f64;
-        let coupon_rate_: f64;
-        let maturity_: f64;
-        let coupon_growth_rate_: f64;
-        let first_coupon_time_: f64;
-        match bond_type {
-            BondType::AnnuityBond { principal, coupon_rate, maturity, first_coupon_time } => {
-                principal_ = principal;
-                coupon_rate_ = coupon_rate;
-                maturity_ = maturity;
-                coupon_growth_rate_ = 0.0;
-                first_coupon_time_ = match first_coupon_time { Some(v) => v, None => 1.0, };
-            },
-            BondType::GrowingAnnuityBond { principal, coupon_rate, maturity, coupon_growth_rate, first_coupon_time } => {
-                principal_ = principal;
-                coupon_rate_ = coupon_rate;
-                maturity_ = maturity;
-                coupon_growth_rate_ = coupon_growth_rate;
-                first_coupon_time_ = match first_coupon_time { Some(v) => v, None => 1.0, };
-            },
-            BondType::ZeroCouponBond { principal, maturity } => {
-                principal_ = principal;
-                coupon_rate_ = 0.0;
-                maturity_ = maturity;
-                coupon_growth_rate_ = 0.0;
-                first_coupon_time_ = 0.0;
-            },
-        }
-        let compounding_frequency: f64 = match compounding_type {
-            CompoundingType::Periodic { frequency } => frequency as f64,
-            CompoundingType::Continuous => 1.0,
-        };
-        let coupon: f64 = principal_ * coupon_rate_ / compounding_frequency;
-        let time: Time = Time::Range { initial_time: first_coupon_time_, final_time: maturity_, time_step: 1.0 / compounding_frequency };
-        let inflation_rate: f64 = match inflation_rate { Some(v) => v, None => 0.0, };
-        let cashflow: Cashflow = Cashflow::build(ParameterType::Value { value: coupon}, time, coupon_growth_rate_, inflation_rate)?;
-        let discount_rate: Array1<f64> = match discount_rate {
-            ParameterType::Value { value } => Array1::from_vec(vec![value; cashflow.cashflow().len()]),
-            ParameterType::TimeSeries { values } => {
-                compare_array_len(&values, cashflow.cashflow(), "discount_rate", "generated cashflow array")?;
-                values
-            },
-        };
+        let bond_info: BondTypeInfo = (&bond_type).into();
+        let compounding_frequency: f64 = compounding_type.frequency() as f64;
+        let coupon: f64 = bond_info.principal * bond_info.coupon_rate / compounding_frequency;
+        let time: Time = Time::new_from_range(bond_info.first_coupon_time, bond_info.maturity, 1.0 / compounding_frequency);
+        let inflation_rate: f64 = inflation_rate.unwrap_or(0.0);
+        let cashflow: Cashflow = Cashflow::build(ParameterType::Value { value: coupon }, time, bond_info.coupon_growth_rate, inflation_rate)?;
+        let discount_rate: Array1<f64> = discount_rate.into_array(cashflow.len())?;
         Ok(Bond {
-            bond_type, principal: principal_, discount_rate, maturity: maturity_, initial_price: initial_price, compounding_type, compounding_frequency,
+            bond_type, principal: bond_info.principal, discount_rate, maturity: bond_info.maturity, initial_price: initial_price, compounding_type, compounding_frequency,
             financial_instrument_id, asset_historical_data: asset_historical_data, stochastic_model: stochastic_model, coupon, cashflow,
         })
     }
@@ -225,7 +223,7 @@ impl Bond {
     /// Estimated total rate of return of the bond from current time to its maturity.
     ///
     /// # Input
-    /// - `ytm_method`: Method for evaluating yield-to-maturity (i.e., Numerical - for numerical solution of the IRR, Approximation - for approximation formula)
+    /// - `ytm_method`: Method for evaluating yield-to-maturity (i.e., Numerical - numerical solution of the IRR, Approximation - approximation formula)
     ///
     /// # Output
     /// - Yield-to-Maturity (YtM)
@@ -242,7 +240,7 @@ impl Bond {
                 let mut cashflow: Array1<f64> = self.cashflow.cashflow().clone();
                 let last_index: usize = cashflow.len() - 1;
                 cashflow[last_index] = cashflow[last_index] + self.principal;
-                internal_rate_of_return(self.initial_price, &cashflow, self.cashflow.time(), &self.compounding_type)
+                internal_rate_of_return(self.initial_price, cashflow.iter(), self.cashflow.time(), &self.compounding_type)
             },
         }
     }
@@ -258,7 +256,7 @@ impl Bond {
         let mut cashflow: Array1<f64> = self.cashflow.cashflow().clone();
         let last_index: usize = cashflow.len() - 1;
         cashflow[last_index] = cashflow[last_index] + call_price;
-        internal_rate_of_return(0.0, &cashflow, self.cashflow.time(), &self.compounding_type)
+        internal_rate_of_return(0.0, cashflow.iter(), self.cashflow.time(), &self.compounding_type)
     }
 
     /// Spot rate of a bond computed based on cashflows of the bond discounted with the provided spot rates.
@@ -273,36 +271,31 @@ impl Bond {
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Spot_contract#Bonds_and_swaps>
     /// - Original Source: N/A
     pub fn spot_rate(&self, spot_rates: Option<Array1<f64>>) -> Result<f64, DigiFiError> {
-        let error_title: String = String::from("Bond");
         match self.bond_type {
             BondType::ZeroCouponBond { principal, maturity } => {
                 Ok((self.initial_price / principal).ln() / maturity)
             },
             _ => {
-                let spot_rates: Array1<f64> = match spot_rates {
-                    Some(v) => v,
-                    None => return Err(DigiFiError::ValidationError {
-                        title: error_title,
-                        details: "The argument `spot_rates` must be an array if the bond type is not `ZeroCouponBond`.".to_owned(),
-                    }),
-                };
-                if spot_rates.len() != (self.cashflow.cashflow().len() - 1) {
+                let spot_rates: Array1<f64> = spot_rates.ok_or(DigiFiError::ValidationError {
+                    title: Self::error_title(),
+                    details: "The argument `spot_rates` must be an array if the bond type is not `ZeroCouponBond`.".to_owned(),
+                })?;
+                let last_cashflow_i: usize = self.cashflow.len() - 1;
+                if spot_rates.len() != last_cashflow_i {
                     return Err(DigiFiError::UnmatchingLength { array_1: "spot_rate".to_owned(), array_2: "cashflow (without the last element)".to_owned(), });
                 }
-                let time_array: Array1<f64> = self.cashflow.time_array();
-                let mut discounted_coupons: f64 = 0.0;
-                for i in 0..(time_array.len() - 1) {
+                let discounted_coupons: f64 = (0..last_cashflow_i).into_iter().fold(0.0, |discounted_coupons, i| {
                     let discount_term: Compounding = Compounding::new(spot_rates[i], &self.compounding_type);
-                    discounted_coupons += self.cashflow.cashflow()[i] * discount_term.compounding_term(time_array[i]);
-                }
+                    discounted_coupons + self.cashflow.cashflow()[i] * discount_term.compounding_term(self.cashflow.time_array()[i])
+                } );
                 match self.compounding_type {
                     CompoundingType::Continuous => {
-                        Ok(-((self.initial_price - discounted_coupons) / (self.principal + self.cashflow.cashflow()[self.cashflow.cashflow().len()-1])).ln() / self.maturity)
+                        Ok(-((self.initial_price - discounted_coupons) / (self.principal + self.cashflow.cashflow()[last_cashflow_i])).ln() / self.maturity)
                     },
                     CompoundingType::Periodic { frequency } => {
                         let frequency: f64 = frequency as f64;
                         let power: f64 = -1.0 / (self.maturity * frequency);
-                        Ok(frequency * ((self.initial_price - discounted_coupons) / (self.principal + self.cashflow.cashflow()[self.cashflow.cashflow().len()-1])).powf(power) - frequency)
+                        Ok(frequency * ((self.initial_price - discounted_coupons) / (self.principal + self.cashflow.cashflow()[last_cashflow_i])).powf(power) - frequency)
                     },
                 }
             }
@@ -318,12 +311,10 @@ impl Bond {
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Par_yield#>
     /// - Original Source: N/A
     pub fn par_yield(&self) -> f64 {
-        let time_array: Array1<f64> = self.cashflow.time_array();
-        let mut discount_terms: f64 = 0.0;
-        for i in 0..time_array.len() {
-            let discount_term: Compounding = Compounding::new(self.discount_rate[i], &self.compounding_type);
-            discount_terms += discount_term.compounding_term(time_array[i]);
-        }
+        let discount_terms: f64 = self.discount_rate.iter().zip(self.cashflow.time_array().iter()).fold(0.0, |discount, (r, t)| {
+            let discount_term: Compounding = Compounding::new(*r, &self.compounding_type);
+            discount + discount_term.compounding_term(*t)
+        } );
         self.compounding_frequency * (self.principal * (1.0 - discount_terms)) / discount_terms
     }
 
@@ -345,26 +336,22 @@ impl Bond {
     /// - Original Source: N/A
     pub fn duration(&self, modified: bool) -> Result<f64, DigiFiError> {
         let ytm: f64 = self.yield_to_maturity(YtMMethod::Numerical)?;
-        let time_array: Array1<f64> = self.cashflow.time_array();
-        let mut weighted_cashflows: f64 = 0.0;
-        for i in 0..time_array.len() {
+        let last_index: usize = self.cashflow.len() - 1;
+        let weighted_cashflows: f64 = (0..self.cashflow.len()).into_iter().fold(0.0, |weighted_cashflows, i| {
             let discount_term: Compounding = Compounding::new(ytm, &self.compounding_type);
-            let mut cashflow: f64 = self.cashflow.cashflow()[i];
-            if i == (time_array.len() - 1) {
-                cashflow += self.principal;
-            }
-            weighted_cashflows += time_array[i] * cashflow * discount_term.compounding_term(time_array[i]);
-        }
-        let mut duration: f64 = weighted_cashflows / self.initial_price;
+            let cashflow: f64 = if i == last_index {
+                self.cashflow.cashflow()[i] + self.principal
+            } else {
+                self.cashflow.cashflow()[i]
+            };
+            let time_step: f64 = self.cashflow.time_array()[i];
+            weighted_cashflows + time_step * cashflow * discount_term.compounding_term(time_step)
+        } );
+        let duration: f64 = weighted_cashflows / self.initial_price;
         match self.compounding_type {
-            CompoundingType::Periodic { .. } => {
-                if modified {
-                    duration = duration / (1.0 + ytm / self.compounding_frequency)
-                }
-            },
-            _ => (), 
+            CompoundingType::Periodic { .. } if modified => Ok(duration / (1.0 + ytm / self.compounding_frequency)),
+            _ => Ok(duration), 
         }
-        Ok(duration)
     }
 
     /// Measure of the curvature in relationship between bond's prices and yields.
@@ -383,36 +370,29 @@ impl Bond {
     /// - Original Source: N/A
     pub fn convexity(&self, modified: bool) -> Result<f64, DigiFiError> {
         let ytm: f64 = self.yield_to_maturity(YtMMethod::Numerical)?;
-        let time_array: Array1<f64> = self.cashflow.time_array();
-        let mut weighted_cashflows: f64 = 0.0;
-        for i in 0..time_array.len() {
+        let last_index: usize = self.cashflow.len() - 1;
+        let weighted_cashflows: f64 = (0..self.cashflow.len()).into_iter().fold(0.0, |weighted_cashflows, i| {
             let discount_term: Compounding = Compounding::new(ytm, &self.compounding_type);
-            let mut cashflow: f64 = self.cashflow.cashflow()[i];
-            if i == (time_array.len() - 1) {
-                cashflow += self.principal;
-            }
-            let mut time: f64 = time_array[i].powi(2);
+            let cashflow: f64 = if i == last_index {
+                self.cashflow.cashflow()[i] + self.principal
+            } else {
+                self.cashflow.cashflow()[i]
+            };
+            let time_step: f64 = self.cashflow.time_array()[i];
+            let mut time: f64 = time_step.powi(2);
             // Convexity modified for periodic compounding
-            match self.compounding_type {
-                CompoundingType::Periodic { .. } => {
-                    if modified {
-                        time += time_array[i] / self.compounding_frequency;
-                    }
-                },
-                _ => (),
-            }
-            weighted_cashflows += time * cashflow * discount_term.compounding_term(time_array[i]);
-        }
-        let mut convexity: f64 = weighted_cashflows / self.initial_price;
-        match self.compounding_type {
-            CompoundingType::Periodic { .. } => {
+            if let CompoundingType::Periodic { .. } = self.compounding_type {
                 if modified {
-                    convexity = convexity / (1.0 + ytm / self.compounding_frequency).powi(2);
+                    time += time_step / self.compounding_frequency;
                 }
-            },
-            _ => (),
+            }
+            weighted_cashflows + time * cashflow * discount_term.compounding_term(time_step)
+        } );
+        let convexity: f64 = weighted_cashflows / self.initial_price;
+        match self.compounding_type {
+            CompoundingType::Periodic { .. } if modified => Ok(convexity / (1.0 + ytm / self.compounding_frequency).powi(2)),
+            _ => Ok(convexity)
         }
-        Ok(convexity)
     }
 
     /// Amount of coupon accumulated before the purchase of the bond.
@@ -475,7 +455,13 @@ impl Bond {
         };
         let db_dy: f64 = -current_price * duration;
         let d2b_dy2: f64 = current_price * convexity;
-        Ok(current_price + db_dy*yield_spread + 0.5*d2b_dy2*yield_spread.powi(2))
+        Ok(current_price + db_dy * yield_spread + 0.5 * d2b_dy2 * yield_spread.powi(2))
+    }
+}
+
+impl ErrorTitle for Bond {
+    fn error_title() -> String {
+        String::from("Bond")
     }
 }
 
@@ -490,17 +476,17 @@ impl FinancialInstrument for Bond {
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Bond_valuation>
     /// - Original Source: N/A
     fn present_value(&self) -> Result<f64, DigiFiError> {
-        let time_array: Array1<f64> = self.cashflow.time_array();
-        let mut present_value: f64 = 0.0;
         // Present value of coupon payments
-        for i in 0..time_array.len() {
-            let discount_term: Compounding = Compounding::new(self.discount_rate[i], &self.compounding_type);
-            present_value += self.cashflow.cashflow()[i] * discount_term.compounding_term(time_array[i]);
-        }
+        let coupon_pv: f64 = self.discount_rate.iter().zip(self.cashflow.cashflow().iter().zip(self.cashflow.time_array().iter()))
+            .fold(0.0, |pv, (r, (cash, t))| {
+                let discount_term: Compounding = Compounding::new(*r, &self.compounding_type);
+                pv + cash * discount_term.compounding_term(*t)
+            } );
+
         // Present value of principal and coupon payments
-        let last_index: usize = time_array.len() - 1;
-        present_value += self.principal * Compounding::new(self.discount_rate[last_index], &self.compounding_type).compounding_term(time_array[last_index]);
-        Ok(present_value)
+        let last_index: usize = self.cashflow.len() - 1;
+        let principal_pv: f64 = self.principal * Compounding::new(self.discount_rate[last_index], &self.compounding_type).compounding_term(self.cashflow.time_array()[last_index]);
+        Ok(coupon_pv + principal_pv)
     }
 
     /// Net present value of the bond.
@@ -516,36 +502,17 @@ impl FinancialInstrument for Bond {
     /// # Output
     /// - Future value of the bond at it maturity (Computed from the present value of the bond)
     fn future_value(&self) -> Result<f64, DigiFiError> {
-        let time_array: Array1<f64> = self.cashflow.time_array();
-        let mut future_multiplicator: f64 = 0.0;
-        for i in 0..time_array.len() {
-            let discount_term: Compounding = Compounding::new(self.discount_rate[i], &self.compounding_type);
-            future_multiplicator = future_multiplicator / discount_term.compounding_term(time_array[i]);
-        }
+        let future_multiplicator: f64 = self.discount_rate.iter().zip(self.cashflow.time_array().iter())
+            .fold(0.0, |fm, (r, t)| {
+                let discount_term: Compounding = Compounding::new(*r, &self.compounding_type);
+                fm / discount_term.compounding_term(*t)
+            } );
         Ok(self.present_value()? * future_multiplicator)
     }
 
-    /// Returns an array of bond prices.
-    ///
-    /// # Input
-    /// - `end_index`: Time index beyond which no data will be returned
-    /// - `start_index`: Time index below which no data will be returned
-    fn get_prices(&self, end_index: usize, start_index: Option<usize>) -> Result<Array1<f64>, DigiFiError> {
-        self.asset_historical_data.get_price(end_index, start_index)
-    }
-
-    /// Returns an array of predictable incomes for the bond (i.e., coupons).
-    ///
-    /// # Input
-    /// - `end_index`: Time index beyond which no data will be returned
-    /// - `start_index`: Time index below which no data will be returned
-    fn get_predictable_income(&self, end_index: usize, start_index: Option<usize>) -> Result<Array1<f64>, DigiFiError> {
-        self.asset_historical_data.get_predictable_income(end_index, start_index)
-    }
-
-    /// Returns an array of time steps at which the asset price and predictable_income are recorded.
-    fn get_time_array(&self) -> Array1<f64> {
-        self.asset_historical_data.time_array.clone()
+    /// Returns asset's historical data.
+    fn historical_data(&self) -> &AssetHistData {
+        &self.asset_historical_data
     }
 
     /// Updates historical data of the asset with the newly generated data.
@@ -601,7 +568,8 @@ mod tests {
             instrument_type: FinancialInstrumentType::CashInstrument, asset_class: AssetClass::DebtBasedInstrument, identifier: String::from("32198407128904"),
         };
         let asset_historical_data: AssetHistData = AssetHistData::build(
-            Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]), Array1::from_vec(vec![0.0, 1.0])
+            Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]),
+            Time::new(Array1::from_vec(vec![0.0, 1.0]))
         ).unwrap();
         let bond_type: BondType = BondType::AnnuityBond { principal: 100.0, coupon_rate: 0.05, maturity: 5.0, first_coupon_time: Some(1.0) };
         let discount_rate: ParameterType = ParameterType::Value { value: 0.02 };
@@ -610,9 +578,9 @@ mod tests {
             asset_historical_data, None
         ).unwrap();
         // Theoretical value
-        let cashflow: Array1<f64>  =Array1::from_vec(vec![5.0, 5.0, 5.0, 5.0, 105.0]);
-        let time: Time = Time::Range { initial_time: 1.0, final_time: 5.0, time_step: 1.0 };
-        let pv: f64 = present_value(&cashflow, &time, ParameterType::Value { value: 0.02 }, &CompoundingType::Continuous).unwrap();
+        let cashflow: Vec<f64> = vec![5.0, 5.0, 5.0, 5.0, 105.0];
+        let time: Time = Time::new_from_range(1.0, 5.0, 1.0);
+        let pv: f64 = present_value(cashflow.iter(), &time, ParameterType::Value { value: 0.02 }, &CompoundingType::Continuous).unwrap();
         assert!((bond.present_value().unwrap() - pv).abs() < TEST_ACCURACY);
     }
 }

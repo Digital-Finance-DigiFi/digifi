@@ -21,7 +21,7 @@ impl PortfolioTaxonomy for Portfolio {
     /// ```rust
     /// use std::collections::HashMap;
     /// use ndarray::Array1;
-    /// use digifi::utilities::minimal_spanning_tree::MSTDistance;
+    /// use digifi::utilities::{Time, MSTDistance};
     /// use digifi::portfolio_applications::{AssetHistData, portfolio_performance::SharpeRatio};
     /// use digifi::portfolio_applications::portfolio_composition::{Asset, Portfolio};
     /// use digifi::portfolio_applications::portfolio_taxonomy::PortfolioTaxonomy;
@@ -37,7 +37,7 @@ impl PortfolioTaxonomy for Portfolio {
     ///     let dummy_array: Array1<f64> = Array1::from_vec(vec![0.0; time.len()]);
     ///     let mut assets: HashMap<String, Asset> = HashMap::<String, Asset>::new();
     ///     for (k, v) in data.into_iter() {
-    ///         let hist_data: AssetHistData = AssetHistData::build(v, dummy_array.clone(), dummy_array.clone()).unwrap();
+    ///         let hist_data: AssetHistData = AssetHistData::build(v, dummy_array.clone(), Time::new(dummy_array.clone())).unwrap();
     ///         assets.insert(k, Asset { hist_data, weight, });
     ///     }
     ///     let performance_metric: Box<SharpeRatio> = Box::new(SharpeRatio { rf: 0.02 });
@@ -84,6 +84,7 @@ impl PortfolioTaxonomy for Portfolio {
 mod tests {
     use std::collections::HashMap;
     use ndarray::Array1;
+    use crate::utilities::Time;
     use crate::portfolio_applications::{AssetHistData, portfolio_performance::SharpeRatio};
     use crate::portfolio_applications::portfolio_composition::{Asset, Portfolio};
     use crate::portfolio_applications::portfolio_taxonomy::PortfolioTaxonomy;
@@ -98,7 +99,7 @@ mod tests {
         let dummy_array: Array1<f64> = Array1::from_vec(vec![0.0; time.len()]);
         let mut assets: HashMap<String, Asset> = HashMap::<String, Asset>::new();
         for (k, v) in data.into_iter() {
-            let hist_data: AssetHistData = AssetHistData::build(v, dummy_array.clone(), dummy_array.clone()).unwrap();
+            let hist_data: AssetHistData = AssetHistData::build(v, dummy_array.clone(), Time::new(dummy_array.clone())).unwrap();
             assets.insert(k, Asset { hist_data, weight, });
         }
         let performance_metric: Box<SharpeRatio> = Box::new(SharpeRatio { rf: 0.02 });

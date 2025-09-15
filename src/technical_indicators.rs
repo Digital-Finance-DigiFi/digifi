@@ -9,7 +9,7 @@ use serde::{Serialize, Deserialize};
 #[cfg(feature = "plotly")]
 use plotly::{Plot, Trace, Scatter, Bar, Layout, common::{Line, color::NamedColor}, layout::Axis};
 use crate::error::DigiFiError;
-use crate::utilities::compare_array_len;
+use crate::utilities::compare_len;
 
 
 /// Measure of the decline of the asset from its historical peak.
@@ -36,26 +36,35 @@ use crate::utilities::compare_array_len;
 /// use digifi::technical_indicators::maximum_drawdown;
 /// 
 /// let asset_price: Array1<f64> = Array1::from_vec(vec![100.0, 101.0, 104.0, 102.0, 103.0, 106.0]);
-/// let max_dd = maximum_drawdown(&asset_price);
+/// let max_dd: f64 = maximum_drawdown(&asset_price);
 /// 
 /// assert_eq!(max_dd, 100.0*2.0/104.0);
 /// ```
 pub fn maximum_drawdown(asset_value: &Array1<f64>) -> f64 {
     let mut maximum_drawdown: f64 = 0.0;
-    let mut drawdowns: Vec<f64> = vec![0.0];
-    let mut peak = asset_value[0];
+    let mut peak: f64 = asset_value[0];
     // Selection of maximum drawdown candidates
     for i in asset_value {
         if peak < *i {
             peak = *i;
         }
         let last_drawdown: f64 = 100.0 * (peak - *i) / peak;
-        drawdowns.push(last_drawdown);
         if maximum_drawdown < last_drawdown {
             maximum_drawdown = last_drawdown;
         }
     }
     maximum_drawdown
+}
+
+
+#[derive(Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+/// Simple Moving Average (SMA) data.
+pub struct SMA {
+    /// Size of the rolling window for the SMA
+    pub period: usize,
+    /// An array of SMA readings
+    pub sma: Array1<f64>,
 }
 
 
@@ -80,20 +89,33 @@ pub fn maximum_drawdown(asset_value: &Array1<f64>) -> f64 {
 /// ```rust
 /// use ndarray::{Array1, s};
 /// use digifi::utilities::TEST_ACCURACY;
-/// use digifi::technical_indicators::sma;
+/// use digifi::technical_indicators::{SMA, sma};
 /// 
 /// let price_array: Array1<f64> = Array1::from_vec(vec![10.0, 11.0, 12.0, 13.0, 11.0, 15.0]);
-/// let sma: Array1<f64> = sma(&price_array, 3).unwrap();
+/// let sma: SMA = sma(&price_array, 3).unwrap();
 /// 
-/// assert!((sma - Array1::from_vec(vec![f64::NAN, f64::NAN, 11.0, 12.0, 12.0, 13.0])).slice(s![2..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+/// assert!((sma.sma - Array1::from_vec(vec![f64::NAN, f64::NAN, 11.0, 12.0, 12.0, 13.0])).slice(s![2..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
 /// ```
-pub fn sma(price_array: &Array1<f64>, period: usize) -> Result<Array1<f64>, DigiFiError> {
+pub fn sma(price_array: &Array1<f64>, period: usize) -> Result<SMA, DigiFiError> {
     let mut sma: Vec<f64> = vec![f64::NAN; period - 1];
     let windows = price_array.windows(period).to_owned();
     for window in windows {
         sma.push(window.mean().ok_or(DigiFiError::MeanCalculation { title: "SMA".to_owned(), series: "price array slice".to_owned() })?);
     }
-    Ok(Array1::from_vec(sma))
+    Ok(SMA { period, sma: Array1::from_vec(sma) })
+}
+
+
+#[derive(Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+/// Exponential Moving Average (SMA) data.
+pub struct EMA {
+    /// Size of the rolling window for the EMA
+    pub period: usize,
+    /// Smoothing of the EMA line
+    pub smoothing: i32,
+    /// An array of EMA readings
+    pub ema: Array1<f64>,
 }
 
 
@@ -103,7 +125,7 @@ pub fn sma(price_array: &Array1<f64>, period: usize) -> Result<Array1<f64>, Digi
 /// # Input
 /// - `price_array`: Array of prices
 /// - `period`: Size of the rolling window for the EMA
-/// - `smoothing`: Smoothing of the EMA
+/// - `smoothing`: Smoothing of the EMA line
 /// 
 /// # Output
 /// - An array of EMA readings
@@ -120,21 +142,21 @@ pub fn sma(price_array: &Array1<f64>, period: usize) -> Result<Array1<f64>, Digi
 /// ```rust
 /// use ndarray::{Array1, s};
 /// use digifi::utilities::TEST_ACCURACY;
-/// use digifi::technical_indicators::ema;
+/// use digifi::technical_indicators::{EMA, ema};
 /// 
 /// let price_array: Array1<f64> = Array1::from_vec(vec![10.0, 11.0, 12.0, 13.0, 11.0, 15.0]);
-/// let ema: Array1<f64> = ema(&price_array, 3, 2).unwrap();
+/// let ema: EMA = ema(&price_array, 3, 2).unwrap();
 /// 
-/// assert!((ema - Array1::from_vec(vec![f64::NAN, f64::NAN, 11.0, 12.0, 11.5, 13.25])).slice(s![2..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+/// assert!((ema.ema - Array1::from_vec(vec![f64::NAN, f64::NAN, 11.0, 12.0, 11.5, 13.25])).slice(s![2..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
 /// ```
-pub fn ema(price_array: &Array1<f64>, period: usize, smoothing: i32) -> Result<Array1<f64>, DigiFiError> {
+pub fn ema(price_array: &Array1<f64>, period: usize, smoothing: i32) -> Result<EMA, DigiFiError> {
     let multiplier: f64 = smoothing as f64 / (1.0 + period as f64);
     let mut ema: Vec<f64> = vec![f64::NAN; period - 1];
     ema.push(price_array.slice(s![0..period]).mean().ok_or(DigiFiError::MeanCalculation { title: "EMA".to_owned(), series: "price array slice".to_owned() })?);
     for i in period..price_array.len() {
         ema.push(price_array[i]*multiplier + ema[i-1]*(1.0-multiplier));
     }
-    Ok(Array1::from_vec(ema))
+    Ok(EMA { period, smoothing, ema: Array1::from_vec(ema) })
 }
 
 
@@ -142,6 +164,14 @@ pub fn ema(price_array: &Array1<f64>, period: usize, smoothing: i32) -> Result<A
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Moving Average Convergence/Divergence (MACD) data.
 pub struct MACD {
+    /// Size of the rolling window for the smaller EMA
+    pub small_ema_period: usize,
+    /// Size of the rolling window for the larger EMA
+    pub large_ema_period: usize,
+    /// Size of rolling window for the signal line
+    pub  signal_line_period: usize,
+    /// Smoothing of the EMA lines
+    pub smoothing: i32,
     /// An array of smaller EMA readings
     pub small_ema: Array1<f64>,
     /// An array of larger EMA readings
@@ -161,8 +191,8 @@ pub struct MACD {
 /// - `price_array`: Array of prices
 /// - `small_ema_period`: Size of the rolling window for the smaller EMA
 /// - `large_ema_period`: Size of the rolling window for the larger EMA
-/// - `signal_line`: Size of rolling window for the signal line
-/// - `smoothing`: Smoothing of the EMAs
+/// - `signal_line_period`: Size of rolling window for the signal line
+/// - `smoothing`: Smoothing of the EMA lines
 /// 
 /// # Output
 /// - MACD data
@@ -184,10 +214,10 @@ pub struct MACD {
 /// let price_array: Array1<f64> = Array1::from_vec(vec![10.0, 11.0, 12.0, 13.0, 11.0, 15.0]);
 /// let macd_info: MACD = macd(&price_array, 3, 4, 2, 2).unwrap();
 /// 
-/// assert!((macd_info.macd - ema(&price_array, 3, 2).unwrap() + ema(&price_array, 4, 2).unwrap()).slice(s![3..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+/// assert!((macd_info.macd - ema(&price_array, 3, 2).unwrap().ema + ema(&price_array, 4, 2).unwrap().ema).slice(s![3..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
 /// assert!((macd_info.signal_line.slice(s![4..]).to_owned() - Array1::from_vec(vec![0.35, 0.43])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
 /// ```
-pub fn macd(price_array: &Array1<f64>, small_ema_period: usize, large_ema_period: usize, signal_line: usize, smoothing: i32) -> Result<MACD, DigiFiError> {
+pub fn macd(price_array: &Array1<f64>, small_ema_period: usize, large_ema_period: usize, signal_line_period: usize, smoothing: i32) -> Result<MACD, DigiFiError> {
     let error_title: String = String::from("MACD");
     if large_ema_period <= small_ema_period {
         return Err(DigiFiError::ParameterConstraint {
@@ -195,24 +225,24 @@ pub fn macd(price_array: &Array1<f64>, small_ema_period: usize, large_ema_period
             constraint: "The argument large_ema_period must be bigger than the argument small_ema_period.".to_owned(),
         });
     }
-    let signal_line_mult: f64 = smoothing as f64 / (1.0 + signal_line as f64);
+    let signal_line_mult: f64 = smoothing as f64 / (1.0 + signal_line_period as f64);
     // Small EMA
-    let small_ema: Array1<f64> = ema(&price_array, small_ema_period, smoothing)?;
+    let small_ema: Array1<f64> = ema(&price_array, small_ema_period, smoothing)?.ema;
     // Large Ema
-    let large_ema: Array1<f64> = ema(&price_array, large_ema_period, smoothing)?;
+    let large_ema: Array1<f64> = ema(&price_array, large_ema_period, smoothing)?.ema;
     // MACD
     let macd: Array1<f64> = &small_ema - &large_ema;
     // Signal Line
     let mut signal_line_: Vec<f64> = vec![f64::NAN; price_array.len()];
-    signal_line_[large_ema_period-2+signal_line] = macd.slice(s![large_ema_period-1..large_ema_period-1+signal_line]).mean()
+    signal_line_[large_ema_period-2+signal_line_period] = macd.slice(s![large_ema_period-1..large_ema_period-1+signal_line_period]).mean()
         .ok_or(DigiFiError::MeanCalculation { title: error_title, series: "price array slice".to_owned(), })?;
-    for i in (large_ema_period-1+signal_line)..small_ema.len() {
+    for i in (large_ema_period-1+signal_line_period)..small_ema.len() {
         signal_line_[i] = macd[i]*signal_line_mult + signal_line_[i-1]*(1.0-signal_line_mult);
     }
     let signal_line_: Array1<f64> = Array1::from_vec(signal_line_);
     // MACD Histogram
     let macd_hist: Array1<f64> = &macd - &signal_line_;
-    Ok(MACD { small_ema, large_ema, macd, signal_line: signal_line_, macd_hist })
+    Ok(MACD { small_ema_period, large_ema_period, signal_line_period, smoothing, small_ema, large_ema, macd, signal_line: signal_line_, macd_hist })
 }
 
 
@@ -220,6 +250,10 @@ pub fn macd(price_array: &Array1<f64>, small_ema_period: usize, large_ema_period
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Bollinger Band data.
 pub struct BollingerBands {
+    /// Size of the rolling window for the SMA
+    pub period: usize,
+    /// Number of standard deviations used to construct Bollinger bands around the SMA
+    pub n_std: usize,
     /// An array of SMA readings
     pub sma: Array1<f64>,
     /// An array of upper Bollinger band readings
@@ -257,19 +291,18 @@ pub struct BollingerBands {
 /// let deviations: Array1<f64> = 2.0 * Array1::from_vec(vec![f64::NAN, f64::NAN, (2.0/3.0_f64).sqrt(), (2.0/3.0_f64).sqrt(), (2.0/3.0_f64).sqrt(), (8.0/3.0_f64).sqrt()]);
 /// let bb_info: BollingerBands = bollinger_bands(&price_array, 3, 2).unwrap();
 /// 
-/// assert!((bb_info.upper_band - sma(&price_array, 3).unwrap() - &deviations).slice(s![2..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+/// assert!((bb_info.upper_band - sma(&price_array, 3).unwrap().sma - &deviations).slice(s![2..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
 /// ```
-pub fn bollinger_bands(price_array: &Array1<f64>, period: usize, n_std: i32) -> Result<BollingerBands, DigiFiError> {
-    let sma: Array1<f64> = sma(price_array, period)?;
-    let mut deviation:Vec<f64> = vec![f64::NAN; period - 1];
-    let windows = price_array.windows(period).to_owned();
-    for window in windows {
-        deviation.push(n_std as f64 * window.std(0.0));
-    }
-    let deviation: Array1<f64> = Array1::from_vec(deviation);
-    let upper_band: Array1<f64> = &sma + &deviation;
-    let lower_band: Array1<f64> = &sma - &deviation;
-    Ok(BollingerBands { sma, upper_band, lower_band })
+pub fn bollinger_bands(price_array: &Array1<f64>, period: usize, n_std: usize) -> Result<BollingerBands, DigiFiError> {
+    let n_std_: f64 = n_std as f64;
+    let sma: Array1<f64> = sma(price_array, period)?.sma;
+    let mut deviation: Vec<f64> = price_array.windows(period).into_iter().map(|window| {
+        n_std_ * window.std(0.0)
+    } ).collect();
+    let _: Vec<_> = (0..(period - 1)).map(|_| deviation.insert(0, f64::NAN) ).collect();
+    let (upper_band, lower_band) = sma.iter().zip(deviation.iter())
+        .map(|(sma, deviation)| (sma + deviation, sma - deviation) ).unzip();
+    Ok(BollingerBands { period, n_std, sma, upper_band: Array1::from_vec(upper_band), lower_band: Array1::from_vec(lower_band) })
 }
 
 
@@ -277,6 +310,12 @@ pub fn bollinger_bands(price_array: &Array1<f64>, period: usize, n_std: i32) -> 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Relative Strength Index (RSI) data.
 pub struct RSI {
+    /// Size of the rolling window for the RSI
+    pub period: usize,
+    /// Constant value of the oversold band
+    pub oversold_band: f64,
+    /// Constant value of the overbought band
+    pub overbought_band: f64,
     /// An array of upward price changes
     pub u: Array1<f64>,
     /// An array of downward price changes
@@ -365,8 +404,10 @@ pub fn rsi(price_array: &Array1<f64>, period: usize, oversold_band: f64, overbou
     // Removes division by zero (division by zero results in infinity).
     rs = rs.map(| i | if (*i == f64::INFINITY) || (*i == -f64::INFINITY) { f64::NAN } else { *i });
     let rsi: Array1<f64> = 100.0 - 100.0/(1.0 + &rs);
-    Ok(RSI { u, d, u_smma, d_smma, rs, rsi, oversold: Array1::from_vec(vec![oversold_band; price_array_length]),
-                              overbought: Array1::from_vec(vec![overbought_band; price_array_length]) })
+    Ok(RSI {
+        period, oversold_band, overbought_band, u, d, u_smma, d_smma, rs, rsi,
+        oversold: Array1::from_vec(vec![oversold_band; price_array_length]), overbought: Array1::from_vec(vec![overbought_band; price_array_length])
+    })
 }
 
 
@@ -374,6 +415,10 @@ pub fn rsi(price_array: &Array1<f64>, period: usize, oversold_band: f64, overbou
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Average Directional Index (ADX) data.
 pub struct ADX {
+    /// Size of the rolling window for ADX
+    pub period: usize,
+    /// Constant value of the benchmark array
+    pub benchmark: f64,
     /// +DM. An array of directional movement up readings
     pub pdm: Array1<f64>,
     /// -DM. An array of directional movement down readings
@@ -385,7 +430,7 @@ pub struct ADX {
     /// An array of ADX readings
     pub adx: Array1<f64>,
     /// An array of benchmark readings
-    pub benchmark: Array1<f64>,
+    pub benchmark_array: Array1<f64>,
 }
 
 
@@ -433,11 +478,11 @@ pub struct ADX {
 /// ```
 pub fn adx(high_price: &Array1<f64>, low_price: &Array1<f64>, close_price: &Array1<f64>, period: usize, benchmark: f64) -> Result<ADX, DigiFiError> {
     let error_title: String = String::from("ADX");
-    compare_array_len(close_price, high_price, "close_price", "high_price")?;
-    compare_array_len(close_price, low_price, "close_price", "low_price")?;
+    compare_len(&close_price.iter(), &high_price.iter(), "close_price", "high_price")?;
+    compare_len(&close_price.iter(), &low_price.iter(), "close_price", "low_price")?;
     let price_array_length = close_price.len();
-    if price_array_length < (2*period + 1) {
-        return Err(DigiFiError::ParameterConstraint { title: error_title.clone(),
+    if price_array_length < (2 * period + 1) {
+        return Err(DigiFiError::ParameterConstraint { title: error_title,
             constraint: "The argument period must be defined such that the length of price array is smaller than (2*period + 1).".to_owned(), });
     }
     let mut pdm: Vec<f64> = vec![0.0; price_array_length];
@@ -494,7 +539,16 @@ pub fn adx(high_price: &Array1<f64>, low_price: &Array1<f64>, close_price: &Arra
         adx[i] = (adx[i-1] * (period as f64 - 1.0) + abs_pdi_mdi[i]) / period as f64;
     }
     adx = 100.0 * adx / (&pdi + &mdi);
-    Ok(ADX { pdm, mdm, pdi, mdi, adx, benchmark: Array1::from_vec(vec![benchmark; price_array_length]) })
+    Ok(ADX { period, benchmark, pdm, mdm, pdi, mdi, adx, benchmark_array: Array1::from_vec(vec![benchmark; price_array_length]) })
+}
+
+
+#[derive(Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+/// On-Balance Volume (OBV) data.
+pub struct OBV {
+    /// An array of on-balance volume readings
+    pub obv: Array1<f64>,
 }
 
 
@@ -519,16 +573,16 @@ pub fn adx(high_price: &Array1<f64>, low_price: &Array1<f64>, close_price: &Arra
 /// ```rust
 /// use ndarray::Array1;
 /// use digifi::utilities::TEST_ACCURACY;
-/// use digifi::technical_indicators::obv;
+/// use digifi::technical_indicators::{OBV, obv};
 /// 
 /// let close_price: Array1<f64> = Array1::from_vec(vec![10.0, 11.0, 12.0, 13.0, 11.0, 15.0]);
 /// let volume: Array1<f64> = Array1::from_vec(vec![1000.0, 1200.0, 1100.0, 1250.0, 1260.0, 1110.0]);
-/// let obv: Array1<f64> = obv(&close_price, &volume).unwrap();
+/// let obv: OBV = obv(&close_price, &volume).unwrap();
 /// 
-/// assert!((obv - Array1::from_vec(vec![0.0, 1200.0, 2300.0, 3550.0, 2290.0, 3400.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+/// assert!((obv.obv - Array1::from_vec(vec![0.0, 1200.0, 2300.0, 3550.0, 2290.0, 3400.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
 /// ```
-pub fn obv(close_price: &Array1<f64>, volume: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
-    compare_array_len(close_price, volume, "close_price", "volume")?;
+pub fn obv(close_price: &Array1<f64>, volume: &Array1<f64>) -> Result<OBV, DigiFiError> {
+    compare_len(&close_price.iter(), &volume.iter(), "close_price", "volume")?;
     let price_array_len = close_price.len();
     let mut obv: Vec<f64> = vec![0.0; price_array_len];
     for i in 1..price_array_len {
@@ -540,8 +594,7 @@ pub fn obv(close_price: &Array1<f64>, volume: &Array1<f64>) -> Result<Array1<f64
             obv[i] = obv[i-1];
         }
     }
-    let obv: Array1<f64> = Array1::from_vec(obv);
-    Ok(obv)
+    Ok(OBV { obv: Array1::from_vec(obv) })
 }
 
 
@@ -575,10 +628,10 @@ pub fn obv(close_price: &Array1<f64>, volume: &Array1<f64>) -> Result<Array1<f64
 ///         151.3699951171875, 153.72999572753906, 155.17999267578125, 154.6199951171875, 153.16000366210938]);
 ///
 ///     // SMA
-///     let sma_: Array1<f64> = sma(&price_array, 3).unwrap();
+///     let sma: Array1<f64> = sma(&price_array, 3).unwrap().sma;
 ///
 ///     // Moving average plot
-///     let plot: Plot = plot_moving_average(&sma_, &times, None);
+///     let plot: Plot = plot_moving_average(&sma, &times, None);
 ///     plot.show();
 /// }
 /// ```
@@ -823,7 +876,7 @@ pub fn plot_adx(adx: &ADX, times: &Vec<String>) -> Plot {
     plot.add_trace(Scatter::new(times.clone(), adx.pdi.to_vec()).name("+DI").line(pdi_line));
     // Benchmark
     let benchmark_line: Line = Line::new().color(NamedColor::Black);
-    plot.add_trace(Scatter::new(times.clone(), adx.benchmark.to_vec()).name("Benchmark").line(benchmark_line));
+    plot.add_trace(Scatter::new(times.clone(), adx.benchmark_array.to_vec()).name("Benchmark").line(benchmark_line));
     // Layout
     let x_axis: Axis = Axis::new().title("Time");
     let y_axis: Axis = Axis::new().title("ADX");
@@ -864,10 +917,10 @@ pub fn plot_adx(adx: &ADX, times: &Vec<String>) -> Plot {
 ///         40460300.0, 41384600.0]);
 ///
 ///     // OBV
-///     let obv_: Array1<f64> = obv(&close_price, &volume).unwrap();
+///     let obv: Array1<f64> = obv(&close_price, &volume).unwrap().obv;
 ///
 ///     // OBV plot
-///     let plot: Plot = plot_obv(&obv_, &times);
+///     let plot: Plot = plot_obv(&obv, &times);
 ///     plot.show();
 /// }
 /// ```
@@ -891,24 +944,24 @@ mod tests {
     fn unit_test_maximum_drawdown() -> () {
         use crate::technical_indicators::maximum_drawdown;
         let asset_price: Array1<f64> = Array1::from_vec(vec![100.0, 101.0, 104.0, 102.0, 103.0, 106.0]);
-        let max_dd = maximum_drawdown(&asset_price);
+        let max_dd: f64 = maximum_drawdown(&asset_price);
         assert_eq!(max_dd, 100.0*2.0/104.0);
     }
 
     #[test]
     fn unit_test_sma() -> () {
-        use crate::technical_indicators::sma;
+        use crate::technical_indicators::{SMA, sma};
         let price_array: Array1<f64> = Array1::from_vec(vec![10.0, 11.0, 12.0, 13.0, 11.0, 15.0]);
-        let sma: Array1<f64> = sma(&price_array, 3).unwrap();
-        assert!((sma - Array1::from_vec(vec![f64::NAN, f64::NAN, 11.0, 12.0, 12.0, 13.0])).slice(s![2..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+        let sma: SMA = sma(&price_array, 3).unwrap();
+        assert!((sma.sma - Array1::from_vec(vec![f64::NAN, f64::NAN, 11.0, 12.0, 12.0, 13.0])).slice(s![2..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
     fn unit_test_ema() -> () {
-        use crate::technical_indicators::ema;
+        use crate::technical_indicators::{EMA, ema};
         let price_array: Array1<f64> = Array1::from_vec(vec![10.0, 11.0, 12.0, 13.0, 11.0, 15.0]);
-        let ema: Array1<f64> = ema(&price_array, 3, 2).unwrap();
-        assert!((ema - Array1::from_vec(vec![f64::NAN, f64::NAN, 11.0, 12.0, 11.5, 13.25])).slice(s![2..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+        let ema: EMA = ema(&price_array, 3, 2).unwrap();
+        assert!((ema.ema - Array1::from_vec(vec![f64::NAN, f64::NAN, 11.0, 12.0, 11.5, 13.25])).slice(s![2..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
@@ -916,7 +969,7 @@ mod tests {
         use crate::technical_indicators::{ema, macd, MACD};
         let price_array: Array1<f64> = Array1::from_vec(vec![10.0, 11.0, 12.0, 13.0, 11.0, 15.0]);
         let macd_info: MACD = macd(&price_array, 3, 4, 2, 2).unwrap();
-        assert!((macd_info.macd - ema(&price_array, 3, 2).unwrap() + ema(&price_array, 4, 2).unwrap()).slice(s![3..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+        assert!((macd_info.macd - ema(&price_array, 3, 2).unwrap().ema + ema(&price_array, 4, 2).unwrap().ema).slice(s![3..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
         assert!((macd_info.signal_line.slice(s![4..]).to_owned() - Array1::from_vec(vec![0.35, 0.43])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
@@ -926,7 +979,7 @@ mod tests {
         let price_array: Array1<f64> = Array1::from_vec(vec![10.0, 11.0, 12.0, 13.0, 11.0, 15.0]);
         let deviations: Array1<f64> = 2.0 * Array1::from_vec(vec![f64::NAN, f64::NAN, (2.0/3.0_f64).sqrt(), (2.0/3.0_f64).sqrt(), (2.0/3.0_f64).sqrt(), (8.0/3.0_f64).sqrt()]);
         let bb_info: BollingerBands = bollinger_bands(&price_array, 3, 2).unwrap();
-        assert!((bb_info.upper_band - sma(&price_array, 3).unwrap() - &deviations).slice(s![2..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+        assert!((bb_info.upper_band - sma(&price_array, 3).unwrap().sma - &deviations).slice(s![2..]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
@@ -958,11 +1011,11 @@ mod tests {
 
     #[test]
     fn unit_test_obv() -> () {
-        use crate::technical_indicators::obv;
+        use crate::technical_indicators::{OBV, obv};
         let close_price: Array1<f64> = Array1::from_vec(vec![10.0, 11.0, 12.0, 13.0, 11.0, 15.0]);
         let volume: Array1<f64> = Array1::from_vec(vec![1000.0, 1200.0, 1100.0, 1250.0, 1260.0, 1110.0]);
-        let obv: Array1<f64> = obv(&close_price, &volume).unwrap();
-        assert!((obv - Array1::from_vec(vec![0.0, 1200.0, 2300.0, 3550.0, 2290.0, 3400.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+        let obv: OBV = obv(&close_price, &volume).unwrap();
+        assert!((obv.obv - Array1::from_vec(vec![0.0, 1200.0, 2300.0, 3550.0, 2290.0, 3400.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[cfg(feature = "plotly")]
@@ -978,7 +1031,7 @@ mod tests {
         let price_array: Array1<f64> = Array1::from_vec(vec![149.92999267578125, 148.47000122070312, 144.57000732421875, 145.24000549316406, 149.10000610351562,
             151.3699951171875, 153.72999572753906, 155.17999267578125, 154.6199951171875, 153.16000366210938]);
         // SMA
-        let sma: Array1<f64> = sma(&price_array, 3).unwrap();
+        let sma: Array1<f64> = sma(&price_array, 3).unwrap().sma;
         // Moving average plot
         let plot: Plot = plot_moving_average(&sma, &times, None);
         plot.show();
@@ -1079,9 +1132,9 @@ mod tests {
         let volume: Array1<f64> = Array1::from_vec(vec![47339400.0, 49425500.0, 56039800.0, 45124800.0, 46757100.0, 43812600.0, 44421800.0, 49072700.0,
             40460300.0, 41384600.0]);
         // OBV
-        let obv_: Array1<f64> = obv(&close_price, &volume).unwrap();
+        let obv: Array1<f64> = obv(&close_price, &volume).unwrap().obv;
         // Moving average plot
-        let plot: Plot = plot_obv(&obv_, &times);
+        let plot: Plot = plot_obv(&obv, &times);
         plot.show();
     }
 }

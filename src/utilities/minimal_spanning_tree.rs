@@ -2,12 +2,12 @@ use std::cmp::Ordering;
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
 use ndarray::{Array1, Array2};
-use crate::error::DigiFiError;
+use crate::error::{DigiFiError, ErrorTitle};
 use crate::utilities::{maths_utils::euclidean_distance, data_transformations::log_return_transformation};
 use crate::statistics::pearson_correlation;
 
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Type of distance function to apply when computing the distance between the nodes in the minimal spanning tree.
 pub enum MSTDistance {
@@ -49,7 +49,7 @@ impl MSTDistance {
     /// - Distance between the provided nodes
     pub fn distance(&self, v_1: &Array1<f64>, v_2: &Array1<f64>) -> Result<f64, DigiFiError> {
         match self {
-            MSTDistance::EuclideanDistance => Ok(euclidean_distance(v_1, v_2)),
+            MSTDistance::EuclideanDistance => euclidean_distance(v_1.iter(), v_2.iter()),
             MSTDistance::MantegnaDistance => MSTDistance::mantegna_distance(v_1, v_2),
         }
     }
@@ -247,7 +247,6 @@ impl<'a, 'b, 'x> MST<'a, 'b, 'x> {
 
     /// Extracts the distance matrix from the resulting MST.
     pub fn distance_matrix(&self, nodes: &Vec<MSTNode>) -> Result<(Vec<String>, Array2<Option<f64>>), DigiFiError> {
-        let error_title: String = String::from("Minimal-Spanning Tree Distance Matrix");
         // Get ordered node names
         let mut node_names: Vec<String> = Vec::<String>::new();
         for node in nodes {
@@ -258,13 +257,19 @@ impl<'a, 'b, 'x> MST<'a, 'b, 'x> {
         let mut distances: Array2<Option<f64>> = Array2::from_shape_vec((self.n_nodes, self.n_nodes), distances)?;
         for edge in &self.result {
             let i: usize = node_names.iter().position(|v| v == &edge.node_1.name )
-                .ok_or(DigiFiError::NotFound { title: error_title.clone(), data: "matching edge name".to_owned(), })?;
+                .ok_or(DigiFiError::NotFound { title: Self::error_title(), data: "matching edge name".to_owned(), })?;
             let j: usize = node_names.iter().position(|v| v == &edge.node_2.name )
-                .ok_or(DigiFiError::NotFound { title: error_title.clone(), data: "matching edge name".to_owned(), })?;
+                .ok_or(DigiFiError::NotFound { title: Self::error_title(), data: "matching edge name".to_owned(), })?;
             distances[[i, j]] = Some(edge.weight);
             distances[[j, i]] = Some(edge.weight);
         }
         Ok((node_names, distances))
+    }
+}
+
+impl ErrorTitle for MST<'_, '_, '_> {
+    fn error_title() -> String {
+        String::from("Minimal-Spanning Tree")
     }
 }
 

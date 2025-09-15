@@ -1,13 +1,13 @@
-use ndarray::{Array1, Axis};
+use ndarray::Array1;
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
-use crate::error::DigiFiError;
+use crate::error::{DigiFiError, ErrorTitle};
 use crate::random_generators::RandomGenerator;
 use crate::stochastic_processes::StochasticProcess;
-use crate::random_generators::standard_normal_generators::StandardNormalInverseTransform;
+use crate::random_generators::standard_normal_generators::StandardNormalBoxMuller;
 
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Different methods of simulating the Feller Square-Root Process.
 pub enum FSRSimulationMethod {
@@ -34,15 +34,15 @@ pub enum FSRSimulationMethod {
 /// use digifi::utilities::TEST_ACCURACY;
 /// use digifi::stochastic_processes::{StochasticProcess, ArithmeticBrownianMotion};
 ///
-/// let n_paths: usize = 100;
+/// let n_paths: usize = 1_000;
 /// let n_steps: usize = 200;
 ///
 /// let abm: ArithmeticBrownianMotion = ArithmeticBrownianMotion::new(1.0, 0.4, n_paths, n_steps, 1.0, 100.0);
 /// let paths: Vec<Array1<f64>> = abm.get_paths().unwrap();
 ///
 /// assert_eq!(paths.len(), n_paths);
-/// assert_eq!(paths[0].len(), n_steps+1);
-/// let mut final_steps: Vec<f64> = Vec::<f64>::new();
+/// assert_eq!(paths[0].len(), n_steps + 1);
+/// let mut final_steps: Vec<f64> = Vec::with_capacity(n_paths);
 /// for i in 0..n_paths {
 ///     final_steps.push(paths[i][n_steps]);
 /// }
@@ -122,15 +122,20 @@ impl ArithmeticBrownianMotion {
     /// # LaTeX Formula
     /// - \\textit{Cov}(S_{t_{1}}, S_{t_{2}}) = \\sigma^{2} \\min(S_{t_{1}}, S_{t_{2}})
     pub fn get_auto_cov(&self, index_t1: usize, index_t2: usize) -> Result<f64, DigiFiError> {
-        let error_title: String = String::from("Arithmetic Brownian Motion");
         let t_len: usize = self.t.len();
         if t_len < index_t1 {
-            return Err(DigiFiError::IndexOutOfRange { title: error_title.clone(), index: "index_t1".to_owned(), array: "time".to_owned(), });
+            return Err(DigiFiError::IndexOutOfRange { title: Self::error_title(), index: "index_t1".to_owned(), array: "time".to_owned(), });
         }
         if t_len < index_t2 {
-            return Err(DigiFiError::IndexOutOfRange { title: error_title.clone(), index: "index_t1".to_owned(), array: "time".to_owned(), });
+            return Err(DigiFiError::IndexOutOfRange { title: Self::error_title(), index: "index_t2".to_owned(), array: "time".to_owned(), });
         }
         Ok(self.sigma.powi(2) * self.t[index_t1].min(self.t[index_t2]))
+    }
+}
+
+impl ErrorTitle for ArithmeticBrownianMotion {
+    fn error_title() -> String {
+        String::from("Arithmetic Brownian Motion")
     }
 }
 
@@ -155,13 +160,17 @@ impl StochasticProcess for ArithmeticBrownianMotion {
     /// # LaTeX Formula
     /// - dS_{t} = \\mu dt + \\sigma dW_{t}
     fn get_paths(&self) -> Result<Vec<Array1<f64>>, DigiFiError> {
-        let mut paths: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
+        let mut paths: Vec<Array1<f64>> = Vec::with_capacity(self.n_paths);
+        let len: usize = self.t.len();
+        let drift_coef: f64 = self.mu * self.dt;
+        let diffusion_coef: f64 = self.sigma * self.dt.sqrt();
         for _ in 0..self.n_paths {
-            let dw: Array1<f64> = self.dt.sqrt() * StandardNormalInverseTransform::new_shuffle(self.t.len())?.generate()?;
-            let mut ds: Array1<f64> = self.mu * self.dt + self.sigma * dw;
-            ds[0] = self.s_0;
-            ds.accumulate_axis_inplace(Axis(0), |&prev, curr| { *curr += prev });
-            paths.push(ds);
+            let n: Array1<f64> = StandardNormalBoxMuller::new_shuffle(len)?.generate()?;
+            let (ds, _) = (0..len).into_iter().fold((Vec::with_capacity(len), self.s_0), |(mut ds, prev), i| {
+                ds.push(prev);
+                (ds, prev + drift_coef + diffusion_coef * n[i])
+            } );
+            paths.push(Array1::from_vec(ds));
         }
         Ok(paths)
     }
@@ -192,8 +201,8 @@ impl StochasticProcess for ArithmeticBrownianMotion {
 /// let paths: Vec<Array1<f64>> = gbm.get_paths().unwrap();
 ///
 /// assert_eq!(paths.len(), n_paths);
-/// assert_eq!(paths[0].len(), n_steps+1);
-/// let mut final_steps: Vec<f64> = Vec::<f64>::new();
+/// assert_eq!(paths[0].len(), n_steps + 1);
+/// let mut final_steps: Vec<f64> = Vec::with_capacity(n_paths);
 /// for i in 0..n_paths {
 ///     final_steps.push(paths[i][n_steps]);
 /// }
@@ -244,7 +253,7 @@ impl GeometricBrownianMotion {
     /// # LaTeX Formula:
     /// - E\[S_t\] = S_{0} e^{\\mu t}
     pub fn get_expectations(&self) -> Array1<f64> {
-        self.s_0 * (self.mu * &self.t).map(|i| i.exp() )
+        self.t.map(|t| { self.s_0 * (self.mu * t).exp() } )
     }
 
     /// Computes the variance of the stock price at each time step under the Geometric Brownian Motion model.
@@ -257,7 +266,10 @@ impl GeometricBrownianMotion {
     /// # LaTeX Formula
     /// - \\textit{Var}[S_{t}] = (S^{2}_{0}) e^{2\\mu t} (e^{\\sigma^{2} t} - 1)
     pub fn get_variance(&self) -> Array1<f64> {
-        self.s_0.powi(2) * (2.0 * self.mu * &self.t).map(|i| i.exp() ) * ((&self.t * self.sigma.powi(2)).map(|i| i.exp() ) - 1.0)
+        let s_0_sq: f64 = self.s_0.powi(2);
+        let two_mu: f64 = 2.0 * self.mu;
+        let sigma_sq: f64 = self.sigma.powi(2);
+        self.t.map(|t| { s_0_sq * (two_mu * t).exp() * ((t * sigma_sq).exp() - 1.0) } )
     }
 }
 
@@ -283,14 +295,17 @@ impl StochasticProcess for GeometricBrownianMotion {
     /// # LaTeX Formula
     /// - dS_{t} = \\mu S_{t} dt + \\sigma S_{t} dW_{t}
     fn get_paths(&self) -> Result<Vec<Array1<f64>>, DigiFiError> {
-        let mut paths: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
+        let mut paths: Vec<Array1<f64>> = Vec::with_capacity(self.n_paths);
+        let len: usize = self.t.len();
+        let drift_coef: f64 = self.mu * self.dt;
+        let diffusion_coef: f64 = self.sigma * self.dt.sqrt();
         for _ in 0..self.n_paths {
-            let dw: Array1<f64> = self.dt.sqrt() * StandardNormalInverseTransform::new_shuffle(self.t.len())?.generate()?;
-            let mut s: Array1<f64> = Array1::from_vec(vec![self.s_0; self.t.len()]);
-            for i in 1..self.t.len() {
-                s[i] = s[i-1] + self.mu * s[i-1] * self.dt + self.sigma * s[i-1] * dw[i];
-            }
-            paths.push(s);
+            let n: Array1<f64> = StandardNormalBoxMuller::new_shuffle(len)?.generate()?;
+            let (s, _) = (0..len).into_iter().fold((Vec::with_capacity(len), self.s_0), |(mut s, prev), i| {
+                s.push(prev);
+                (s, prev + drift_coef * prev + diffusion_coef * prev * n[i])
+            } );
+            paths.push(Array1::from_vec(s));
         }
         Ok(paths)
     }
@@ -315,15 +330,15 @@ impl StochasticProcess for GeometricBrownianMotion {
 /// use digifi::utilities::TEST_ACCURACY;
 /// use digifi::stochastic_processes::{StochasticProcess, OrnsteinUhlenbeckProcess};
 ///
-/// let n_paths: usize = 100;
+/// let n_paths: usize = 1_000;
 /// let n_steps: usize = 200;
 ///
 /// let oup: OrnsteinUhlenbeckProcess = OrnsteinUhlenbeckProcess::new(0.07, 0.1, 10.0, n_paths, n_steps, 1.0, 0.05, true);
 /// let paths: Vec<Array1<f64>> = oup.get_paths().unwrap();
 /// 
 /// assert_eq!(paths.len(), n_paths);
-/// assert_eq!(paths[0].len(), n_steps+1);
-/// let mut final_steps: Vec<f64> = Vec::<f64>::new();
+/// assert_eq!(paths[0].len(), n_steps + 1);
+/// let mut final_steps: Vec<f64> = Vec::with_capacity(n_paths);
 /// for i in 0..n_paths {
 ///     final_steps.push(paths[i][n_steps]);
 /// }
@@ -380,7 +395,8 @@ impl OrnsteinUhlenbeckProcess {
     /// # LaTeX Formula
     /// - E\[S_t\] = \\mu + (S_{0} - \\mu) e^{-\\alpha t}
     pub fn get_expectations(&self) -> Array1<f64> {
-        self.mu + (self.s_0 * self.mu) * (-self.alpha * &self.t).map(|i| i.exp() )
+        let drift_coef: f64 = self.s_0 - self.mu;
+        self.t.map(|t| { self.mu + drift_coef * (-self.alpha * t).exp() } )
     }
 
     /// Computes the variance of the Ornstein-Uhlenbeck Process at each time step, providing insights into the variability around the mean.
@@ -391,7 +407,9 @@ impl OrnsteinUhlenbeckProcess {
     /// # LaTeX Formula
     /// - \\textit{Var}[S_{t}] = \\frac{\\sigma^{2}}{2\\alpha} (1 - e^{-2\\alpha t})
     pub fn get_variance(&self) -> Array1<f64> {
-        (1.0 - (-2.0 * self.alpha * &self.t).map(|i| i.exp() )) * self.sigma.powi(2) / (2.0 * self.alpha)
+        let two_alpha: f64 = 2.0 * self.alpha;
+        let sigma_sq: f64 = self.sigma.powi(2);
+        self.t.map(|t| { (1.0 - (-two_alpha * t).exp()) * sigma_sq / two_alpha } )
     }
 }
 
@@ -417,28 +435,32 @@ impl StochasticProcess for OrnsteinUhlenbeckProcess {
     /// # LaTeX Formula
     /// - dS_{t} = \\alpha(\\mu - S_{t}) dt + \\sigma dW_{t}
     fn get_paths(&self) -> Result<Vec<Array1<f64>>, DigiFiError> {
-        let mut paths: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
-        let std: f64;
-        if self.analytic_em {
-            std = self.sigma * ((1.0 - (-2.0 * self.alpha * self.dt).exp()) / (2.0 * self.alpha)).sqrt();
+        let mut paths: Vec<Array1<f64>> = Vec::with_capacity(self.n_paths);
+        let len: usize = self.t.len();
+        let alpha_dt: f64 = self.alpha * self.dt;
+        let (drift_coef, diffusion_coef) = if self.analytic_em {
+            let drift_coef: f64 = (-alpha_dt).exp();
+            let diffusion_coef: f64 = self.sigma * ((1.0 - (-2.0 * alpha_dt).exp()) / (2.0 * self.alpha)).sqrt();
+            (drift_coef, diffusion_coef)
         } else {
-            std = self.sigma * self.dt.sqrt();
-        }
+            let drift_coef: f64 = alpha_dt;
+            let diffusion_coef: f64 = self.sigma * self.dt.sqrt();
+            (drift_coef, diffusion_coef)
+        };
         for _ in 0..self.n_paths {
-            let mut s: Array1<f64> = Array1::from_vec(vec![self.s_0; self.t.len()]);
-            let r: Array1<f64> = StandardNormalInverseTransform::new_shuffle(self.t.len())?.generate()?;
+            let mut s: Array1<f64> = Array1::from_vec(vec![self.s_0; len]);
+            let r: Array1<f64> = StandardNormalBoxMuller::new_shuffle(len)?.generate()?;
             if self.analytic_em {
                 // Analytic Euler-Maruyama method
-                for i in 1..self.t.len() {
-                    s[i] = self.mu + (s[i-1] - self.mu) * (-self.alpha * self.dt).exp() + std * r[i-1]
+                for i in 1..len {
+                    s[i] = self.mu + drift_coef * (s[i-1] - self.mu) + diffusion_coef * r[i-1]
                 }
             } else {
                 // Plain Euler-Maruyama method
-                for i in 1..self.t.len() {
-                    s[i] = s[i-1] + self.alpha * (self.mu - s[i]) * self.dt + std * r[i];
+                for i in 1..len {
+                    s[i] = s[i-1] + drift_coef * (self.mu - s[i]) + diffusion_coef * r[i];
                 }
             }
-
             paths.push(s);
         }
         Ok(paths)
@@ -465,20 +487,20 @@ impl StochasticProcess for OrnsteinUhlenbeckProcess {
 /// use digifi::utilities::TEST_ACCURACY;
 /// use digifi::stochastic_processes::{StochasticProcess, BrownianBridge};
 ///
-/// let n_paths: usize = 100;
+/// let n_paths: usize = 1_000;
 /// let n_steps: usize = 200;
 /// let bb: BrownianBridge = BrownianBridge::new(1.0, 2.0, 0.5, n_paths, n_steps, 1.0);
 /// let paths: Vec<Array1<f64>> = bb.get_paths().unwrap();
 ///
 /// assert_eq!(paths.len(), n_paths);
-/// assert_eq!(paths[0].len(), n_steps+1);
-/// let mut final_steps: Vec<f64> = Vec::<f64>::new();
+/// assert_eq!(paths[0].len(), n_steps + 1);
+/// let mut final_steps: Vec<f64> = Vec::with_capacity(n_paths);
 /// for i in 0..n_paths {
 ///    final_steps.push(paths[i][n_steps-1]);
 /// }
 /// let final_steps: Array1<f64> = Array1::from_vec(final_steps);
 /// let expected_path: Array1<f64> = bb.get_expectations();
-/// assert!((final_steps.mean().unwrap() - expected_path[expected_path.len()-2]).abs() < 10_000_000.0 * TEST_ACCURACY);
+/// assert!((final_steps.mean().unwrap() - expected_path[expected_path.len()-2]).abs() < 1_000_000.0 * TEST_ACCURACY);
 /// ```
 pub struct BrownianBridge {
     /// Initial value of the process
@@ -524,7 +546,8 @@ impl BrownianBridge {
     /// # LaTeX Formula
     /// - E[S_{t}] = \\alpha + (\\beta - \\alpha) \\frac{t}{T}
     pub fn get_expectations(&self) -> Array1<f64> {
-        self.alpha + (self.beta - self.alpha) / self.t_f * &self.t
+        let c: f64 = (self.beta - self.alpha) / self.t_f;
+        self.t.map(|t| self.alpha + c * t )
     }
 
     /// Computes the variance of the Brownian Bridge at each time step.
@@ -563,13 +586,15 @@ impl StochasticProcess for BrownianBridge {
     /// # LaTeX Formula
     /// - dS_{t} = ((\\beta - \\alpha)/(T - t)) dt + \\sigma dW_{t}
     fn get_paths(&self) -> Result<Vec<Array1<f64>>, DigiFiError> {
-        let mut paths: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
+        let mut paths: Vec<Array1<f64>> = Vec::with_capacity(self.n_paths);
+        let len: usize = self.t.len();
+        let diffusion_coef: f64 = self.sigma * self.dt.sqrt();
         for _ in 0..self.n_paths {
-            let dw: Array1<f64> = self.dt.sqrt() * StandardNormalInverseTransform::new_shuffle(self.t.len())?.generate()?;
-            let mut s: Array1<f64> = Array1::from_vec(vec![self.alpha; self.t.len()]);
-            s[self.t.len()-1] = self.beta;
-            for i in 0..(self.t.len() - 2) {
-                s[i+1] = s[i] + (self.beta - s[i]) / (self.t.len() - i) as f64 + self.sigma * dw[i];
+            let n: Array1<f64> = StandardNormalBoxMuller::new_shuffle(len)?.generate()?;
+            let mut s: Array1<f64> = Array1::from_vec(vec![self.alpha; len]);
+            s[len - 1] = self.beta;
+            for i in 0..(len - 2) {
+                s[i+1] = s[i] + (self.beta - s[i]) / (len - i) as f64 + diffusion_coef * n[i];
             }
             paths.push(s)
         }
@@ -596,21 +621,21 @@ impl StochasticProcess for BrownianBridge {
 /// use digifi::utilities::TEST_ACCURACY;
 /// use digifi::stochastic_processes::{StochasticProcess, FellerSquareRootProcess, FSRSimulationMethod};
 ///
-/// let n_paths: usize = 100;
+/// let n_paths: usize = 1_000;
 /// let n_steps: usize = 200;
 ///
 /// let fsrp: FellerSquareRootProcess = FellerSquareRootProcess::new(0.05, 0.265, 5.0, n_paths, n_steps, 1.0, 0.03, FSRSimulationMethod::EulerMaruyama);
 /// let paths: Vec<Array1<f64>> = fsrp.get_paths().unwrap();
 ///
 /// assert_eq!(paths.len(), n_paths);
-/// assert_eq!(paths[0].len(), n_steps+1);
-/// let mut final_steps: Vec<f64> = Vec::<f64>::new();
+/// assert_eq!(paths[0].len(), n_steps + 1);
+/// let mut final_steps: Vec<f64> = Vec::with_capacity(n_paths);
 /// for i in 0..n_paths {
 ///    final_steps.push(paths[i][n_steps]);
 /// }
 /// let final_steps: Array1<f64> = Array1::from_vec(final_steps);
 /// let expected_path: Array1<f64> = fsrp.get_expectations();
-/// assert!((final_steps.mean().unwrap() - expected_path.last().unwrap()).abs() < 10_000_000.0 * TEST_ACCURACY);
+/// assert!((final_steps.mean().unwrap() - expected_path.last().unwrap()).abs() < 1_000_000.0 * TEST_ACCURACY);
 /// ```
 pub struct FellerSquareRootProcess {
     /// Drift constant of the process
@@ -661,7 +686,8 @@ impl FellerSquareRootProcess {
     /// # LaTeX Formula
     /// - E[S_{t}] = \\mu + (S_{0} - \\mu) e^{-\\alpha t}
     pub fn get_expectations(&self) -> Array1<f64> {
-        self.mu + (self.s_0 - self.mu) * (-self.alpha * &self.t).map(|i| i.exp() )
+        let drift_delta: f64 = self.s_0 - self.mu;
+        self.t.map(|t| { self.mu + drift_delta * (-self.alpha * t).exp() } )
     }
 
     /// Computes the variance of the Feller Square-Root Process at each time step, providing insights into the variability around the mean.
@@ -669,9 +695,15 @@ impl FellerSquareRootProcess {
     /// # Output
     /// - An array of variances of the process at each time step
     pub fn get_variance(&self) -> Array1<f64> {
-        let v_1: Array1<f64> = ((-self.alpha * &self.t).map(|i| i.exp() ) - (-self.alpha * 2.0 * &self.t).map(|i| i.exp() )) * self.s_0 / self.alpha;
-        let v_2: Array1<f64> = (-self.alpha * 2.0 * &self.t).map(|i| i.exp() ) * ((self.alpha * &self.t).map(|i| i.exp() ) - 1.0).map(|i| i.powi(2) ) * self.mu / (2.0 * self.alpha);
-        self.sigma.powi(2) * (v_1 + v_2)
+        let neg_two_alpha: f64 = -2.0 * self.alpha;
+        let mult_1: f64 = self.s_0 / self.alpha;
+        let mult_2: f64 = self.mu / (2.0 * self.alpha);
+        let sigma_sq: f64 = self.sigma.powi(2);
+        self.t.map(|t| {
+            let v_1: f64 = ((-self.alpha * t).exp() - (neg_two_alpha * t).exp()) * mult_1;
+            let v_2: f64 = (neg_two_alpha * t).exp() * ((self.alpha * t).exp() - 1.0).powi(2) * mult_2;
+            sigma_sq * (v_1 + v_2)
+        } )
     }
 }
 
@@ -697,22 +729,32 @@ impl StochasticProcess for FellerSquareRootProcess {
     /// # LaTeX Formula
     /// - dS_{t} = \\alpha*(\\mu-S_{t})*dt + \\sigma\\sqrt(S_{t})*dW_{t}
     fn get_paths(&self) -> Result<Vec<Array1<f64>>, DigiFiError> {
-        let mut paths: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
+        let mut paths: Vec<Array1<f64>> = Vec::with_capacity(self.n_paths);
+        let len: usize = self.t.len();
+        let alpha_dt: f64 = self.alpha * self.dt;
+        let (exp_neg_alpha_dt, a, b) = match self.method {
+            FSRSimulationMethod::EulerMaruyama => (f64::NAN, f64::NAN, f64::NAN),
+            FSRSimulationMethod::AnalyticEulerMaruyama => {
+                let exp_neg_alpha_dt: f64 = (-alpha_dt).exp();
+                let sigma_sq: f64 = self.sigma.powi(2);
+                let a: f64 = sigma_sq / self.alpha * (exp_neg_alpha_dt - (-2.0 * alpha_dt).exp());
+                let b: f64 = self.mu * sigma_sq / (2.0 * self.alpha) * (1.0 - exp_neg_alpha_dt).powi(2);
+                (exp_neg_alpha_dt, a, b)
+            }
+        };
         for _ in 0..self.n_paths {
-            let mut s: Array1<f64> = Array1::from_vec(vec![self.s_0; self.t.len()]);
-            let r: Array1<f64> = StandardNormalInverseTransform::new_shuffle(self.t.len())?.generate()?;
+            let mut s: Array1<f64> = Array1::from_vec(vec![self.s_0; len]);
+            let r: Array1<f64> = StandardNormalBoxMuller::new_shuffle(len)?.generate()?;
             match self.method {
                 FSRSimulationMethod::EulerMaruyama => {
-                    for i in 1..self.t.len() {
-                        s[i] = s[i-1] + self.alpha * (self.mu - s[i-1]) * self.dt + self.sigma * (s[i-1] * self.dt).sqrt() * r[i-1];
+                    for i in 1..len {
+                        s[i] = s[i-1] + alpha_dt * (self.mu - s[i-1]) + self.sigma * (s[i-1] * self.dt).sqrt() * r[i-1];
                         s[i] = s[i].max(0.0);
                     }
                 },
                 FSRSimulationMethod::AnalyticEulerMaruyama => {
-                    let a: f64 = self.sigma.powi(2) / self.alpha * ((-self.alpha * self.dt).exp() - (-2.0 * self.alpha * self.dt).exp());
-                    let b: f64 = self.mu * self.sigma.powi(2) / (2.0 * self.alpha) * (1.0 - (-self.alpha * self.dt).exp()).powi(2);
-                    for i in 1..self.t.len() {
-                        s[i] = self.mu + (s[i-1] - self.mu) * (-self.alpha * self.dt).exp() + (a * s[i-1] + b).sqrt() * r[i-1];
+                    for i in 1..len {
+                        s[i] = self.mu + (s[i-1] - self.mu) * exp_neg_alpha_dt + (a * s[i-1] + b).sqrt() * r[i-1];
                         s[i] = s[i].max(0.0);
                     }
                 },
@@ -733,13 +775,13 @@ mod tests {
     #[test]
     fn unit_test_arithmetic_brownian_motion() -> () {
         use crate::stochastic_processes::standard_stochastic_models::ArithmeticBrownianMotion;
-        let n_paths: usize = 100;
+        let n_paths: usize = 1_000;
         let n_steps: usize = 200;
         let abm: ArithmeticBrownianMotion = ArithmeticBrownianMotion::new(1.0, 0.4, n_paths, n_steps, 1.0, 100.0);
         let paths: Vec<Array1<f64>> = abm.get_paths().unwrap();
         assert_eq!(paths.len(), n_paths);
-        assert_eq!(paths[0].len(), n_steps+1);
-        let mut final_steps: Vec<f64> = Vec::<f64>::new();
+        assert_eq!(paths[0].len(), n_steps + 1);
+        let mut final_steps: Vec<f64> = Vec::with_capacity(n_paths);
         for i in 0..n_paths {
             final_steps.push(paths[i][n_steps]);
         }
@@ -756,8 +798,8 @@ mod tests {
         let gbm: GeometricBrownianMotion = GeometricBrownianMotion::new(0.0, 0.2, n_paths, n_steps, 1.0, 100.0);
         let paths: Vec<Array1<f64>> = gbm.get_paths().unwrap();
         assert_eq!(paths.len(), n_paths);
-        assert_eq!(paths[0].len(), n_steps+1);
-        let mut final_steps: Vec<f64> = Vec::<f64>::new();
+        assert_eq!(paths[0].len(), n_steps + 1);
+        let mut final_steps: Vec<f64> = Vec::with_capacity(n_paths);
         for i in 0..n_paths {
             final_steps.push(paths[i][n_steps]);
         }
@@ -769,15 +811,15 @@ mod tests {
     #[test]
     fn unit_test_ornstein_uhlenbeck_process() -> () {
         use crate::stochastic_processes::standard_stochastic_models::OrnsteinUhlenbeckProcess;
-        let n_paths: usize = 100;
+        let n_paths: usize = 1_000;
         let n_steps: usize = 200;
         let oup: OrnsteinUhlenbeckProcess = OrnsteinUhlenbeckProcess::new(
             0.07, 0.1, 10.0, n_paths, n_steps, 1.0, 0.05, true
         );
         let paths: Vec<Array1<f64>> = oup.get_paths().unwrap();
         assert_eq!(paths.len(), n_paths);
-        assert_eq!(paths[0].len(), n_steps+1);
-        let mut final_steps: Vec<f64> = Vec::<f64>::new();
+        assert_eq!(paths[0].len(), n_steps + 1);
+        let mut final_steps: Vec<f64> = Vec::with_capacity(n_paths);
         for i in 0..n_paths {
             final_steps.push(paths[i][n_steps]);
         }
@@ -789,37 +831,37 @@ mod tests {
     #[test]
     fn unit_test_brownian_bridge() -> () {
         use crate::stochastic_processes::standard_stochastic_models::BrownianBridge;
-        let n_paths: usize = 100;
+        let n_paths: usize = 1_000;
         let n_steps: usize = 200;
         let bb: BrownianBridge = BrownianBridge::new(1.0, 2.0, 0.5, n_paths, n_steps, 1.0);
         let paths: Vec<Array1<f64>> = bb.get_paths().unwrap();
         assert_eq!(paths.len(), n_paths);
-        assert_eq!(paths[0].len(), n_steps+1);
-        let mut final_steps: Vec<f64> = Vec::<f64>::new();
+        assert_eq!(paths[0].len(), n_steps + 1);
+        let mut final_steps: Vec<f64> =Vec::with_capacity(n_paths);
         for i in 0..n_paths {
            final_steps.push(paths[i][n_steps-1]);
         }
         let final_steps: Array1<f64> = Array1::from_vec(final_steps);
         let expected_path: Array1<f64> = bb.get_expectations();
-        assert!((final_steps.mean().unwrap() - expected_path[expected_path.len()-2]).abs() < 10_000_000.0 * TEST_ACCURACY);
+        assert!((final_steps.mean().unwrap() - expected_path[expected_path.len()-2]).abs() < 1_000_000.0 * TEST_ACCURACY);
     }
 
     #[test]
     fn unit_test_feller_square_root_process() -> () {
         use crate::stochastic_processes::standard_stochastic_models::{FellerSquareRootProcess, FSRSimulationMethod};
-        let n_paths: usize = 100;
+        let n_paths: usize = 1_000;
         let n_steps: usize = 200;
         let fsrp: FellerSquareRootProcess = FellerSquareRootProcess::new(0.05, 0.265, 5.0, n_paths, n_steps,
                                                                          1.0, 0.03, FSRSimulationMethod::EulerMaruyama);
         let paths: Vec<Array1<f64>> = fsrp.get_paths().unwrap();
         assert_eq!(paths.len(), n_paths);
-        assert_eq!(paths[0].len(), n_steps+1);
-        let mut final_steps: Vec<f64> = Vec::<f64>::new();
+        assert_eq!(paths[0].len(), n_steps + 1);
+        let mut final_steps: Vec<f64> = Vec::with_capacity(n_paths);
         for i in 0..n_paths {
            final_steps.push(paths[i][n_steps]);
         }
         let final_steps: Array1<f64> = Array1::from_vec(final_steps);
         let expected_path: Array1<f64> = fsrp.get_expectations();
-        assert!((final_steps.mean().unwrap() - expected_path.last().unwrap()).abs() < 10_000_000.0 * TEST_ACCURACY);
+        assert!((final_steps.mean().unwrap() - expected_path.last().unwrap()).abs() < 1_000_000.0 * TEST_ACCURACY);
     }
 }

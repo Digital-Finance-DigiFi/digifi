@@ -1,7 +1,6 @@
-use ndarray::{Array1, arr1};
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
-use crate::error::DigiFiError;
+use crate::error::{DigiFiError, ErrorTitle};
 use crate::utilities::maths_utils::factorial;
 use crate::statistics::{
     ProbabilityDistribution, ProbabilityDistributionType, n_choose_r,
@@ -10,7 +9,7 @@ use crate::statistics::{
 };
 
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Methods and properties of Bernoulli distribution.
 /// 
@@ -21,30 +20,27 @@ use crate::statistics::{
 /// # Examples
 ///
 /// ```rust
-/// use ndarray::{Array1, arr1};
 /// use digifi::utilities::TEST_ACCURACY;
 /// use digifi::statistics::{ProbabilityDistribution, BernoulliDistribution};
 ///
 /// let dist: BernoulliDistribution = BernoulliDistribution::build(0.4).unwrap();
-/// let x: Array1<f64> = arr1(&[0.0]);
+/// let x: f64 = 0.0;
 ///
 /// // PDF test
-/// let pdf_v: f64 = dist.pdf(&x).unwrap()[0];
+/// let pdf_v: f64 = dist.pdf(x).unwrap();
 /// assert!((pdf_v - 0.6).abs() < TEST_ACCURACY);
 ///
 /// // CDF test
-/// let cdf_v: f64 = dist.cdf(&x).unwrap()[0];
+/// let cdf_v: f64 = dist.cdf(x).unwrap();
 /// assert!((cdf_v - 0.6).abs() < TEST_ACCURACY);
 ///
 /// // Inverse CDF test
-/// let icdf_v: f64 = dist.inverse_cdf(&arr1(&[0.6])).unwrap()[0];
-/// assert!((icdf_v - x[0]).abs() < TEST_ACCURACY);
+/// let icdf_v: f64 = dist.inverse_cdf(0.6).unwrap();
+/// assert!((icdf_v - x).abs() < TEST_ACCURACY);
 /// ```
 pub struct BernoulliDistribution {
     /// Probability of successful outcome
     p: f64,
-    /// Type of distribution
-    _distribution_type: ProbabilityDistributionType,
 }
 
 impl BernoulliDistribution {
@@ -58,15 +54,25 @@ impl BernoulliDistribution {
     pub fn build(p: f64) -> Result<Self, DigiFiError> {
         if (p < 0.0) || (1.0 < p) {
             return Err(DigiFiError::ParameterConstraint {
-                title: "Bernoulli Distribution".to_owned(),
+                title: Self::error_title(),
                 constraint: "The argument `p` must be in the range `[0, 1]`.".to_owned(),
             });
         }
-        Ok(BernoulliDistribution { p, _distribution_type: ProbabilityDistributionType::Discrete })
+        Ok(BernoulliDistribution { p, })
+    }
+}
+
+impl ErrorTitle for BernoulliDistribution {
+    fn error_title() -> String {
+        String::from("Bernoulli Distribution")
     }
 }
 
 impl ProbabilityDistribution for BernoulliDistribution {
+    fn distribution_type() -> ProbabilityDistributionType {
+        ProbabilityDistributionType::Discrete
+    }
+
     fn mean(&self) -> f64 {
         self.p
     }
@@ -98,69 +104,61 @@ impl ProbabilityDistribution for BernoulliDistribution {
     /// Calculates the Probability Mass Function (PMF) for a Bernoulli distribution.
     /// 
     /// # Input
-    /// - `x`: Array of values (`0` or `1`) at which to calculate the PMF
+    /// - `x`: Value (`0` or `1`) at which to calculate the PMF
     /// 
     /// # Output
-    /// - PMF values at the given `x`
+    /// - PMF value at the given `x`
     ///
     /// # Errors
-    /// - Returns an error if any value inside array `x` is not in the set {0, 1}
-    fn pdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
-        let mut result: Vec<f64> = Vec::<f64>::new();
-        for i in x {
-            let x_: f64;
-            if *i == 0.0 {
-                x_ = 1.0 - self.p
-            } else if *i == 1.0 {
-                x_ = self.p
-            } else {
-                return Err(DigiFiError::ParameterConstraint {
-                    title: "Bernoulli Distribution".to_owned(),
-                    constraint: "The argument `x` must be in the `{{0, 1}}` set.".to_owned(),
-                });
-            }
-            result.push(x_)
+    /// - Returns an error if the value `x` is not in the set {0, 1}
+    fn pdf(&self, x: f64) -> Result<f64, DigiFiError> {
+        match x {
+            0.0 => Ok(1.0 - self.p),
+            1.0 => Ok(self.p),
+            _ => Err(DigiFiError::ParameterConstraint {
+                title: Self::error_title(),
+                constraint: "The argument `x` must be in the `{{0, 1}}` set.".to_owned(),
+            }),
         }
-        Ok(Array1::from_vec(result))
     }
 
     /// Computes the Cumulative Distribution Function (CDF) for a Bernoulli distribution.
     /// 
     /// # Input
-    /// - `x`: Array of values (`0` or `1`) at which to calculate the CDF
+    /// - `x`: Value (`0` or `1`) at which to calculate the CDF
     /// 
     /// # Output
-    /// - CDF values at the given `x`
-    fn cdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
-        Ok(x.map(|x_| if *x_ < 0.0 { 0.0 } else if 1.0 <= *x_ { 1.0 } else { 1.0 - self.p } ))
+    /// - CDF value at the given `x`
+    fn cdf(&self, x: f64) -> Result<f64, DigiFiError> {
+        Ok(if x < 0.0 { 0.0 } else if 1.0 <= x { 1.0 } else { 1.0 - self.p })
     }
 
     /// Computes the Inverse Cumulative Distribution Function (Inverse CDF) for a Bernoulli distribution.
     /// 
     /// # Input
-    /// - `p`: Probability values for which to calculate the inverse CDF
+    /// - `p`: Probability value for which to calculate the inverse CDF
     /// 
     /// # Output
-    /// - Inverse CDF values for the given probabilities
-    fn inverse_cdf(&self, p: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
-        let p: Array1<f64> = p.map(|p_| if (*p_ < 0.0) || (1.0 < *p_) { f64::NAN } else {*p_});
-        Ok(p.map(|p_| if *p_ == 1.0 { 1.0 } else { 0.0 } ))
+    /// - Inverse CDF value for the given probabilities
+    fn inverse_cdf(&self, p: f64) -> Result<f64, DigiFiError> {
+        if (p < 0.0) || (1.0 < p) { return Ok(f64::NAN) }
+        if p == 1.0 { Ok(1.0) } else { Ok(0.0) }
     }
 
     /// Calculates the Moment Generating Function (MGF) for a Bernoulli distribution.
     /// 
     /// # Input
-    /// - `t`: Input values for the MGF
+    /// - `t`: Input value for the MGF
     /// 
     /// # Output
-    /// - MGF values at the given `t`
-    fn mgf(&self, t: &Array1<usize>) -> Array1<f64> {
-        t.map(|t_| (1.0 - self.p) + self.p * (*t_ as f64).exp() )
+    /// - MGF value at the given `t`
+    fn mgf(&self, t: usize) -> f64 {
+        (1.0 - self.p) + self.p * (t as f64).exp()
     }
 }
 
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Methods and properties of binomial distribution.
 /// 
@@ -171,32 +169,29 @@ impl ProbabilityDistribution for BernoulliDistribution {
 /// # Examples
 ///
 /// ```rust
-/// use ndarray::{Array1, arr1};
 /// use digifi::utilities::TEST_ACCURACY;
 /// use digifi::statistics::{ProbabilityDistribution, BinomialDistribution};
 ///
 /// let dist: BinomialDistribution = BinomialDistribution::build(4, 0.6).unwrap();
-/// let x: Array1<f64> = arr1(&[2.0]);
+/// let x: f64 = 2.0;
 ///
 /// // PDF test
-/// let pdf_v: f64 = dist.pdf(&x).unwrap()[0];
+/// let pdf_v: f64 = dist.pdf(x).unwrap();
 /// assert!((pdf_v - 0.3456).abs() < TEST_ACCURACY);
 ///
 /// // CDF test
-/// let cdf_v: f64 = dist.cdf(&x).unwrap()[0];
+/// let cdf_v: f64 = dist.cdf(x).unwrap();
 /// assert!((cdf_v - 0.5247999999999999).abs() < TEST_ACCURACY);
 ///
 /// // Inverse CDF test
-/// let icdf_v: f64 = dist.inverse_cdf(&arr1(&[0.5248])).unwrap()[0];
-/// assert!((icdf_v - x[0]).abs() < TEST_ACCURACY);
+/// let icdf_v: f64 = dist.inverse_cdf(0.5248).unwrap();
+/// assert!((icdf_v - x).abs() < TEST_ACCURACY);
 /// ```
 pub struct BinomialDistribution {
     /// Number of trials
     n: usize,
     /// Probability of successful outcome
     p: f64,
-    /// Type of distribution
-    _distribution_type: ProbabilityDistributionType,
 }
 
 impl BinomialDistribution {
@@ -211,15 +206,25 @@ impl BinomialDistribution {
     pub fn build(n: usize, p: f64) -> Result<Self, DigiFiError> {
         if (p < 0.0) || (1.0 < p) {
             return Err(DigiFiError::ParameterConstraint {
-                title: "Binomial Distribution".to_owned(),
+                title: Self::error_title(),
                 constraint: "The argument `p` must be in the range `[0, 1]`.".to_owned(),
             });
         }
-        Ok(BinomialDistribution { n, p, _distribution_type: ProbabilityDistributionType::Discrete })
+        Ok(BinomialDistribution { n, p, })
+    }
+}
+
+impl ErrorTitle for BinomialDistribution {
+    fn error_title() -> String {
+        String::from("Binomial Distribution")
     }
 }
 
 impl ProbabilityDistribution for BinomialDistribution {
+    fn distribution_type() -> ProbabilityDistributionType {
+        ProbabilityDistributionType::Discrete
+    }
+
     fn mean(&self) -> f64 {
         (self.n as f64) * self.p
     }
@@ -252,82 +257,66 @@ impl ProbabilityDistribution for BinomialDistribution {
     /// Calculates the Probability Mass Function (PMF) for a binomial distribution.
     /// 
     /// # Input
-    /// - `x`: Array of non-negative integer values at which to calculate the PMF
+    /// - `x`: Non-negative integer value at which to calculate the PMF
     /// 
     /// # Output
-    /// - PMF values at the given `x`
-    fn pdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
-        let mut result: Vec<f64> = Vec::<f64>::new();
-        for i in x {
-            let x_: f64 = (n_choose_r(self.n as u128, *i as u128)? as f64) * self.p.powi(*i as i32) * (1.0 - self.p).powi(self.n as i32 - *i as i32);
-            result.push(x_);
-        }
-        Ok(Array1::from_vec(result))
+    /// - PMF value at the given `x`
+    fn pdf(&self, x: f64) -> Result<f64, DigiFiError> {
+        Ok((n_choose_r(self.n as u128, x as u128)? as f64) * self.p.powi(x as i32) * (1.0 - self.p).powi(self.n as i32 - x as i32))
     }
 
 
     /// Computes the Cumulative Distribution Function (CDF) for a binomial distribution.
     /// 
     /// # Input
-    /// - `x`: Array of non-negative integer values at which to calculate the CDF
+    /// - `x`: Non-negative integer value at which to calculate the CDF
     /// 
     /// # Output
-    /// - CDF values at the given `x`
-    fn cdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
-        let x_floor: Array1<f64> = x.map(|x_| x_.floor() );
-        let a : Array1<f64> = self.n as f64 - &x_floor;
-        let b: Array1<f64> = 1.0 + &x_floor;
-        let upper_integral_limit: Array1<f64> = (1.0 - self.p) * Array1::from_vec(vec![1.0; x_floor.len()]);
-        let mut cdf_: Vec<f64> = Vec::<f64>::new();
-        for i in 0..x.len() {
-            cdf_.push(regularized_incomplete_beta(upper_integral_limit[i], a[i], b[i])?);
-        }
-        Ok(Array1::from_vec(cdf_))
+    /// - CDF value at the given `x`
+    fn cdf(&self, x: f64) -> Result<f64, DigiFiError> {
+        let x_floor: f64 = x.floor();
+        let a: f64 = self.n as f64 - x_floor;
+        let b: f64 = 1.0 + x_floor;
+        let upper_integral_limit: f64 = 1.0 - self.p;
+        regularized_incomplete_beta(upper_integral_limit, a, b)
+
     }
 
     /// Computes the Inverse Cumulative Distribution Function (Inverse CDF) for a binomial distribution.
     /// 
     /// # Input
-    /// - `p`: Probability values for which to calculate the inverse CDF
+    /// - `p`: Probability value for which to calculate the inverse CDF
     /// 
     /// # Output
-    /// - Inverse CDF values for the given probabilities
-    fn inverse_cdf(&self, p: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
-        let p: Array1<f64> = p.map(|p_| if (*p_ < 0.0) || (1.0 < *p_) { f64::NAN } else {*p_});
-        let mut result: Vec<f64> = Vec::<f64>::new();
-        for p_ in p {
-            if p_.is_nan() {
-                result.push(p_);
-                continue
+    /// - Inverse CDF value for the given probabilities
+    fn inverse_cdf(&self, p: f64) -> Result<f64, DigiFiError> {
+        if (p < 0.0) || (1.0 < p) { return Ok(f64::NAN) }
+        let mut x: f64 = f64::NAN;
+        // Iteratively solve CDF for p
+        for i in 0..(self.n + 1) {
+            let proxy: f64 = self.cdf(i as f64)?;
+            if (proxy - p).abs() < 1.0 / self.n as f64 {
+                x = i as f64;
+                break;
             }
-            let mut x: f64 = f64::NAN;
-            // Iteratively solve CDF for p
-            for i in 0..(self.n + 1) {
-                let proxy: f64 = self.cdf(&arr1(&[i as f64]))?[0];
-                if (proxy - p_).abs() < 1.0 / self.n as f64 {
-                    x = i as f64;
-                    break;
-                }
-            }
-            result.push(x);
         }
-        Ok(Array1::from_vec(result))
+        Ok(x)
     }
 
     /// Calculates the Moment Generating Function (MGF) for a binomial distribution.
     /// 
     /// # Input
-    /// - `t`: Input values for the MGF
+    /// - `t`: Input value for the MGF
     /// 
     /// # Output
-    /// - MGF values at the given `t`
-    fn mgf(&self, t: &Array1<usize>) -> Array1<f64> {
-        t.map(|t_| ((1.0 - self.p) + self.p * (*t_ as f64).exp()).powi(self.n as i32) )
+    /// - MGF value at the given `t`
+    fn mgf(&self, t: usize) -> f64 {
+        ((1.0 - self.p) + self.p * (t as f64).exp()).powi(self.n as i32)
     }
 }
 
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Methods and properties of discrete uniform distribution.
 /// 
@@ -338,24 +327,23 @@ impl ProbabilityDistribution for BinomialDistribution {
 /// # Examples
 ///
 /// ```rust
-/// use ndarray::{Array1, arr1};
 /// use digifi::utilities::TEST_ACCURACY;
 /// use digifi::statistics::{ProbabilityDistribution, DiscreteUniformDistribution};
 ///
 /// let dist: DiscreteUniformDistribution = DiscreteUniformDistribution::build(1, 3).unwrap();
-/// let x: Array1<f64> = arr1(&[1.0]);
+/// let x: f64 = 1.0;
 ///
 /// // PDF test
-/// let pdf_v: f64 = dist.pdf(&x).unwrap()[0];
+/// let pdf_v: f64 = dist.pdf(x).unwrap();
 /// assert!((pdf_v - 1.0 / 3.0).abs() < TEST_ACCURACY);
 ///
 /// // CDF test
-/// let cdf_v: f64 = dist.cdf(&x).unwrap()[0];
+/// let cdf_v: f64 = dist.cdf(x).unwrap();
 /// assert!((cdf_v - 1.0 / 3.0).abs() < TEST_ACCURACY);
 ///
 /// // Inverse CDF test
-/// let icdf_v: f64 = dist.inverse_cdf(&arr1(&[1.0 / 3.0])).unwrap()[0];
-/// assert!((icdf_v - x[0]).abs() < TEST_ACCURACY);
+/// let icdf_v: f64 = dist.inverse_cdf(1.0 / 3.0).unwrap();
+/// assert!((icdf_v - x).abs() < TEST_ACCURACY);
 /// ```
 pub struct DiscreteUniformDistribution {
     /// Lower bound of the distribution
@@ -364,12 +352,10 @@ pub struct DiscreteUniformDistribution {
     b: i32,
     /// `n = b - a + 1`
     n: f64,
-    /// Type of distribution
-    _distribution_type: ProbabilityDistributionType,
 }
 
 impl DiscreteUniformDistribution {
-    /// # Discription
+
     /// Creates a new `DiscreteUniformDistribution` instance.
     /// 
     /// # Input
@@ -381,15 +367,25 @@ impl DiscreteUniformDistribution {
     pub fn build(a: i32, b: i32) -> Result<Self, DigiFiError> {
         if b < a {
             return Err(DigiFiError::ParameterConstraint {
-                title: "Discrete Uniform Distribution".to_owned(),
+                title: Self::error_title(),
                 constraint: "The argument `a` must be smaller or equal to the argument `b`.".to_owned(),
             });
         }
-        Ok(DiscreteUniformDistribution { a, b, n: ((b - a + 1) as f64), _distribution_type: ProbabilityDistributionType::Discrete })
+        Ok(DiscreteUniformDistribution { a, b, n: ((b - a + 1) as f64), })
+    }
+}
+
+impl ErrorTitle for DiscreteUniformDistribution {
+    fn error_title() -> String {
+        String::from("Discrete Uniform Distribution")
     }
 }
 
 impl ProbabilityDistribution for DiscreteUniformDistribution {
+    fn distribution_type() -> ProbabilityDistributionType {
+        ProbabilityDistributionType::Discrete
+    }
+
     fn mean(&self) -> f64 {
         (self.a + self.b) as f64 / 2.0
     }
@@ -421,54 +417,52 @@ impl ProbabilityDistribution for DiscreteUniformDistribution {
     /// Calculates the Probability Mass Function (PMF) for a discrete uniform distribution.
     /// 
     /// # Input
-    /// - `x`: Array of values at which to calculate the PMF
+    /// - `x`: Values at which to calculate the PMF
     /// 
     /// # Output
-    /// - PMF values for the discrete uniform distribution
-    fn pdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
-        Ok(Array1::from_vec(vec![1.0; x.len()]) / self.n)
+    /// - PMF value for the discrete uniform distribution
+    fn pdf(&self, _x: f64) -> Result<f64, DigiFiError> {
+        Ok(1.0 / self.n)
     }
 
     /// Computes the Cumulative Distribution Function (CDF) for a discrete uniform distribution.
     /// 
     /// # Input
-    /// - `x`: Array of values at which to calculate the CDF
+    /// - `x`: Value at which to calculate the CDF
     /// 
     /// # Output
-    /// - CDF values at the given `x`
-    fn cdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
-        Ok(x.map(|x_| if ((self.a as f64) <= *x_) || (*x_ <= (self.b as f64)) { (x_.floor() - (self.a as f64) + 1.0) / self.n } else { f64::NAN } ))
+    /// - CDF value at the given `x`
+    fn cdf(&self, x: f64) -> Result<f64, DigiFiError> {
+        Ok(if ((self.a as f64) <= x) || (x <= (self.b as f64)) { (x.floor() - (self.a as f64) + 1.0) / self.n } else { f64::NAN })
     }
 
     /// Calculates the Inverse Cumulative Distribution Function (Inverse CDF) for a discrete uniform distribution.
     /// 
     /// # Input
-    /// - `p`: Probability values for which to calculate the inverse CDF
+    /// - `p`: Probability value for which to calculate the inverse CDF
     /// 
     /// # Output
-    /// - Inverse CDF values for the given probabilities
-    fn inverse_cdf(&self, p: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
-        let p: Array1<f64> = p.map(|p_| if (*p_ < 0.0) || (1.0 < *p_) { f64::NAN } else {*p_});
+    /// - Inverse CDF value for the given probabilities
+    fn inverse_cdf(&self, p: f64) -> Result<f64, DigiFiError> {
+        if (p < 0.0) || (1.0 < p) { return Ok(f64::NAN) }
         Ok(p * self.n - 1.0 + (self.a as f64))
     }
 
     /// Computes the Moment Generating Function (MGF) for a discrete uniform distribution.
     /// 
     /// # Input
-    /// - `t`: Input values for the MGF
+    /// - `t`: Input value for the MGF
     /// 
     /// # Output
-    /// - MGF values at the given `t`
-    fn mgf(&self, t: &Array1<usize>) -> Array1<f64> {
-        t.map(|t_| {
-            let x: f64 = *t_ as f64;
-            ((self.a as f64 * x).exp() - ((self.b as f64 + 1.0) * x).exp()) / (self.n * (1.0 - x.exp()))
-        } )
+    /// - MGF value at the given `t`
+    fn mgf(&self, t: usize) -> f64 {
+        let x: f64 = t as f64;
+        ((self.a as f64 * x).exp() - ((self.b as f64 + 1.0) * x).exp()) / (self.n * (1.0 - x.exp()))
     }
 }
 
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Methods and properties of Poisson distribution.
 /// 
@@ -479,30 +473,27 @@ impl ProbabilityDistribution for DiscreteUniformDistribution {
 /// # Examples
 ///
 /// ```rust
-/// use ndarray::{Array1, arr1};
 /// use digifi::utilities::TEST_ACCURACY;
 /// use digifi::statistics::{ProbabilityDistribution, PoissonDistribution};
 ///
 /// let dist: PoissonDistribution = PoissonDistribution::build(1.5).unwrap();
-/// let x: Array1<f64> = arr1(&[3.0]);
+/// let x: f64 = 3.0;
 ///
 /// // PDF test
-/// let pdf_v: f64 = dist.pdf(&x).unwrap()[0];
+/// let pdf_v: f64 = dist.pdf(x).unwrap();
 /// assert!((pdf_v - 0.12551071508349182).abs() < TEST_ACCURACY);
 ///
 /// // CDF test
-/// let cdf_v: f64 = dist.cdf(&x).unwrap()[0];
+/// let cdf_v: f64 = dist.cdf(x).unwrap();
 /// assert!((cdf_v - 0.9343575456215499).abs() < TEST_ACCURACY);
 ///
 /// // Inverse CDF test
-/// let icdf_v: f64 = dist.inverse_cdf(&arr1(&[0.9343575456215499])).unwrap()[0];
-/// assert!((icdf_v - x[0]).abs() < TEST_ACCURACY);
+/// let icdf_v: f64 = dist.inverse_cdf(0.9343575456215499).unwrap();
+/// assert!((icdf_v - x).abs() < TEST_ACCURACY);
 /// ```
 pub struct PoissonDistribution {
     /// Expected number of events in a given interval
     lambda: f64,
-    /// Type of distribution
-    _distribution_type: ProbabilityDistributionType,
 }
 
 impl PoissonDistribution {
@@ -516,15 +507,25 @@ impl PoissonDistribution {
     pub fn build(lambda: f64) -> Result<Self, DigiFiError> {
         if lambda <= 0.0 {
             return Err(DigiFiError::ParameterConstraint {
-                title: "Poisson Distribution".to_owned(),
+                title: Self::error_title(),
                 constraint: "The argument `lambda` must be positive.".to_owned(),
             });
         }
-        Ok(PoissonDistribution { lambda, _distribution_type: ProbabilityDistributionType::Discrete })
+        Ok(PoissonDistribution { lambda, })
+    }
+}
+
+impl ErrorTitle for PoissonDistribution {
+    fn error_title() -> String {
+        String::from("Poisson Distribution")
     }
 }
 
 impl ProbabilityDistribution for PoissonDistribution {
+    fn distribution_type() -> ProbabilityDistributionType {
+        ProbabilityDistributionType::Discrete
+    }
+
     fn mean(&self) -> f64 {
         self.lambda
     }
@@ -556,65 +557,57 @@ impl ProbabilityDistribution for PoissonDistribution {
     /// Calculates the Probability Mass Function (PMF) for a Poisson distribution.
     /// 
     /// # Input
-    /// - `x`: Array of non-negative integer values at which to calculate the PMF
+    /// - `x`: Non-negative integer value at which to calculate the PMF
     /// 
     /// # Output
-    /// - PMF values at the given `x`
+    /// - PMF value at the given `x`
     ///
     /// # Errors
-    /// - Returns an error if any value inside array `x` is not positive
-    fn pdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
-        let mut result: Vec<f64> = Vec::<f64>::new();
-        for i in x {
-            if *i < 0.0 {
-                return Err(DigiFiError::ParameterConstraint {
-                    title: "Poisson Distribution".to_owned(),
-                    constraint: "The argument `x` must be positive.".to_owned(),
-                });
-            } else {
-                result.push((self.lambda.powi(*i as i32) * (-self.lambda).exp()) / factorial(*i as u128) as f64)
-            }
+    /// - Returns an error if he value`x` is not positive
+    fn pdf(&self, x: f64) -> Result<f64, DigiFiError> {
+        if x < 0.0 {
+            Err(DigiFiError::ParameterConstraint {
+                title: Self::error_title(),
+                constraint: "The argument `x` must be positive.".to_owned(),
+            })
+        } else {
+            Ok((self.lambda.powi(x as i32) * (-self.lambda).exp()) / factorial(x as u128) as f64)
         }
-        Ok(Array1::from_vec(result))
     }
 
     /// Computes the Cumulative Distribution Function (CDF) for a Poisson distribution.
     /// 
     /// # Input
-    /// - `x`: Array of non-negative integer values at which to calculate the CDF
+    /// - `x`: Non-negative integer value at which to calculate the CDF
     /// 
     /// # Output
-    /// - CDF values at the given `x`
+    /// - CDF value at the given `x`
     ///
     /// # Errors
-    /// - Returns an error if any value inside array `x` is not positive
-    fn cdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
-        let mut result: Vec<f64> = Vec::<f64>::new();
-        for i in x {
-            if *i < 0.0 {
-                return Err(DigiFiError::ParameterConstraint {
-                    title: "Poisson Distribution".to_owned(),
-                    constraint: "The argument `x` must be positive.".to_owned(),
-                });
-            }
-            let mut proxy: f64 = 0.0;
-            for j in 0..(1 + i.floor() as i32) {
-                proxy += self.lambda.powi(j) / factorial(j as u128) as f64;
-            }
-            result.push(proxy * (-self.lambda).exp());
+    /// - Returns an error if the value `x` is not positive
+    fn cdf(&self, x: f64) -> Result<f64, DigiFiError> {
+        if x < 0.0 {
+            return Err(DigiFiError::ParameterConstraint {
+                title: Self::error_title(),
+                constraint: "The argument `x` must be positive.".to_owned(),
+            });
         }
-        Ok(Array1::from_vec(result))
+        let mut proxy: f64 = 0.0;
+        for j in 0..(1 + x.floor() as i32) {
+            proxy += self.lambda.powi(j) / factorial(j as u128) as f64;
+        }
+        Ok(proxy * (-self.lambda).exp())
     }
 
     /// Computes the Inverse Cumulative Distribution Function (Inverse CDF) for a Poisson distribution.
     /// 
     /// # Input
-    /// - `p`: Probability values for which to calculate the inverse CDF
+    /// - `p`: Probability value for which to calculate the inverse CDF
     /// 
     /// # Output
-    /// - Inverse CDF values for the givenprobabilities
-    fn inverse_cdf(&self, p: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
-        let p: Array1<f64> = p.map(|p_| if (*p_ < 0.0) || (1.0 < *p_) { f64::NAN } else {*p_});
+    /// - Inverse CDF value for the givenprobabilities
+    fn inverse_cdf(&self, p: f64) -> Result<f64, DigiFiError> {
+        if (p < 0.0) || (1.0 < p) { return Ok(f64::NAN) }
         let normal_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
         // Helper functions
         let q_n2 = |w: f64| { self.lambda + self.lambda.sqrt()*w + (1.0/3.0 + w.powi(2)/6.0) + (-w/36.0 - w.powi(3)/72.0)/self.lambda.sqrt() };
@@ -622,56 +615,52 @@ impl ProbabilityDistribution for PoissonDistribution {
         let f_1 = |v: f64| { 1.0 + v + v.powi(2)/6.0 - v.powi(3)/72.0 };
         let c_0 = |r: f64| { (f(r)* r.sqrt() / (r - 1.0)).log(10.0) / r.log(10.0) };
         // Inverse CDF algorithm
-        let result: Array1<f64> = p.map(|p_| {
-            if 4.0 < self.lambda {
-                let w: f64 = normal_dist.inverse_cdf(&Array1::from_vec(vec![*p_])).unwrap()[0];
-                let mut x: f64;
-                let delta: f64;
-                if w.abs() < 3.0 {
-                    // Normal asymptotic approximation
-                    x = q_n2(w);
-                    delta = (1.0/40.0 + w.powi(2)/80.0 + w.powi(4)/160.0) / self.lambda;
-                } else {
-                    // Temme asymptotic approximation
-                    let r: f64 = f_1(w / self.lambda.sqrt());
-                    x = self.lambda*r + c_0(r);
-                    x = x - 0.0218 / (x + 0.065*self.lambda);
-                    delta = 0.01 / self.lambda;
-                }
-                (x + delta).floor()
+        if 4.0 < self.lambda {
+            let w: f64 = normal_dist.inverse_cdf(p).unwrap();
+            let mut x: f64;
+            let delta: f64;
+            if w.abs() < 3.0 {
+                // Normal asymptotic approximation
+                x = q_n2(w);
+                delta = (1.0/40.0 + w.powi(2)/80.0 + w.powi(4)/160.0) / self.lambda;
             } else {
-                // Bottom-up summation
-                let mut delta: f64 = 0.00000000000001;
-                let mut s: f64 = 1.0 - self.lambda.exp() * (p_-delta);
-                delta = self.lambda.exp() * delta;
-                let mut n: f64 = 0.0;
-                while s < 0.0 {
-                    n += 1.0;
-                    s = s * n / self.lambda + 1.0;
-                    delta = delta * n / self.lambda;
-                }
-                n
+                // Temme asymptotic approximation
+                let r: f64 = f_1(w / self.lambda.sqrt());
+                x = self.lambda*r + c_0(r);
+                x = x - 0.0218 / (x + 0.065*self.lambda);
+                delta = 0.01 / self.lambda;
             }
-        } );
-        Ok(result)
+            Ok((x + delta).floor())
+        } else {
+            // Bottom-up summation
+            let mut delta: f64 = 0.00000000000001;
+            let mut s: f64 = 1.0 - self.lambda.exp() * (p - delta);
+            delta = self.lambda.exp() * delta;
+            let mut n: f64 = 0.0;
+            while s < 0.0 {
+                n += 1.0;
+                s = s * n / self.lambda + 1.0;
+                delta = delta * n / self.lambda;
+            }
+            Ok(n)
+        }
     }
 
     /// Calculates the Moment Generating Function (MGF) for a Poisson distribution.
     /// 
     /// # Input
-    /// - `t`: Input values for the MGF
+    /// - `t`: Input value for the MGF
     /// 
     /// # Output
-    /// - MGF values at the given `t`
-    fn mgf(&self, t: &Array1<usize>) -> Array1<f64> {
-        t.map(|t_| (self.lambda * ((*t_ as f64).exp() - 1.0)).exp() )
+    /// - MGF value at the given `t`
+    fn mgf(&self, t: usize) -> f64 {
+        (self.lambda * ((t as f64).exp() - 1.0)).exp()
     }
 }
 
 
 #[cfg(test)]
 mod tests {
-    use ndarray::{Array1, arr1};
     use crate::utilities::TEST_ACCURACY;
     use crate::statistics::ProbabilityDistribution;
 
@@ -679,63 +668,63 @@ mod tests {
     fn unit_test_bernoulli_distribution() -> () {
         use crate::statistics::discrete_distributions::BernoulliDistribution;
         let dist: BernoulliDistribution = BernoulliDistribution::build(0.4).unwrap();
-        let x: Array1<f64> = arr1(&[0.0]);
+        let x: f64 = 0.0;
         // PDF test
-        let pdf_v: f64 = dist.pdf(&x).unwrap()[0];
+        let pdf_v: f64 = dist.pdf(x).unwrap();
         assert!((pdf_v - 0.6).abs() < TEST_ACCURACY);
         // CDF test
-        let cdf_v: f64 = dist.cdf(&x).unwrap()[0];
+        let cdf_v: f64 = dist.cdf(x).unwrap();
         assert!((cdf_v - 0.6).abs() < TEST_ACCURACY);
         // Inverse CDF test
-        let icdf_v: f64 = dist.inverse_cdf(&arr1(&[0.6])).unwrap()[0];
-        assert!((icdf_v - x[0]).abs() < TEST_ACCURACY);
+        let icdf_v: f64 = dist.inverse_cdf(0.6).unwrap();
+        assert!((icdf_v - x).abs() < TEST_ACCURACY);
     }
 
     #[test]
     fn unit_test_binomial_distribution() -> () {
         use crate::statistics::discrete_distributions::BinomialDistribution;
         let dist: BinomialDistribution = BinomialDistribution::build(4, 0.6).unwrap();
-        let x: Array1<f64> = arr1(&[2.0]);
+        let x: f64 = 2.0;
         // PDF test
-        let pdf_v: f64 = dist.pdf(&x).unwrap()[0];
+        let pdf_v: f64 = dist.pdf(x).unwrap();
         assert!((pdf_v - 0.3456).abs() < TEST_ACCURACY);
         // CDF test
-        let cdf_v: f64 = dist.cdf(&x).unwrap()[0];
+        let cdf_v: f64 = dist.cdf(x).unwrap();
         assert!((cdf_v - 0.5247999999999999).abs() < TEST_ACCURACY);
         // Inverse CDF test
-        let icdf_v: f64 = dist.inverse_cdf(&arr1(&[0.5248])).unwrap()[0];
-        assert!((icdf_v - x[0]).abs() < TEST_ACCURACY);
+        let icdf_v: f64 = dist.inverse_cdf(0.5248).unwrap();
+        assert!((icdf_v - x).abs() < TEST_ACCURACY);
     }
 
     #[test]
     fn unit_test_discrete_uniform_distribution() -> () {
         use crate::statistics::discrete_distributions::DiscreteUniformDistribution;
         let dist: DiscreteUniformDistribution = DiscreteUniformDistribution::build(1, 3).unwrap();
-        let x: Array1<f64> = arr1(&[1.0]);
+        let x: f64 = 1.0;
         // PDF test
-        let pdf_v: f64 = dist.pdf(&x).unwrap()[0];
+        let pdf_v: f64 = dist.pdf(x).unwrap();
         assert!((pdf_v - 1.0 / 3.0).abs() < TEST_ACCURACY);
         // CDF test
-        let cdf_v: f64 = dist.cdf(&x).unwrap()[0];
+        let cdf_v: f64 = dist.cdf(x).unwrap();
         assert!((cdf_v - 1.0 / 3.0).abs() < TEST_ACCURACY);
         // Inverse CDF test
-        let icdf_v: f64 = dist.inverse_cdf(&arr1(&[1.0 / 3.0])).unwrap()[0];
-        assert!((icdf_v - x[0]).abs() < TEST_ACCURACY);
+        let icdf_v: f64 = dist.inverse_cdf(1.0 / 3.0).unwrap();
+        assert!((icdf_v - x).abs() < TEST_ACCURACY);
     }
 
     #[test]
     fn unit_test_poisson_distribution() -> () {
         use crate::statistics::discrete_distributions::PoissonDistribution;
         let dist: PoissonDistribution = PoissonDistribution::build(1.5).unwrap();
-        let x: Array1<f64> = arr1(&[3.0]);
+        let x: f64 = 3.0;
         // PDF test
-        let pdf_v: f64 = dist.pdf(&x).unwrap()[0];
+        let pdf_v: f64 = dist.pdf(x).unwrap();
         assert!((pdf_v - 0.12551071508349182).abs() < TEST_ACCURACY);
         // CDF test
-        let cdf_v: f64 = dist.cdf(&x).unwrap()[0];
+        let cdf_v: f64 = dist.cdf(x).unwrap();
         assert!((cdf_v - 0.9343575456215499).abs() < TEST_ACCURACY);
         // Inverse CDF test
-        let icdf_v: f64 = dist.inverse_cdf(&arr1(&[0.9343575456215499])).unwrap()[0];
-        assert!((icdf_v - x[0]).abs() < TEST_ACCURACY);
+        let icdf_v: f64 = dist.inverse_cdf(0.9343575456215499).unwrap();
+        assert!((icdf_v - x).abs() < TEST_ACCURACY);
     }
 }

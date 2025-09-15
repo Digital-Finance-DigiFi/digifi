@@ -1,12 +1,12 @@
 use ndarray::{Array1, Array2};
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
-use crate::error::DigiFiError;
-use crate::utilities::compare_array_len;
+use crate::error::{DigiFiError, ErrorTitle};
+use crate::utilities::compare_len;
 use crate::statistics::{covariance, linear_regression};
 
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Parameters of CAPM model.
 pub struct CAPMParams {
@@ -57,19 +57,19 @@ impl CAPMType {
         match self {
             CAPMType::Standard => Ok(()),
             CAPMType::ThreeFactorFamaFrench { smb, hml } => {
-                compare_array_len(smb, hml, "smb", "hml")
+                compare_len(&smb.iter(), &hml.iter(), "smb", "hml")
             },
             CAPMType::FiveFactorFamaFrench { smb, hml, rmw, cma } => {
-                compare_array_len(smb, hml, "smb", "hml")?;
-                compare_array_len(smb, rmw, "smb", "rmw")?;
-                compare_array_len(smb, cma, "smb", "cma")
+                compare_len(&smb.iter(), &hml.iter(), "smb", "hml")?;
+                compare_len(&smb.iter(), &rmw.iter(), "smb", "rmw")?;
+                compare_len(&smb.iter(), &cma.iter(), "smb", "cma")
             },
         }
     }
 }
 
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Type of solution used for computing the parameters of the CAPM.
 ///
@@ -145,15 +145,15 @@ impl CAPM {
     /// - Returns an error if covariance solution type used with non-standard CAPM.
     pub fn build(market_returns: Array1<f64>, rf: Array1<f64>, capm_type: CAPMType, solution_type: CAPMSolutionType) -> Result<Self, DigiFiError> {
         // Cross-validate the lengths of all arrays
-        compare_array_len(&market_returns, &rf, "market_returns", "rf")?;
+        compare_len(&market_returns.iter(), &rf.iter(), "market_returns", "rf")?;
         capm_type.self_validate()?;
         match &capm_type {
             CAPMType::Standard => (),
             CAPMType::ThreeFactorFamaFrench { smb, .. } => {
-                compare_array_len(&market_returns, smb, "market_returns", "smb")?;
+                compare_len(&market_returns.iter(), &smb.iter(), "market_returns", "smb")?;
             },
             CAPMType::FiveFactorFamaFrench { smb, ..} => {
-                compare_array_len(&market_returns, smb, "market_returns", "smb")?;
+                compare_len(&market_returns.iter(), &smb.iter(), "market_returns", "smb")?;
             },
         };
         // Check solution type compatibility with the choice of the model.
@@ -201,25 +201,21 @@ impl CAPM {
     }
 
     fn train(&self, risk_premium: &Array1<f64>) -> Result<CAPMParams, DigiFiError> {
-        let mut reg_params: CAPMParams = CAPMParams { alpha: None, beta: 0.0, beta_s: None, beta_h: None, beta_r: None, beta_c: None };
         let mut data_vec: Vec<Vec<f64>> = vec![(&self.market_returns - &self.rf).to_vec()];
         data_vec.push(vec![1.0; data_vec[0].len()]);
         match &self.capm_type {
             CAPMType::Standard => {
                 let data_matrix: Array2<f64> = Array2::from_shape_vec((2, risk_premium.len()), data_vec.into_iter().flatten().collect())?;
                 let params: Array1<f64> = linear_regression(&data_matrix.t().to_owned(), &risk_premium)?;
-                reg_params.beta = params[0];
-                reg_params.alpha = Some(params[1]);
+                self.unstack_parameters(&mut params.into_iter())
+
             },
             CAPMType::ThreeFactorFamaFrench { smb, hml } => {
                 data_vec.push(smb.to_vec());
                 data_vec.push(hml.to_vec());
                 let data_matrix: Array2<f64> = Array2::from_shape_vec((4, risk_premium.len()), data_vec.into_iter().flatten().collect())?;
                 let params: Array1<f64> = linear_regression(&data_matrix.t().to_owned(), &risk_premium)?;
-                reg_params.beta = params[0];
-                reg_params.alpha = Some(params[1]);
-                reg_params.beta_s = Some(params[2]);
-                reg_params.beta_h = Some(params[3]);
+                self.unstack_parameters(&mut params.into_iter())
             },
             CAPMType::FiveFactorFamaFrench { smb, hml, rmw, cma } => {
                 data_vec.push(smb.to_vec());
@@ -228,13 +224,26 @@ impl CAPM {
                 data_vec.push(cma.to_vec());
                 let data_matrix: Array2<f64> = Array2::from_shape_vec((6, risk_premium.len()), data_vec.into_iter().flatten().collect())?;
                 let params: Array1<f64> = linear_regression(&data_matrix.t().to_owned(), &risk_premium)?;
-                reg_params.beta = params[0];
-                reg_params.alpha = Some(params[1]);
-                reg_params.beta_s = Some(params[2]);
-                reg_params.beta_h = Some(params[3]);
-                reg_params.beta_r = Some(params[4]);
-                reg_params.beta_c = Some(params[5]);
+                self.unstack_parameters(&mut params.into_iter())
             },
+        }
+    }
+
+    /// Converts an iterator over parameters of linear regression model to `CAPMParams` instance.
+    fn unstack_parameters(&self, params: &mut impl Iterator<Item = f64>) -> Result<CAPMParams, DigiFiError> {
+        let mut reg_params: CAPMParams = CAPMParams { alpha: None, beta: 0.0, beta_s: None, beta_h: None, beta_r: None, beta_c: None };
+        reg_params.beta = match params.next() {
+            Some(v) => v,
+            None => return Err(DigiFiError::Other { title: Self::error_title(), details: "No `beta` was found.".to_owned(), }),
+        };
+        reg_params.alpha = params.next();
+        if let CAPMType::ThreeFactorFamaFrench { .. } | CAPMType::FiveFactorFamaFrench { .. } = &self.capm_type {
+            reg_params.beta_s = params.next();
+            reg_params.beta_h = params.next();
+        }
+        if let CAPMType::FiveFactorFamaFrench { .. } = &self.capm_type {
+            reg_params.beta_r = params.next();
+            reg_params.beta_c = params.next();
         }
         Ok(reg_params)
     }
@@ -247,7 +256,7 @@ impl CAPM {
     /// # Output
     /// - Parameters of the chosen CAPM model
     pub fn get_parameters(&self, risk_premium: &Array1<f64>) -> Result<CAPMParams, DigiFiError> {
-        compare_array_len(risk_premium, &self.market_returns, "risk_premium", "market_returns")?;
+        compare_len(&risk_premium.iter(), &self.market_returns.iter(), "risk_premium", "market_returns")?;
         match self.solution_type {
             CAPMSolutionType::Covariance => {
                 let numerator: f64 = covariance(risk_premium, &self.market_returns, 0)?;
@@ -258,6 +267,12 @@ impl CAPM {
                 self.train(risk_premium)
             },
         }
+    }
+}
+
+impl ErrorTitle for CAPM {
+    fn error_title() -> String {
+        String::from("CAPM")
     }
 }
 

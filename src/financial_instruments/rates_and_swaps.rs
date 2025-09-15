@@ -1,5 +1,4 @@
-use ndarray::Array1;
-use crate::error::DigiFiError;
+use crate::error::{DigiFiError, ErrorTitle};
 use crate::utilities::time_value_utils::{CompoundingType, Compounding, forward_rate};
 use crate::financial_instruments::{FinancialInstrument, FinancialInstrumentId};
 use crate::portfolio_applications::{AssetHistData, PortfolioInstrument};
@@ -16,7 +15,7 @@ use crate::stochastic_processes::StochasticProcess;
 ///
 /// ```rust
 /// use ndarray::Array1;
-/// use digifi::utilities::{TEST_ACCURACY, CompoundingType};
+/// use digifi::utilities::{TEST_ACCURACY, Time, CompoundingType};
 /// use digifi::financial_instruments::{FinancialInstrument, FinancialInstrumentId, FinancialInstrumentType, AssetClass, ForwardRateAgreement};
 /// use digifi::portfolio_applications::AssetHistData;
 ///
@@ -26,7 +25,7 @@ use crate::stochastic_processes::StochasticProcess;
 ///     identifier: String::from("32198407128904"),
 /// };
 /// let asset_historical_data: AssetHistData = AssetHistData::build(
-///     Array1::from_vec(vec![0.4, 0.5]),Array1::from_vec(vec![0.0, 0.0]), Array1::from_vec(vec![0.0, 1.0])
+///     Array1::from_vec(vec![0.4, 0.5]),Array1::from_vec(vec![0.0, 0.0]), Time::new(Array1::from_vec(vec![0.0, 1.0]))
 /// ).unwrap();
 /// let forward_rate: ForwardRateAgreement = ForwardRateAgreement::new(
 ///     0.04, 0.05, 1.0, 1000.0, 10.0, compounding_type, financial_instrument_id, asset_historical_data, None
@@ -132,13 +131,19 @@ impl ForwardRateAgreement {
     /// - \\textit{Forward Rate} = \\textit{Futures Rate} - \\textit{C}
     pub fn rate_adjustment(&mut self, futures_rate: f64, convexity_adjustment: f64, in_place: bool) -> Result<f64, DigiFiError> {
         if convexity_adjustment <= 0.0 {
-            return Err(DigiFiError::ParameterConstraint { title: "Forward Rate".to_owned(), constraint: "The argument `convexity` adjustment must be positive.".to_owned(), });
+            return Err(DigiFiError::ParameterConstraint { title: Self::error_title(), constraint: "The argument `convexity_adjustment` must be positive.".to_owned(), });
         }
         let forward_rate: f64 = futures_rate - convexity_adjustment;
         if in_place {
             self.current_forward_rate = forward_rate;
         }
         Ok(forward_rate)
+    }
+}
+
+impl ErrorTitle for ForwardRateAgreement {
+    fn error_title() -> String {
+        String::from("Forward Rate Agreement")
     }
 }
 
@@ -176,27 +181,9 @@ impl FinancialInstrument for ForwardRateAgreement {
         Ok(self.present_value()? / discount_term.compounding_term(self.time_to_maturity))
     }
 
-    /// Returns an array of forward rate prices.
-    ///
-    /// # Input
-    /// - `end_index`: Time index beyond which no data will be returned
-    /// - `start_index`: Time index below which no data will be returned
-    fn get_prices(&self, end_index: usize, start_index: Option<usize>) -> Result<Array1<f64>, DigiFiError> {
-        self.asset_historical_data.get_price(end_index, start_index)
-    }
-
-    /// Returns an array of predictable incomes for the forward contract (i.e., dividends, yields, etc.).
-    ///
-    /// # Input
-    /// - `end_index`: Time index beyond which no data will be returned
-    /// - `start_index`: Time index below which no data will be returned
-    fn get_predictable_income(&self, end_index: usize, start_index: Option<usize>) -> Result<Array1<f64>, DigiFiError> {
-        self.asset_historical_data.get_predictable_income(end_index, start_index)
-    }
-
-    /// Returns an array of time steps at which the asset price and predictable_income are recorded.
-    fn get_time_array(&self) -> Array1<f64> {
-        self.asset_historical_data.time_array.clone()
+    /// Returns asset's historical data.
+    fn historical_data(&self) -> &AssetHistData {
+        &self.asset_historical_data
     }
 
     /// Updates historical data of the asset with the newly generated data.
@@ -229,7 +216,7 @@ mod tests {
 
     #[test]
     fn unit_test_forward_rate() -> () {
-        use crate::utilities::time_value_utils::CompoundingType;
+        use crate::utilities::{Time, time_value_utils::CompoundingType};
         use crate::financial_instruments::{FinancialInstrument, FinancialInstrumentId, FinancialInstrumentType, AssetClass};
         use crate::financial_instruments::rates_and_swaps::ForwardRateAgreement;
         use crate::portfolio_applications::AssetHistData;
@@ -239,7 +226,7 @@ mod tests {
             identifier: String::from("32198407128904"),
         };
         let asset_historical_data: AssetHistData = AssetHistData::build(
-            Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]), Array1::from_vec(vec![0.0, 1.0])
+            Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]), Time::new(Array1::from_vec(vec![0.0, 1.0]))
         ).unwrap();
         let forward_rate: ForwardRateAgreement = ForwardRateAgreement::new(
             0.04, 0.05, 1.0, 1000.0, 10.0, compounding_type, financial_instrument_id, asset_historical_data, None

@@ -1,8 +1,8 @@
-use ndarray::Array1;
-use crate::utilities::NUMERICAL_CORRECTION;
+use std::{borrow::Borrow, iter::zip};
+use crate::error::DigiFiError;
+use crate::utilities::{NUMERICAL_CORRECTION, compare_len};
 
 
-/// # Desciption
 /// Factorial of n.
 /// 
 /// # Input
@@ -70,14 +70,10 @@ pub fn rising_factorial(x: u128, n: u128) -> u128 {
 /// ```
 pub fn erf(x: f64, n_terms: Option<usize>) -> f64 {
     let n_terms: usize = n_terms.unwrap_or(20);
-    let mut total: f64 = 0.0;
-    let mut sign: f64 = 1.0;
-    for n in 0..n_terms {
+    let total: f64 = (0..n_terms).into_iter().fold(0.0, |total, n| {
         let exp: i32 = (2 * n + 1) as i32;
-        total += sign * x.powi(exp) / (factorial(n as u128) as f64 * (2 * n + 1) as f64);
-        // Flip the sign for the next term
-        sign *= -1.0;
-    }
+        total + (-1.0_f64).powi(n as i32) * x.powi(exp) / (factorial(n as u128) as f64 * (2 * n + 1) as f64)
+    } );
     (2.0 / f64::sqrt(std::f64::consts::PI)) * total
 }
 
@@ -102,21 +98,17 @@ pub fn erf(x: f64, n_terms: Option<usize>) -> f64 {
 /// ```
 pub fn erfinv(z: f64, n_terms: Option<usize>) -> f64 {
     let n_terms: usize = n_terms.unwrap_or(20);
-    let mut total: f64 = 0.0;
-    let mut c: Vec<f64> = Vec::<f64>::new();
-    for k in 0..n_terms {
-        let mut c_sum: f64 = 0.0;
-        if k == 0 {
-            c_sum = 1.0;
-        } else {
-            for m in 0..(k) {
-                c_sum += c[m] * c[k-1-m] / ((m+1) * (2*m + 1)) as f64;
-            }
-        }
+    let pi_sqrt_half_z: f64 = f64::sqrt(std::f64::consts::PI) * z / 2.0;
+    let mut c: Vec<f64> = Vec::with_capacity(n_terms);
+    (0..n_terms).into_iter().fold(0.0, |total, k| {
+        let two_k_plus_one: i32 = (2 * k + 1) as i32;
+        let c_sum: f64 = match k {
+            0 => 1.0,
+            _ => (0..k).into_iter().fold(0.0, |total, m| total + c[m] * c[k-1-m] / ((m + 1) * (2 * m + 1)) as f64 )
+        };
         c.push(c_sum);
-        total += c_sum / ((2*k+1) as f64) * (f64::sqrt(std::f64::consts::PI) * z / 2.0).powi((2*k+1) as i32)
-    }
-    total
+        total + c_sum / (two_k_plus_one as f64) * pi_sqrt_half_z.powi(two_k_plus_one)
+    } )
 }
 
 
@@ -132,8 +124,14 @@ pub fn erfinv(z: f64, n_terms: Option<usize>) -> f64 {
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Euclidean_distance>
 /// - Original Source: N/A
-pub fn euclidean_distance(v_1: &Array1<f64>, v_2: &Array1<f64>) -> f64 {
-    (v_1 - v_2).map(|v| v.powi(2) ).sum().sqrt()
+pub fn euclidean_distance<T, I>(v_1: T, v_2: T) -> Result<f64, DigiFiError>
+where
+    T: Iterator<Item = I> + ExactSizeIterator,
+    I: Borrow<f64>,
+{
+    compare_len(&v_1, &v_2, "v_1", "v_2")?;
+    Ok(zip(v_1, v_2).fold(0.0, |sum, (v1, v2)| { sum + (v1.borrow() - v2.borrow()).powi(2) } ).sqrt())
+
 }
 
 
@@ -223,25 +221,20 @@ pub fn definite_integral<F: Fn(f64) -> f64>(f: F, start: f64, end: f64, n_interv
             Box::new(move |t: f64| { f(v + t/(1.0 - t)) / (1.0 - t).powi(2) })
         },
         (a_, b_) => {
-            if a_ == 0.0 {
-                a = NUMERICAL_CORRECTION;
-            } else {
-                a = a_
+            match a_ {
+                0.0 => { a = NUMERICAL_CORRECTION; },
+                _ => {a = a_; },
             }
-            if b_ == 0.0 {
-                b = NUMERICAL_CORRECTION;
-            } else {
-                b = b_
+            match b_ {
+                0.0 => { b = NUMERICAL_CORRECTION; },
+                _ => { b = b_; },
             }
             Box::new(move |t: f64| { f(t) })
         },
     };
     // Composite trapezoidal rule
     let scale_factor: f64 = (b - a) / n;
-    let mut result: f64 = g(a)/2.0 + g(b)/2.0;
-    for i in 1..(n_intervals - 1) {
-        result += g(a + (i as f64) * (b - a) / n)
-    }
+    let result: f64 = (1..(n_intervals - 1)).into_iter().fold(g(a)/2.0 + g(b)/2.0, |result, i| result + g(a + (i as f64) * scale_factor) );
     scale_factor * result
 }
 

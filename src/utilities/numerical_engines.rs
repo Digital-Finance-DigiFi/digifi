@@ -2,7 +2,7 @@ use std::cmp::PartialOrd;
 use ndarray::{Array, Array1, Array2, s};
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
-use crate::error::DigiFiError;
+use crate::error::{DigiFiError, ErrorTitle};
 
 
 type Simplex = Vec<(f64, Array1<f64>)>;
@@ -22,7 +22,7 @@ impl<F: FnMut(&Array1<f64>) -> f64> WrappedFunction<F> {
 }
 
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// A minimizer for a scalar function of one or more variables using the Nelder-Mead algorithm.
 struct NelderMead {
@@ -45,7 +45,7 @@ impl NelderMead {
         let adaptive: bool = match adaptive { Some(v) => v, None => false };
         let x_tolerance: f64 = match x_tolerance { Some(v) => v, None => 1e-4f64 };
         let f_tolerance: f64 = match f_tolerance { Some(v) => v, None => 1e-4f64 };
-        NelderMead {max_iterations, max_fun_calls, adaptive, x_tolerance, f_tolerance}
+        NelderMead { max_iterations, max_fun_calls, adaptive, x_tolerance, f_tolerance }
     }
 
     /// Search for the value minimizing `func` given an initial guess in the form of a point. The algorithm will
@@ -121,8 +121,6 @@ impl NelderMead {
     /// Resolves default values that can only be known after the minimize function is called.
     #[inline]
     fn initialize_parameters(&self, n: usize) -> (u64, u64, f64, f64, f64, f64) {
-        let max_iterations: u64 = self.max_iterations;
-        let max_fun_calls: u64 = self.max_fun_calls;
         let (alpha, beta, gamma, delta): (f64, f64, f64, f64) = match self.adaptive {
             true => {
                 let dim: f64 = n as f64;
@@ -130,7 +128,7 @@ impl NelderMead {
             },
             false => (1.0, 2.0, 0.5, 0.5),
         };
-        (max_iterations, max_fun_calls, alpha, beta, gamma, delta)
+        (self.max_iterations, self.max_fun_calls, alpha, beta, gamma, delta)
     }
 
     #[inline]
@@ -147,10 +145,11 @@ impl NelderMead {
     #[inline]
     fn lean_update(&self, simplex: &mut Simplex, centroid: &mut Array1<f64>, xnew: Array1<f64>, fnew: f64) -> () {
         let n: usize = simplex.len();
-        *centroid += &(&xnew / (n-1) as f64);
+        let denominator: f64 = (n - 1) as f64;
+        *centroid += &(&xnew / denominator);
         simplex[n-1] = (fnew, xnew);
         self.order_simplex(simplex);
-        *centroid -= &(&simplex[n-1].1 / (n-1) as f64);
+        *centroid -= &(&simplex[n-1].1 / denominator);
     }
 
     /// Shrink all points towards the best point. Assumes the simplex is ordered. The centroid is updated by shrinking
@@ -164,7 +163,7 @@ impl NelderMead {
             let mut iter = simplex.iter_mut();
             let (_, x0) = iter.next()
                 .ok_or(DigiFiError::Other {
-                    title: "Nelder-Mead Numerical Engine".to_owned(),
+                    title: Self::error_title(),
                     details: "Could not grab next element from the simplex.".to_owned(),
                 })?;
             for (fi, xi) in iter {
@@ -197,6 +196,12 @@ impl NelderMead {
     #[inline]
     fn order_simplex(&self, simplex: &mut Simplex) -> () {
         simplex.sort_unstable_by(|&(fa, _), &(fb, _)| fa.partial_cmp(&fb).unwrap());
+    }
+}
+
+impl ErrorTitle for NelderMead {
+    fn error_title() -> String {
+        String::from("Nelder-Mead Numerical Engine")
     }
 }
 

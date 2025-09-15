@@ -38,18 +38,18 @@ pub trait RandomGenerator<T> {
 /// ```rust
 /// use digifi::random_generators::generate_seed;
 ///
-/// let seed_1: u32 = generate_seed().unwrap();
-/// let seed_2: u32 = generate_seed().unwrap();
+/// let seed_1: f64 = generate_seed().unwrap();
+/// let seed_2: f64 = generate_seed().unwrap();
 ///
 /// assert!(seed_1 != seed_2);
 /// ```
-pub fn generate_seed () -> Result<u32, DigiFiError> {
+pub fn generate_seed () -> Result<f64, DigiFiError> {
     let start: SystemTime = SystemTime::now();
     let delta: f64 = start.duration_since(UNIX_EPOCH)?.subsec_nanos() as f64;
     // Drop the first two digits and last two digits from delta
-    let delta: u32 = (delta / 100.0) as u32;
-    let remainder: u32 = delta.rem_euclid(100_000);
-    let big_digit_number: u32 = delta - remainder;
+    let delta: f64 = delta / 100.0;
+    let remainder: f64 = delta.rem_euclid(100_000.0);
+    let big_digit_number: f64 = delta - remainder;
     Ok(delta - big_digit_number)
 }
 
@@ -174,8 +174,8 @@ mod tests {
     #[test]
     fn unit_test_generate_seed() -> () {
         use crate::random_generators::generate_seed;
-        let seed_1: u32 = generate_seed().unwrap();
-        let seed_2: u32 = generate_seed().unwrap();
+        let seed_1: f64 = generate_seed().unwrap();
+        let seed_2: f64 = generate_seed().unwrap();
         assert!(seed_1 != seed_2);
     }
 

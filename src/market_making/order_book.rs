@@ -26,8 +26,8 @@
 /// assert_eq!(volume_imbalance, -100.0 / 20_100.0);
 /// ```
 pub fn volume_imbalance(best_bid_volume: i32, best_ask_volume: i32) -> f64 {
-    let best_bid_volume = best_bid_volume as f64;
-    let best_ask_volume = best_ask_volume as f64;
+    let best_bid_volume: f64 = best_bid_volume as f64;
+    let best_ask_volume: f64 = best_ask_volume as f64;
     (best_bid_volume - best_ask_volume) / (best_bid_volume + best_ask_volume)
 }
 

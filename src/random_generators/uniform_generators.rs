@@ -1,9 +1,9 @@
-use ndarray::{Array1, Axis};
-use crate::error::DigiFiError;
+use ndarray::Array1;
+use crate::error::{DigiFiError, ErrorTitle};
 use crate::random_generators::{RandomGenerator, generate_seed};
 
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 /// Pseudo-random number generator for uniform distribution.
 /// 
 /// # LaTeX Formula
@@ -20,23 +20,23 @@ use crate::random_generators::{RandomGenerator, generate_seed};
 /// use digifi::utilities::TEST_ACCURACY;
 /// use digifi::random_generators::{RandomGenerator, LinearCongruentialGenerator};
 ///
-/// let lcg: LinearCongruentialGenerator = LinearCongruentialGenerator::new(12_345, 10_000, 244_944, 1_597, 51_749);
+/// let lcg: LinearCongruentialGenerator = LinearCongruentialGenerator::new(12_345, 1_000_000, 244_944, 1_597, 51_749);
 /// let sample: Array1<f64> = lcg.generate().unwrap();
 ///
-/// assert_eq!(sample.len(), 10_000);
-/// assert!((sample.mean().unwrap() - 0.5).abs() < 1_000_000.0 * TEST_ACCURACY)
+/// assert_eq!(sample.len(), 1_000_000);
+/// assert!((sample.mean().unwrap() - 0.5).abs() < 1_000.0 * TEST_ACCURACY)
 /// ```
 pub struct LinearCongruentialGenerator {
     /// Seed of the generator
-    seed: u32,
+    seed: f64,
     /// Number of pseudo-random numbers to generate
     sample_size: usize,
     /// Mod of the linear congruential generator
-    m: u32,
+    m: f64,
     /// Multiplierof the linear congruential generator
-    a: u32,
+    a: f64,
     /// Increment of the linear congruential generator
-    b: u32,
+    b: f64,
 }
 
 impl LinearCongruentialGenerator {
@@ -49,7 +49,7 @@ impl LinearCongruentialGenerator {
     /// - `a`: Multiplierof the linear congruential generator
     /// - `b`: Increment of the linear congruential generator
     pub fn new(seed: u32, sample_size: usize, m: u32, a: u32, b: u32) -> Self {
-        LinearCongruentialGenerator { seed, sample_size, m, a, b }
+        LinearCongruentialGenerator { seed: seed as f64, sample_size, m: m as f64, a: a as f64, b: b as f64, }
     }
 }
 
@@ -59,10 +59,10 @@ impl RandomGenerator<LinearCongruentialGenerator> for LinearCongruentialGenerato
     /// # Input
     /// - `sample_size`: Number of pseudo-random numbers to generate
     fn new_shuffle(sample_size: usize) -> Result<Self, DigiFiError> {
-        let seed: u32 = generate_seed()?;
-        let m: u32 = (seed * 1_234) as u32;
-        let a: u32 = (seed as f64 / 10.0) as u32;
-        let b: u32 = (m as f64 / 10.0) as u32;
+        let seed: f64 = generate_seed()?;
+        let m: f64 = seed * 1_234.0;
+        let a: f64 = seed / 10.0;
+        let b: f64 = m / 10.0;
         Ok(LinearCongruentialGenerator { seed, sample_size, m, a, b })
     }
 
@@ -71,21 +71,18 @@ impl RandomGenerator<LinearCongruentialGenerator> for LinearCongruentialGenerato
     /// # Output
     /// - An array pseudo-random numbers following Uniform distribution
     fn generate(&self) -> Result<Array1<f64>, DigiFiError> {
-        let mut u: Array1<f64> = Array1::from_vec(vec![0.0; self.sample_size + 1]);
-        u[0] = self.seed as f64;
-        let a: f64 = self.a as f64;
-        let b: f64 = self.b as f64;
-        let m: f64 = self.m as f64;
-        for i in 1..(self.sample_size + 1) {
-            u[i] = (a * u[i-1] + b) % m;
-        }
-        u.remove_index(Axis(0), 0);
-        Ok(u / m)
+        let (_, u) = (0..self.sample_size).into_iter()
+            .fold((self.seed, Vec::with_capacity(self.sample_size)), |(prev, mut u), _| {
+                let next: f64 = (self.a * prev + self.b) % self.m;
+                u.push(next / self.m);
+                (next, u)
+            } );
+        Ok(Array1::from_vec(u))
     }
 }
 
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 /// Pseudo-random number generator for uniform distribution.
 /// 
 /// # LaTeX Formula
@@ -103,22 +100,22 @@ impl RandomGenerator<LinearCongruentialGenerator> for LinearCongruentialGenerato
 /// use digifi::random_generators::{RandomGenerator, FibonacciGenerator};
 ///
 /// // Input seed
-/// let fg: FibonacciGenerator = FibonacciGenerator::new(12_345, 10_000, 5, 17, 714_025, 1_366, 150_889);
+/// let fg: FibonacciGenerator = FibonacciGenerator::build(12_345, 1_000_000, 5, 17, 714_025, 1_366, 150_889).unwrap();
 /// let sample: Array1<f64> = fg.generate().unwrap();
 ///
-/// assert_eq!(sample.len(), 10_000);
-/// assert!((sample.mean().unwrap() - 0.5).abs() < 1_000_000.0 * TEST_ACCURACY);
+/// assert_eq!(sample.len(), 1_000_000);
+/// assert!((sample.mean().unwrap() - 0.5).abs() < 10_000.0 * TEST_ACCURACY);
 ///
 /// // Auto-generated seed
-/// let fg: FibonacciGenerator = FibonacciGenerator::new_shuffle(10_000).unwrap();
+/// let fg: FibonacciGenerator = FibonacciGenerator::new_shuffle(1_000_000).unwrap();
 /// let sample: Array1<f64> = fg.generate().unwrap();
 ///
-/// assert_eq!(sample.len(), 10_000);
-/// assert!((sample.mean().unwrap() - 0.5).abs() < 1_000_000.0 * TEST_ACCURACY);
+/// assert_eq!(sample.len(), 1_000_000);
+/// assert!((sample.mean().unwrap() - 0.5).abs() < 100_000.0 * TEST_ACCURACY);
 /// ```
 pub struct FibonacciGenerator {
     /// Seed of the generator
-    seed: u32,
+    seed: f64,
     /// Number of pseudo-random numbers to generate
     sample_size: usize,
     /// First primitive polynomial degree
@@ -126,11 +123,11 @@ pub struct FibonacciGenerator {
     ///Second primitive polynomial degree
     nu: usize,
     /// Mod of the linear congruential generator
-    m: u32,
+    m: f64,
     /// Multiplierof the linear congruential generator
-    a: u32,
+    a: f64,
     /// Increment of the linear congruential generator
-    b: u32,
+    b: f64,
 }
 
 impl FibonacciGenerator {
@@ -144,8 +141,20 @@ impl FibonacciGenerator {
     /// - `m`: Mod of the linear congruential generator
     /// - `a`: Multiplierof the linear congruential generator
     /// - `b`: Increment of the linear congruential generator
-    pub fn new(seed: u32, sample_size: usize, mu: usize, nu: usize, m: u32, a: u32, b: u32) -> Self {
-        FibonacciGenerator { seed, sample_size, mu, nu, m, a, b }
+    pub fn build(seed: u32, sample_size: usize, mu: usize, nu: usize, m: u32, a: u32, b: u32) -> Result<Self, DigiFiError> {
+        if nu <= mu {
+            return Err(DigiFiError::ParameterConstraint {
+                title: Self::error_title(),
+                constraint: "Parameter `nu` must be larger than parameter `mu`".to_owned(),
+            })
+        }
+        Ok(FibonacciGenerator { seed: seed as f64, sample_size, mu, nu, m: m as f64, a: a as f64, b: b as f64, })
+    }
+}
+
+impl ErrorTitle for FibonacciGenerator {
+    fn error_title() -> String {
+        String::from("Fibonacci Generator")
     }
 }
 
@@ -155,10 +164,10 @@ impl RandomGenerator<FibonacciGenerator> for FibonacciGenerator {
     /// # Input
     /// - `sample_size`: Number of pseudo-random numbers to generate
     fn new_shuffle(sample_size: usize) -> Result<Self, DigiFiError> {
-        let seed: u32 = generate_seed()?;
-        let m: u32 = (seed * 1_234) as u32;
-        let a: u32 = (seed as f64 / 10.0) as u32;
-        let b: u32 = (m as f64 / 10.0) as u32;
+        let seed: f64 = generate_seed()?;
+        let m: f64 = seed * 1_234.0;
+        let a: f64 = seed / 10.0;
+        let b: f64 = m / 10.0;
         Ok(FibonacciGenerator { seed, sample_size, mu: 5, nu: 17, m, a, b })
     }
 
@@ -167,19 +176,14 @@ impl RandomGenerator<FibonacciGenerator> for FibonacciGenerator {
     /// # Output
     /// - An array pseudo-random numberss following Uniform distribution
     fn generate(&self) -> Result<Array1<f64>, DigiFiError> {
-        let mut u: Array1<f64> = Array1::from_vec(vec![0.0; self.sample_size + 1]);
-        u[0] = self.seed as f64;
-        let a: f64 = self.a as f64;
-        let b: f64 = self.b as f64;
-        let m: f64 = self.m as f64;
-        for i in 1..(self.sample_size + 1) {
-            u[i] = (a * u[i-1] + b) % m;
-        }
-        for i in (self.nu + 1)..(self.sample_size + 1) {
-            u[i] = (u[i-self.nu] + u[i-self.mu]) % m
-        }
-        u.remove_index(Axis(0), 0);
-        Ok(u / m)
+        let (_, mut u) = (0..self.sample_size).into_iter()
+            .fold((self.seed, Vec::with_capacity(self.sample_size)), |(prev, mut u), _| {
+                let next: f64 = (self.a * prev + self.b) % self.m;
+                u.push(next);
+                (next, u)
+            } );
+        let _ = ((self.nu + 1)..self.sample_size).into_iter().map(|i| { u[i] = (u[i - self.nu] + u[i - self.mu]) % self.m; } );
+        Ok(Array1::from_vec(u) / self.m)
     }
 }
 
@@ -193,24 +197,26 @@ mod tests {
     #[test]
     fn unit_test_linear_congruential_generator() -> () {
         use crate::random_generators::uniform_generators::LinearCongruentialGenerator;
-        let lcg: LinearCongruentialGenerator = LinearCongruentialGenerator::new(12_345, 10_000, 244_944, 1_597, 51_749);
+        let lcg: LinearCongruentialGenerator = LinearCongruentialGenerator::new(12_345, 1_000_000, 244_944, 1_597, 51_749);
         let sample: Array1<f64> = lcg.generate().unwrap();
-        assert_eq!(sample.len(), 10_000);
-        assert!((sample.mean().unwrap() - 0.5).abs() < 1_000_000.0 * TEST_ACCURACY)
+        assert_eq!(sample.len(), 1_000_000);
+        println!("{}", sample.mean().unwrap());
+        assert!((sample.mean().unwrap() - 0.5).abs() < 1_000.0 * TEST_ACCURACY)
     }
 
     #[test]
     fn unit_test_fibonacci_generator() -> () {
         use crate::random_generators::uniform_generators::FibonacciGenerator;
         // Input seed
-        let fg: FibonacciGenerator = FibonacciGenerator::new(12_345, 10_000, 5, 17, 714_025, 1_366, 150_889);
+        let fg: FibonacciGenerator = FibonacciGenerator::build(12_345, 1_000_000, 5, 17, 714_025, 1_366, 150_889).unwrap();
         let sample: Array1<f64> = fg.generate().unwrap();
-        assert_eq!(sample.len(), 10_000);
-        assert!((sample.mean().unwrap() - 0.5).abs() < 1_000_000.0 * TEST_ACCURACY);
+        assert_eq!(sample.len(), 1_000_000);
+        assert!((sample.mean().unwrap() - 0.5).abs() < 10_000.0 * TEST_ACCURACY);
         // Auto-generated seed
-        let fg: FibonacciGenerator = FibonacciGenerator::new_shuffle(10_000).unwrap();
+        let fg: FibonacciGenerator = FibonacciGenerator::new_shuffle(1_000_000).unwrap();
         let sample: Array1<f64> = fg.generate().unwrap();
-        assert_eq!(sample.len(), 10_000);
-        assert!((sample.mean().unwrap() - 0.5).abs() < 1_000_000.0 * TEST_ACCURACY);
+        assert_eq!(sample.len(), 1_000_000);
+        println!("{}", sample.mean().unwrap());
+        assert!((sample.mean().unwrap() - 0.5).abs() < 100_000.0 * TEST_ACCURACY);
     }
 }

@@ -99,18 +99,16 @@ pub fn lower_incomplete_gamma(z: f64, x: f64, n_terms: Option<usize>) -> Result<
         });
     }
     let n_terms: usize = n_terms.unwrap_or(20);
-    let mut result: f64 = 0.0;
-    for k in 0..n_terms {
-        let mut denominator: f64 = 1.0;
-        if k == 0 {
-            denominator *= z;
-        } else {
-            for i in 0..(k+1) {
-                denominator *= z + (i as f64);
-            }
-        } 
-        result += x.powi(k as i32) / denominator;
-    }
+    let result: f64 = (0..n_terms).into_iter().fold(0.0, |result, k| {
+        let denominator: f64 = match k {
+            0 => z,
+            _ => {
+                let denom: f64 = (0..(k+1)).into_iter().fold(1.0, |denom, i| denom * (z + (i as f64)) );
+                denom
+            },
+        };
+        result + x.powi(k as i32) / denominator
+    } );
     Ok(x.powf(z) * (-x).exp() * result)
 }
 
@@ -224,14 +222,14 @@ mod tests {
     }
 
     #[test]
-    fn unit_test_upper_incomplete_gamma() -> () {
+    fn unit_test_lower_incomplete_gamma() -> () {
         use crate::statistics::gamma::lower_incomplete_gamma;
         // Gamma_{lower}(1, x) = 1 - e^{-x}
         assert!((lower_incomplete_gamma(1.0, 3.0, None).unwrap() - (1.0 - (-3.0_f64).exp())).abs() < TEST_ACCURACY);
     }
 
     #[test]
-    fn uni_test_upper_incomplete_gamma() -> () {
+    fn unit_test_upper_incomplete_gamma() -> () {
         use crate::statistics::gamma::{gamma, upper_incomplete_gamma};
         // Gamma_{upper}(s, 0) = Gamma(s)
         assert!((upper_incomplete_gamma(4.0, 0.0, Some(30)).unwrap() - gamma(4.0)).abs() < TEST_ACCURACY);

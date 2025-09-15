@@ -1,12 +1,12 @@
 use ndarray::{Array1, Array2};
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
-use crate::error::DigiFiError;
+use crate::error::{DigiFiError, ErrorTitle};
 use crate::utilities::loss_functions::{LossFunction, SSE};
 use crate::statistics::{self, stat_tests};
 
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// The data relevant to the specific linear regression feature.
 pub struct LinearRegressionFeatureResult {
@@ -144,12 +144,11 @@ impl LinearRegressionAnalysis {
 
     /// Validates the input data for the linear regression analysis.
     fn validate_input(&self, x: &Vec<Array1<f64>>, y: &Array1<f64>) -> Result<(), DigiFiError> {
-        let error_title: String = String::from("Linear Regression Analysis");
         let y_len: usize = y.len();
         let x_len: usize = x.len();
         // Input validation
         if y.is_empty() {
-            return Err(DigiFiError::ValidationError { title: error_title, details: "Array `y` must not be empty.".to_owned() ,});
+            return Err(DigiFiError::ValidationError { title: Self::error_title(), details: "Array `y` must not be empty.".to_owned() ,});
         }
         for v in x {
             if v.len() != y_len {
@@ -157,7 +156,7 @@ impl LinearRegressionAnalysis {
             }
         }
         if (!self.settings.add_constant && y_len < x_len) || (self.settings.add_constant && y_len < x_len + 1) {
-            return Err(DigiFiError::Other { title: error_title, details: "There are fewer data points in `y` array than `ddof`.".to_owned() });
+            return Err(DigiFiError::Other { title: Self::error_title(), details: "There are fewer data points in `y` array than `ddof`.".to_owned() });
         }
         if self.settings.enable_t_test {
             match &self.settings.t_test_h0s {
@@ -228,7 +227,7 @@ impl LinearRegressionAnalysis {
         }
         // Global statistics
         let intercept: Option<f64> = if self.settings.add_constant { all_coefficients.last().copied() } else { None };
-        let sse: Option<f64> = if self.settings.enable_sse { Some(SSE.loss_array(y, &y_prediction)?) } else { None };
+        let sse: Option<f64> = if self.settings.enable_sse { Some(SSE.loss_iter(y.iter(), y_prediction.iter())?) } else { None };
         let r_squared: Option<f64> = if self.settings.enable_r_squared { Some(statistics::r_squared(y, &y_prediction)?) } else { None };
         let adjusted_r_squared: Option<f64> = if self.settings.enable_adjusted_r_squared {Some(statistics::adjusted_r_squared(y, &y_prediction, y_len, x_len)?)} else { None };
         Ok(LinearRegressionResult {
@@ -236,6 +235,12 @@ impl LinearRegressionAnalysis {
             intercept, coefficients,
             ddof, sse, r_squared, adjusted_r_squared,
         })
+    }
+}
+
+impl ErrorTitle for LinearRegressionAnalysis {
+    fn error_title() -> String {
+        String::from("Linear Regression Analysis")
     }
 }
 

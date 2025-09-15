@@ -1,11 +1,12 @@
-use ndarray::{Array1, arr1};
+use std::borrow::Borrow;
+use ndarray::Array1;
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
-use crate::error::DigiFiError;
-use crate::utilities::{ParameterType, Time, compare_array_len, loss_functions::{LossFunction, MSE}, numerical_engines::nelder_mead};
+use crate::error::{DigiFiError, ErrorTitle};
+use crate::utilities::{ParameterType, Time, compare_len, loss_functions::{LossFunction, MSE}, numerical_engines::nelder_mead};
 
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Type of discount rate compounding.
 pub enum CompoundingType {
@@ -16,6 +17,19 @@ pub enum CompoundingType {
     },
 }
 
+impl CompoundingType {
+
+    /// Returns the  compounding frequency for the compounding type.
+    /// 
+    /// Note: For continuous compounding the frequency is set to `1` by default.
+    pub fn frequency(&self) -> u32 {
+        match self {
+            CompoundingType::Periodic { frequency } => *frequency,
+            CompoundingType::Continuous => 1,
+        }
+    }
+}
+
 
 /// Present value of the cashflow discounted at a certain rate for every time period.
 /// 
@@ -24,7 +38,6 @@ pub enum CompoundingType {
 /// - `time`: Time settings
 /// - `rate`: Value (array) of discount rate(s)
 /// - `compounding_type`: Compounding type used to discount cashflows
-/// - `compounding_frequency`: Compounding frequency of cashflows
 /// 
 /// # Output
 /// - Present value of series of cashflows
@@ -42,24 +55,27 @@ pub enum CompoundingType {
 /// use ndarray::Array1;
 /// use digifi::utilities::{TEST_ACCURACY, ParameterType, Time, CompoundingType, present_value};
 ///
-/// let cashflow: Array1<f64> = Array1::from_vec(vec![10.0, 10.0, 10.0]);
-/// let time: Time = Time::Sequence { times: Array1::from_vec(vec![1.0, 2.0, 3.0]) };
+/// let cashflow: Vec<f64> = vec![10.0, 10.0, 10.0];
+/// let time: Time = Time::new(Array1::from_vec(vec![1.0, 2.0, 3.0]));
 /// let rate: ParameterType = ParameterType::Value { value: 0.02 };
 ///
 /// // Periodic compounding
 /// let periodic_compounding: CompoundingType = CompoundingType::Periodic { frequency: 1 };
-/// let pv_periodic: f64 = present_value(&cashflow, &time, rate.clone(), &periodic_compounding).unwrap();
+/// let pv_periodic: f64 = present_value(cashflow.iter(), &time, rate.clone(), &periodic_compounding).unwrap();
 /// assert!((pv_periodic - 10.0*(1.0/1.02 + 1.0/1.02_f64.powf(2.0) + 1.0/1.02_f64.powf(3.0))).abs() < TEST_ACCURACY);
 ///
 /// // Continuous compounding
 /// let continuous_compounding: CompoundingType = CompoundingType::Continuous;
-/// let pv_continuous: f64 = present_value(&cashflow, &time, rate, &continuous_compounding).unwrap();
+/// let pv_continuous: f64 = present_value(cashflow.iter(), &time, rate, &continuous_compounding).unwrap();
 /// assert!((pv_continuous - 10.0*((-0.02_f64).exp() + (-0.02*2.0_f64).exp() + (-0.02*3.0_f64).exp())).abs() < TEST_ACCURACY);
 /// ```
-pub fn present_value(cashflow: &Array1<f64>, time: &Time, rate: ParameterType, compounding_type: &CompoundingType) -> Result<f64, DigiFiError> {
+pub fn present_value<T, I>(cashflow: T, time: &Time, rate: ParameterType, compounding_type: &CompoundingType) -> Result<f64, DigiFiError>
+where
+    T: Iterator<Item = I> + ExactSizeIterator,
+    I: Borrow<f64>
+{
     let error_title: String = String::from("Present Value");
-    let time_array = time.get_time_array();
-    compare_array_len(&cashflow, &time_array, "cashflow", "time_array")?;
+    compare_len(&cashflow, &time.time_array().iter(), "cashflow", "time_array")?;
     let rates: Array1<f64> = match rate {
         ParameterType::Value { value } => {
             if (value <= -1.0) || (1.0 <= value) {
@@ -74,15 +90,16 @@ pub fn present_value(cashflow: &Array1<f64>, time: &Time, rate: ParameterType, c
             if values.mapv(|r| { if (r <= -1.0) || (1.0 <= r) {1.0} else {0.0} }).sum() != 0.0 {
                 return Err(DigiFiError::ParameterConstraint { title: error_title, constraint: "All `rates` must be in the range `(-1,1)`.".to_owned(), });
             }
+            compare_len(&cashflow, &values.iter(), "cashflow", "rate")?;
             values
         },
     };
-    let mut present_value: f64 = 0.0;
-    for i in 0..time_array.len() {
-        let discount_term: Compounding = Compounding::new(rates[i], &compounding_type);
-        present_value += cashflow[i]*discount_term.compounding_term(time_array[i]);
-    }
-    Ok(present_value)
+    Ok(rates.iter().zip(time.time_array().iter().zip(cashflow))
+        .fold(0.0, |pv, (rate, (time, cash))| {
+            let discount_term: Compounding = Compounding::new(*rate, &compounding_type);
+            pv + cash.borrow() * discount_term.compounding_term(*time)
+        } )
+    )
 }
 
 
@@ -94,7 +111,6 @@ pub fn present_value(cashflow: &Array1<f64>, time: &Time, rate: ParameterType, c
 /// - `time`: Time settings
 /// - `rate`: Value (array) of discount rate(s)
 /// - `compounding_type`: Compounding type used to discount cashflows
-/// - `compounding_frequency`: Compounding frequency of cashflows
 /// 
 /// # Output
 /// - Present value of series of cashflows minus the initial cashflow
@@ -105,7 +121,11 @@ pub fn present_value(cashflow: &Array1<f64>, time: &Time, rate: ParameterType, c
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Present_value#Net_present_value_of_a_stream_of_cash_flows>
 /// - Original Source: N/A
-pub fn net_present_value(initial_cashflow: f64, cashflow: &Array1<f64>, time: &Time, rate: ParameterType, compounding_type: &CompoundingType) -> Result<f64, DigiFiError> {
+pub fn net_present_value<T, I>(initial_cashflow: f64, cashflow: T, time: &Time, rate: ParameterType, compounding_type: &CompoundingType) -> Result<f64, DigiFiError>
+where
+    T: Iterator<Item = I> + ExactSizeIterator,
+    I: Borrow<f64>,
+{
     Ok(-initial_cashflow + present_value(cashflow, time, rate, compounding_type)?)
 }
 
@@ -117,7 +137,6 @@ pub fn net_present_value(initial_cashflow: f64, cashflow: &Array1<f64>, time: &T
 /// - `rate`: Discount rate
 /// - `time`: Time for which the future value is evaluated
 /// - `compounding_type`: Compounding type used to discount cashflows
-/// - `compounding_frequency`: Compounding frequency of cashflows
 /// 
 /// # Output
 /// - Future value of the current cashflow
@@ -163,7 +182,6 @@ pub fn future_value(current_value: f64, rate: f64, time: f64, compounding_type: 
 /// - `cashflow`: Array of cashflows
 /// - `time`: Time settings
 /// - `compounding_type`: Compounding type used to discount cashflows
-/// - `compounding_frequency`: Compounding frequency of cashflows
 /// 
 /// # Output
 /// - Internal rate of return that yields the initial cashflow by discounting future cashflows
@@ -178,23 +196,26 @@ pub fn future_value(current_value: f64, rate: f64, time: f64, compounding_type: 
 /// use ndarray::Array1;
 /// use digifi::utilities::{TEST_ACCURACY, Time, CompoundingType, internal_rate_of_return};
 ///
-/// let cashflow: Array1<f64> = Array1::from_vec(vec![200.0, 200.0, 900.0]);
-/// let time: Time = Time::Sequence { times: Array1::from_vec(vec![1.0, 2.0, 3.0]) };
+/// let cashflow: Vec<f64> = vec![200.0, 200.0, 900.0];
+/// let time: Time = Time::new(Array1::from_vec(vec![1.0, 2.0, 3.0]));
 /// let compounding_type: CompoundingType = CompoundingType::Continuous;
 ///
-/// let rate: f64 = internal_rate_of_return(1000.0, &cashflow, &time, &compounding_type).unwrap();
+/// let rate: f64 = internal_rate_of_return(1000.0, cashflow.iter(), &time, &compounding_type).unwrap();
 /// assert!((rate - 0.10459277343750006).abs() < 1_000.0 * TEST_ACCURACY);
 /// ```
-pub fn internal_rate_of_return(initial_cashflow: f64, cashflow: &Array1<f64>, time: &Time, compounding_type: &CompoundingType) -> Result<f64, DigiFiError> {
-    let time_array = time.get_time_array();
-    compare_array_len(&cashflow, &time_array, "cashflow", "time_array")?;
-    let pv_closure  = | rate: &[f64] | {
-        let mut present_value: f64 = 0.0;
-        for i in 0..time_array.len() {
-            let discount_term: Compounding = Compounding::new(rate[0], &compounding_type);
-            present_value += cashflow[i] * discount_term.compounding_term(time_array[i]);
-        }
-        MSE.loss_array(&arr1(&[present_value]), &arr1(&[initial_cashflow])).unwrap()
+pub fn internal_rate_of_return<T, I>(initial_cashflow: f64, cashflow: T, time: &Time, compounding_type: &CompoundingType) -> Result<f64, DigiFiError>
+where
+    T: Iterator<Item = I> + ExactSizeIterator + Clone,
+    I: Borrow<f64>,
+{
+    compare_len(&cashflow, &time.time_array().iter(), "cashflow", "time_array")?;
+    let pv_closure = | rate: &[f64] | {
+        let present_value: f64 = cashflow.clone().zip(time.time_array().iter())
+            .fold(0.0, |pv, (cash, time)| {
+                let discount_term: Compounding = Compounding::new(rate[0], &compounding_type);
+                pv + cash.borrow() * discount_term.compounding_term(*time)
+            } );
+        MSE.loss(present_value, initial_cashflow)
     };
     let rate: Array1<f64> = nelder_mead(pv_closure, vec![0.0], Some(1_000), Some(1_000), None, None, None)?;
     Ok(rate[0])
@@ -223,7 +244,6 @@ pub fn real_interest_rate(nominal_interest_rate: f64, inflation_rate: f64) -> Re
 }
 
 
-/// # Descpition
 /// Periodic-to-periodic compounding transformation between different compounding frequencies.
 /// 
 /// # Input
@@ -234,7 +254,9 @@ pub fn real_interest_rate(nominal_interest_rate: f64, inflation_rate: f64) -> Re
 /// # Output
 /// - New periodic discount rate
 pub fn ptp_compounding_transformation(current_rate: f64, current_frequency: u32, new_frequency: u32) -> f64 {
-    (new_frequency as f64) * ((1.0+current_rate/(current_frequency as f64)).powf((current_frequency as f64)/(new_frequency as f64)) - 1.0)
+    if current_frequency == new_frequency { return current_rate; }
+    let (current_frequency, new_frequency) = (current_frequency as f64, new_frequency as f64);
+    new_frequency * ((1.0 + current_rate / current_frequency).powf(current_frequency / new_frequency) - 1.0)
 }
 
 
@@ -247,7 +269,8 @@ pub fn ptp_compounding_transformation(current_rate: f64, current_frequency: u32,
 /// # Output
 /// - Continuous discount rate
 pub fn ptc_compounding_transformation(periodic_rate: f64, periodic_frequency: u32) -> f64 {
-    (periodic_frequency as f64) * (1.0 + periodic_rate/(periodic_frequency as f64)).ln()
+    let periodic_frequency: f64 = periodic_frequency as f64;
+    periodic_frequency * (1.0 + periodic_rate / periodic_frequency).ln()
 }
 
 
@@ -260,11 +283,12 @@ pub fn ptc_compounding_transformation(periodic_rate: f64, periodic_frequency: u3
 /// # Output
 /// - Periodic discount rate
 pub fn ctp_compounding_transformation(continuous_rate: f64, periodic_frequency: u32) -> f64 {
-    (periodic_frequency as f64) * ((continuous_rate/(periodic_frequency as f64)).exp() - 1.0)
+    let periodic_frequency: f64 = periodic_frequency as f64;
+    periodic_frequency * ((continuous_rate / periodic_frequency).exp() - 1.0)
 }
 
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Different compounding techniques and methods.
 /// 
@@ -304,7 +328,7 @@ impl Compounding {
     /// - `rate`: Discount rate
     /// - `compounding_type`: Type of compounding to use when computing the discount term
     pub fn new(rate: f64, compounding_type: &CompoundingType) -> Self {
-        Compounding { rate, compounding_type: compounding_type.clone() }
+        Compounding { rate, compounding_type: *compounding_type }
     }
 
     /// Defines a compounding term with either continuous or periodic compounding.
@@ -319,12 +343,11 @@ impl Compounding {
     pub fn compounding_term(&self, time: f64) -> f64 {
         match self.compounding_type {
             // Continuous compounding.
-            CompoundingType::Continuous => {
-                (-self.rate * time).exp()
-            },
+            CompoundingType::Continuous => (-self.rate * time).exp(),
             // Periodic compounding.
             CompoundingType::Periodic { frequency } => {
-                (1.0 + self.rate/(frequency as f64)).powf(-(frequency as f64)*time)
+                let frequency: f64 = frequency as f64;
+                (1.0 + self.rate / frequency).powf(-frequency * time)
             },
         }
     }
@@ -366,27 +389,12 @@ impl Compounding {
     /// 
     /// # Input
     /// - `new_compounding_type`: Compounding type to convert to
-    /// - `new_compounding_frequency`: New compounding frequency
     pub fn compounding_transformation(&mut self, new_compounding_type: CompoundingType) -> () {
-        match new_compounding_type {
-            CompoundingType::Continuous => {
-                match self.compounding_type {
-                    CompoundingType::Continuous => (),
-                    CompoundingType::Periodic { .. } => {
-                        self.ptc_compounding_transformation()
-                    },
-                }
-            },
-            CompoundingType::Periodic { frequency } => {
-                match self.compounding_type {
-                    CompoundingType::Continuous => {
-                        self.ctp_compounding_transformation(frequency)
-                    },
-                    CompoundingType::Periodic { .. } => {
-                        self.ptp_compounding_transformation(frequency)
-                    },
-                }
-            },
+        match (self.compounding_type, new_compounding_type) {
+            (CompoundingType::Periodic { .. }, CompoundingType::Continuous) => self.ptc_compounding_transformation(),
+            (CompoundingType::Periodic { .. }, CompoundingType::Periodic { frequency }) => self.ptp_compounding_transformation(frequency),
+            (CompoundingType::Continuous, CompoundingType::Periodic { frequency }) => self.ctp_compounding_transformation(frequency),
+            _ => (),
         }
     }
 }
@@ -423,7 +431,7 @@ pub fn forward_rate(compounding_1: &Compounding, time_1: f64, compounding_2: &Co
         },
         _ => Err(DigiFiError::ValidationError {
             title: error_title,
-            details: "Compounding types for `compounding_1` and `compounding_2` must be the same.".to_owned(),
+            details: "Compounding types for `compounding_1` and `compounding_2` must have the same `CompoundingType`.".to_owned(),
         }),
     }
 }
@@ -440,11 +448,11 @@ pub fn forward_rate(compounding_1: &Compounding, time_1: f64, compounding_2: &Co
 /// use digifi::utilities::{TEST_ACCURACY, ParameterType, Time, Cashflow};
 ///
 /// let cashflow_: ParameterType = ParameterType::Value { value: 10.0 }; 
-/// let time: Time = Time::Range { initial_time: 0.0, final_time: 2.0, time_step: 1.0 };
+/// let time: Time = Time::new_from_range(0.0, 2.0, 1.0);
 ///
 /// let cashflow: Cashflow = Cashflow::build(cashflow_, time, 0.02, 0.015).unwrap();
 ///
-/// assert!((cashflow.time_array() - Array1::from_vec(vec![0.0, 1.0, 2.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+/// assert!((cashflow.time().time_array() - Array1::from_vec(vec![0.0, 1.0, 2.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
 /// assert!((cashflow.cashflow() - Array1::from_vec(vec![10.0, 10.0*1.02/1.015, 10.0*(1.02/1.015_f64).powf(2.0)])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
 /// ```
 pub struct Cashflow {
@@ -470,32 +478,38 @@ impl Cashflow {
     pub fn build(cashflow: ParameterType, time: Time, cashflow_growth_rate: f64, inflation_rate: f64) -> Result<Self, DigiFiError> {
         if inflation_rate == -1.0 {
             return Err(DigiFiError::ParameterConstraint {
-                title: "Cashflow".to_owned(),
+                title: Self::error_title(),
                 constraint: "The argument `inflation_rate` must not be equal to `-1.0`.".to_owned(),
             });
         }
-        let time_array: Array1<f64> = time.get_time_array();
         match cashflow {
             // Generate cashflow array
             ParameterType::Value { value } => {
-                let array_size: usize = time_array.len();
-                let mut cashflow_array: Array1<f64> = Array1::from_vec(vec![value; array_size]);
-                if (cashflow_growth_rate != 0.0) || (inflation_rate != 0.0) {
-                    for i in 1..array_size {
-                        cashflow_array[i] = (1.0 + cashflow_growth_rate)*cashflow_array[i-1]/(1.0 + inflation_rate);
-                    }
-                }
-                Ok(Cashflow { cashflow: cashflow_array, time })
+                let array_size: usize = time.len();
+                let cashflow: Vec<f64> = if (cashflow_growth_rate != 0.0) || (inflation_rate != 0.0) {
+                    (0..array_size).into_iter()
+                        .fold((Vec::with_capacity(array_size), value), |(mut cash, prev), _| {
+                            cash.push(prev);
+                            (cash, (1.0 + cashflow_growth_rate) * prev / (1.0 + inflation_rate))
+                        } ).0
+                } else {
+                    vec![value; array_size]
+                };
+                Ok(Cashflow { cashflow: Array1::from_vec(cashflow), time })
             },
             // Cashflow array is provided
             ParameterType::TimeSeries { values } => {
-                compare_array_len(&values, &time_array, "cashflow", "time_array")?;
+                compare_len(&values.iter(), &time.time_array().iter(), "cashflow", "time_array")?;
                 Ok(Cashflow { cashflow: values, time })
             },
         }
     }
 
-    pub fn cashflow(&self) -> &Array1<f64> {
+    pub fn len(&self) -> usize {
+        self.cashflow.len()
+    }
+
+    pub fn cashflow(&self)-> &Array1<f64> {
         &self.cashflow
     }
 
@@ -503,13 +517,19 @@ impl Cashflow {
         &self.time
     }
 
-    pub fn time_array(&self) -> Array1<f64> {
-        self.time.get_time_array()
+    pub fn time_array(&self) -> &Array1<f64> {
+        &self.time.time_array()
+    }
+}
+
+impl ErrorTitle for Cashflow {
+    fn error_title() -> String {
+        String::from("Cashflow")
     }
 }
 
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// A series of fixed income cashflows paid out each time step forever.
 /// 
@@ -530,11 +550,11 @@ impl Cashflow {
 /// ```
 pub struct Perpetuity {
     /// Constant cashflow of the perpetuity (Initial cashflow for a perpetuity with non-zero growth rate)
-    perpetuity_cashflow: f64,
-    /// Constant cashflow of the perpetuity (Initial cashflow for a perpetuity with non-zero growth rate)
+    cashflow: f64,
+    /// Discount rate
     rate: f64,
-    /// Growth rate of the cashflow at eadch time step
-    perpetuity_growth_rate: f64,
+    /// Growth rate of the cashflow at each time step
+    growth_rate: f64,
     /// Compounding type used to discount cashflows
     compounding_type: CompoundingType,
 }
@@ -543,21 +563,21 @@ impl Perpetuity {
     /// Creates a new `Perpetuity` instance.
     /// 
     /// # Input
-    /// - `perpetuity_cashflow`: Constant cashflow of the perpetuity (Initial cashflow for a perpetuity with non-zero growth rate)
-    /// - `rate`: Constant cashflow of the perpetuity (Initial cashflow for a perpetuity with non-zero growth rate)
-    /// - `perpetuity_growth_rate`: Growth rate of the cashflow at eadch time step
+    /// - `cashflow`: Constant cashflow of the perpetuity (Initial cashflow for a perpetuity with non-zero growth rate)
+    /// - `rate`: Discount rate
+    /// - `growth_rate`: Growth rate of the cashflow at each time step
     /// - `compounding_type`: Compounding type used to discount cashflows
     /// 
     /// # Errors
     /// - Returns an error if the discount rate is smaller or equal to the perpetuity growth rate.
-    pub fn build(perpetuity_cashflow: f64, rate: f64, perpetuity_growth_rate: f64, compounding_type: CompoundingType) -> Result<Self, DigiFiError> {
-        if rate <= perpetuity_growth_rate {
+    pub fn build(cashflow: f64, rate: f64, growth_rate: f64, compounding_type: CompoundingType) -> Result<Self, DigiFiError> {
+        if rate <= growth_rate {
             return Err(DigiFiError::ParameterConstraint {
-                title: "Perpetuity".to_owned(),
+                title: Self::error_title(),
                 constraint: "The `rate` cannot be smaller or equal to the `perpetuity_growth_rate`.".to_owned(),
             });
         }
-        Ok(Perpetuity { perpetuity_cashflow, rate, perpetuity_growth_rate, compounding_type })
+        Ok(Perpetuity { cashflow, rate, growth_rate, compounding_type })
     }
 
     /// Present value of the perpetuity.
@@ -567,12 +587,8 @@ impl Perpetuity {
     /// - Present value of the perpetuity
     pub fn present_value(&self) -> f64 {
         match self.compounding_type {
-            CompoundingType::Continuous => {
-                self.perpetuity_cashflow * self.perpetuity_growth_rate.exp() / ((self.rate - self.perpetuity_growth_rate).exp() - 1.0)
-            },
-            CompoundingType::Periodic { .. } => {
-                self.perpetuity_cashflow / (self.rate - self.perpetuity_growth_rate)
-            },
+            CompoundingType::Continuous => self.cashflow * self.growth_rate.exp() / ((self.rate - self.growth_rate).exp() - 1.0),
+            CompoundingType::Periodic { .. } => self.cashflow / (self.rate - self.growth_rate),
         }
     }
 
@@ -595,18 +611,20 @@ impl Perpetuity {
     /// - Future value of the perpetuity
     pub fn future_value(&self, final_time: f64) -> f64 {
         match self.compounding_type {
-            CompoundingType::Continuous => {
-                self.present_value() * (self.rate*final_time).exp()
-            },
-            CompoundingType::Periodic { .. } => {
-                self.present_value() * (1.0 + self.rate).powf(final_time)
-            },
+            CompoundingType::Continuous => self.present_value() * (self.rate * final_time).exp(),
+            CompoundingType::Periodic { .. } => self.present_value() * (1.0 + self.rate).powf(final_time),
         }
     }
 }
 
+impl ErrorTitle for Perpetuity {
+    fn error_title() -> String {
+        String::from("Perpetuity")
+    }
+}
 
-#[derive(Clone, Debug)]
+
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// A series of fixed income cashflows paid out for a specified number of time periods periods.
 /// 
@@ -627,13 +645,13 @@ impl Perpetuity {
 /// ```
 pub struct Annuity {
     /// Constant cashflow of the annuity (Initial cashflow for an annuity with non-zero growth rate)
-    annuity_cashflow: f64,
+    cashflow: f64,
     /// Discount rate
     rate: f64,
     /// Final time for annuity cashflows
-    final_time_step: f64,
+    t_f: f64,
     /// Growth rate of the cashflow at eadch time step
-    annuity_growth_rate: f64,
+    growth_rate: f64,
     /// Compounding type used to discount cashflows
     compounding_type: CompoundingType,
 }
@@ -642,21 +660,22 @@ impl Annuity {
     /// Creates a new `Annuity` instance.
     /// 
     /// # Input
-    /// - `annuity_cashflow`: Constant cashflow of the annuity (Initial cashflow for an annuity with non-zero growth rate)
+    /// - `cashflow`: Constant cashflow of the annuity (Initial cashflow for an annuity with non-zero growth rate)
     /// - `rate`: Discount rate
-    /// - `annuity_growth_rate`: Growth rate of the cashflow at eadch time step
+    /// - `t_f`: Final time for annuity cashflows
+    /// - `growth_rate`: Growth rate of the cashflow at eadch time step
     /// - `compounding_type`: Compounding type used to discount cashflows
     /// 
     /// # Errors
     /// - Returns an error if the discount rate is smaller or equal to the perpetuity growth rate.
-    pub fn build(annuity_cashflow: f64, rate: f64, final_time_step: f64, annuity_growth_rate: f64, compounding_type: CompoundingType) -> Result<Self, DigiFiError> {
-        if rate <= annuity_growth_rate {
+    pub fn build(cashflow: f64, rate: f64, t_f: f64, growth_rate: f64, compounding_type: CompoundingType) -> Result<Self, DigiFiError> {
+        if rate <= growth_rate {
             return Err(DigiFiError::ParameterConstraint {
-                title: "Annuity".to_owned(),
-                constraint: "The `rate` cannot be smaller or equal to the `annuity_growth_rate`.".to_owned(),
+                title: Self::error_title(),
+                constraint: "The `rate` must be larger the `annuity_growth_rate`.".to_owned(),
             });
         }
-        Ok(Annuity { annuity_cashflow, rate, final_time_step, annuity_growth_rate, compounding_type })
+        Ok(Annuity { cashflow, rate, t_f, growth_rate, compounding_type })
     }
     
     /// Present value of the annuity.
@@ -666,10 +685,10 @@ impl Annuity {
     pub fn present_value(&self) -> f64 {
         match self.compounding_type {
             CompoundingType::Continuous => {
-                self.annuity_cashflow * (-self.annuity_growth_rate).exp() / ((self.rate-self.annuity_growth_rate).exp() - 1.0) * (1.0 - ((self.annuity_growth_rate-self.rate)*self.final_time_step).exp())
+                self.cashflow * (-self.growth_rate).exp() / ((self.rate-self.growth_rate).exp() - 1.0) * (1.0 - ((self.growth_rate - self.rate) * self.t_f).exp())
             },
             CompoundingType::Periodic { .. } => {
-                self.annuity_cashflow / (self.rate-self.annuity_growth_rate) * (1.0 - ((1.0+self.annuity_growth_rate)/(1.0+self.rate)).powf(self.final_time_step))
+                self.cashflow / (self.rate-self.growth_rate) * (1.0 - ((1.0 + self.growth_rate) / (1.0 + self.rate)).powf(self.t_f))
             },
         }
     }
@@ -691,13 +710,15 @@ impl Annuity {
     /// - Future value of the annuity
     pub fn future_value(&self) -> f64 {
         match self.compounding_type {
-            CompoundingType::Continuous => {
-                self.present_value() * (self.rate * self.final_time_step).exp()
-            },
-            CompoundingType::Periodic { .. } => {
-                self.present_value() * (1.0 + self.rate).powf(self.final_time_step)
-            },
+            CompoundingType::Continuous => self.present_value() * (self.rate * self.t_f).exp(),
+            CompoundingType::Periodic { .. } => self.present_value() * (1.0 + self.rate).powf(self.t_f),
         }
+    }
+}
+
+impl ErrorTitle for Annuity {
+    fn error_title() -> String {
+        String::from("Annuity")
     }
 }
 
@@ -711,16 +732,16 @@ mod tests {
     #[test]
     fn unit_test_present_value() -> () {
         use crate::utilities::time_value_utils::present_value;
-        let cashflow: Array1<f64> = Array1::from_vec(vec![10.0, 10.0, 10.0]);
-        let time: Time = Time::Sequence { times: Array1::from_vec(vec![1.0, 2.0, 3.0]) };
+        let cashflow: Vec<f64> = vec![10.0, 10.0, 10.0];
+        let time: Time = Time::new(Array1::from_vec(vec![1.0, 2.0, 3.0]));
         let rate: ParameterType = ParameterType::Value { value: 0.02 };
         // Periodic compounding
         let periodic_compounding: CompoundingType = CompoundingType::Periodic { frequency: 1 };
-        let pv_periodic: f64 = present_value(&cashflow, &time, rate.clone(), &periodic_compounding).unwrap();
+        let pv_periodic: f64 = present_value(cashflow.iter(), &time, rate.clone(), &periodic_compounding).unwrap();
         assert!((pv_periodic - 10.0*(1.0/1.02 + 1.0/1.02_f64.powf(2.0) + 1.0/1.02_f64.powf(3.0))).abs() < TEST_ACCURACY);
         // Continuous compounding
         let continuous_compounding: CompoundingType = CompoundingType::Continuous;
-        let pv_continuous: f64 = present_value(&cashflow, &time, rate, &continuous_compounding).unwrap();
+        let pv_continuous: f64 = present_value(cashflow.iter(), &time, rate, &continuous_compounding).unwrap();
         assert!((pv_continuous - 10.0*((-0.02_f64).exp() + (-0.02*2.0_f64).exp() + (-0.02*3.0_f64).exp())).abs() < TEST_ACCURACY);
     }
 
@@ -740,10 +761,10 @@ mod tests {
     #[test]
     fn unit_test_internal_rate_of_return() -> () {
         use crate::utilities::time_value_utils::internal_rate_of_return;
-        let cashflow: Array1<f64> = Array1::from_vec(vec![200.0, 200.0, 900.0]);
-        let time: Time = Time::Sequence { times: Array1::from_vec(vec![1.0, 2.0, 3.0]) };
+        let cashflow: Vec<f64> = vec![200.0, 200.0, 900.0];
+        let time: Time = Time::new(Array1::from_vec(vec![1.0, 2.0, 3.0]));
         let compounding_type: CompoundingType = CompoundingType::Continuous;
-        let rate: f64 = internal_rate_of_return(1000.0, &cashflow, &time, &compounding_type).unwrap();
+        let rate: f64 = internal_rate_of_return(1000.0, cashflow.iter(), &time, &compounding_type).unwrap();
         assert!((rate - 0.10459277343750006).abs() < 1_000.0 * TEST_ACCURACY);
     }
 
@@ -763,7 +784,7 @@ mod tests {
     fn unit_test_cashflow_struct() -> () {
         use crate::utilities::time_value_utils::Cashflow;
         let cashflow_: ParameterType = ParameterType::Value { value: 10.0 }; 
-        let time: Time = Time::Range { initial_time: 0.0, final_time: 2.0, time_step: 1.0 };
+        let time: Time = Time::new_from_range(0.0, 2.0, 1.0);
         let cashflow: Cashflow = Cashflow::build(cashflow_, time, 0.02, 0.015).unwrap();
         assert!((cashflow.time_array() - Array1::from_vec(vec![0.0, 1.0, 2.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
         assert!((cashflow.cashflow() - Array1::from_vec(vec![10.0, 10.0*1.02/1.015, 10.0*(1.02/1.015_f64).powf(2.0)])).map(|v| v.abs() ).sum() < TEST_ACCURACY);

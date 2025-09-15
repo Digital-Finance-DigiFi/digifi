@@ -26,12 +26,12 @@ use ndarray::Array1;
 use serde::{Serialize, Deserialize};
 #[cfg(feature = "plotly")]
 use plotly::{Plot, Scatter, Layout, layout::Axis};
-use crate::error::DigiFiError;
+use crate::error::{DigiFiError, ErrorTitle};
 use crate::portfolio_applications::AssetHistData;
 use crate::stochastic_processes::StochasticProcess;
 
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum FinancialInstrumentType {
     /// Value of the instrument is determined by the markets (e.g., stocks, bonds, deposits, loans, checks)
     CashInstrument,
@@ -40,7 +40,7 @@ pub enum FinancialInstrumentType {
 }
 
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum AssetClass {
     /// Loans, certificates of deposit, bank deposits, futures, forwards, options, bonds, mortgage-backed securities
     DebtBasedInstrument,
@@ -51,7 +51,7 @@ pub enum AssetClass {
 }
 
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 /// Struct with general financial instrument data.
 pub struct FinancialInstrumentId {
     /// Type of the financial instrument (i.e., cash instrument or derivative instrument)
@@ -73,22 +73,8 @@ pub trait FinancialInstrument {
     /// Computes the future value of the financial instrument.
     fn future_value(&self) -> Result<f64, DigiFiError>;
 
-    /// Returns an array of asset prices.
-    ///
-    /// # Input
-    /// - `end_index`: Time index beyond which no data will be returned
-    /// - `start_index`: Time index below which no data will be returned
-    fn get_prices(&self, end_index: usize, start_index: Option<usize>) -> Result<Array1<f64>, DigiFiError>;
-
-    /// Returns an array of predictable incomes for an asset (i.e., dividends, coupons, etc.).
-    ///
-    /// # Input
-    /// - `end_index`: Time index beyond which no data will be returned
-    /// - `start_index`: Time index below which no data will be returned
-    fn get_predictable_income(&self, end_index: usize, start_index: Option<usize>) -> Result<Array1<f64>, DigiFiError>;
-
-    /// Returns an array of time steps at which the asset price and predictable_income are recorded.
-    fn get_time_array(&self) -> Array1<f64>;
+    /// Returns asset's historical data.
+    fn historical_data(&self) -> &AssetHistData;
 
     /// Updates historical data of the asset with the newly generated data.
     fn update_historical_data(&mut self, new_data: &AssetHistData) -> ();
@@ -124,9 +110,9 @@ pub trait FinancialInstrument {
         match self.stochastic_model() {
             Some(sm) => {
                 let prices: Array1<f64> = sm.get_paths()?.remove(0);
-                let time_array: Array1<f64> = self.get_time_array();
+                let length: usize = prices.len();
                 let new_data: AssetHistData = AssetHistData::build(
-                    prices, Array1::from_vec(vec![0.0; time_array.len()]), time_array
+                    prices, Array1::from_vec(vec![0.0; length]), self.historical_data().time.clone(),
                 )?;
                 if in_place {
                     self.update_historical_data(&new_data);
@@ -155,7 +141,12 @@ where
 
 pub trait Payoff: PayoffClone {
     /// Payoff function.
-    fn payoff(&self, s: &Array1<f64>) -> Array1<f64>;
+    fn payoff(&self, s: f64) -> f64;
+
+    /// Payoff function applied to the array of values.
+    fn payoff_iter(&self, s: &Array1<f64>) -> Array1<f64> {
+        s.map(|s| self.payoff(*s) )
+    }
 
     /// Validation of payoff object to satisfy the computational requirements.
     /// 
@@ -163,12 +154,9 @@ pub trait Payoff: PayoffClone {
     /// - `length_value`: Number of test data points to validate payoff method on
     fn validate_payoff(&self, val_length: usize) -> Result<(), DigiFiError> {
         let s: Array1<f64> = Array1::from_vec(vec![1.0; val_length]);
-        let result: Array1<f64> = self.payoff(&s);
+        let result: Array1<f64> = self.payoff_iter(&s);
         if result.len() != val_length {
-            return Err(DigiFiError::ValidationError {
-                title: "Validate Payoff".to_owned(),
-                details: format!("The payoff does not produce an array of length {}.", val_length),
-            });
+            return Err(DigiFiError::CustomFunctionLengthVal { title: "Validate Payoff".to_owned(), });
         }
         Ok(())
     }
@@ -176,7 +164,12 @@ pub trait Payoff: PayoffClone {
     /// Profit function.
     /// 
     /// Profit = Payoff - Cost
-    fn profit(&self, s: &Array1<f64>) -> Array1<f64>;
+    fn profit(&self, s: f64) -> f64;
+
+    /// Profit function applied to the array of values.
+    fn profit_iter(&self, s: &Array1<f64>) -> Array1<f64> {
+        s.map(|s| self.profit(*s) )
+    }
 
     /// Updates the cost/premium of the instrument.
     ///
@@ -186,7 +179,7 @@ pub trait Payoff: PayoffClone {
 }
 
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Long call payoff and profit.
 pub struct LongCall {
@@ -219,10 +212,10 @@ impl Payoff for LongCall {
     ///
     /// let long_call: LongCall = LongCall { k: 10.0, cost: 1.0 };
     ///
-    /// assert!((long_call.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, 3.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+    /// assert!((long_call.payoff_iter(&s) - Array1::from_vec(vec![0.0, 0.0, 3.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     /// ```
-    fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
-        (s - self.k).map(| p | p.max(0.0))
+    fn payoff(&self, s: f64) -> f64 {
+        (s - self.k).max(0.0)
     }
 
     /// Long call option profit.
@@ -235,7 +228,7 @@ impl Payoff for LongCall {
     /// 
     /// # LaTeX Formula
     /// - \\textit{Long Call Profit} = max(S_{t}-K, 0) - \\textit{Cost}
-    fn profit(&self, s: &Array1<f64>) -> Array1<f64> {
+    fn profit(&self, s: f64) -> f64 {
         self.payoff(s) - self.cost
     }
 
@@ -245,7 +238,7 @@ impl Payoff for LongCall {
 }
 
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Short call payoff and profit.
 pub struct ShortCall {
@@ -278,10 +271,10 @@ impl Payoff for ShortCall {
     ///
     /// let short_call: ShortCall = ShortCall { k: 10.0, cost: 1.0 };
     ///
-    /// assert!((short_call.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, -3.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+    /// assert!((short_call.payoff_iter(&s) - Array1::from_vec(vec![0.0, 0.0, -3.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     /// ```
-    fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
-        (self.k - s).map(| p | p.min(0.0))
+    fn payoff(&self, s: f64) -> f64 {
+        (self.k - s).min(0.0)
     }
 
     /// Short call option profit.
@@ -294,7 +287,7 @@ impl Payoff for ShortCall {
     /// 
     /// # LaTeX Formula
     /// - \\textit{Short Call Profit} = min(K-S_{t}, 0) + \\textit{Cost}
-    fn profit(&self, s: &Array1<f64>) -> Array1<f64> {
+    fn profit(&self, s: f64) -> f64 {
         self.payoff(s) + self.cost
     }
 
@@ -304,7 +297,7 @@ impl Payoff for ShortCall {
 }
 
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Long put payoff and profit.
 pub struct LongPut {
@@ -337,10 +330,10 @@ impl Payoff for LongPut {
     ///
     /// let long_put: LongPut = LongPut { k: 10.0, cost: 1.0 };
     ///
-    /// assert!((long_put.payoff(&s) - Array1::from_vec(vec![0.0, 1.0, 0.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+    /// assert!((long_put.payoff_iter(&s) - Array1::from_vec(vec![0.0, 1.0, 0.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     /// ```
-    fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
-        (self.k - s).map(| p | p.max(0.0))
+    fn payoff(&self, s: f64) -> f64 {
+        (self.k - s).max(0.0)
     }
 
     /// Long put option profit.
@@ -353,7 +346,7 @@ impl Payoff for LongPut {
     /// 
     /// # LaTeX Formula
     /// - \\textit{Long Put Profit} = max(K-S_{t}, 0) - \\textit{Cost}
-    fn profit(&self, s: &Array1<f64>) -> Array1<f64> {
+    fn profit(&self, s: f64) -> f64 {
         self.payoff(s) - self.cost
     }
 
@@ -363,7 +356,7 @@ impl Payoff for LongPut {
 }
 
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Short put payoff and profit.
 pub struct ShortPut {
@@ -396,10 +389,10 @@ impl Payoff for ShortPut {
     ///
     /// let short_put: ShortPut = ShortPut { k: 10.0, cost: 1.0 };
     ///
-    /// assert!((short_put.payoff(&s) - Array1::from_vec(vec![0.0, -1.0, 0.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+    /// assert!((short_put.payoff_iter(&s) - Array1::from_vec(vec![0.0, -1.0, 0.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     /// ```
-    fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
-        (s - self.k).map(| p | p.min(0.0))
+    fn payoff(&self, s: f64) -> f64 {
+        (s - self.k).min(0.0)
     }
 
     /// Short put option profit.
@@ -412,7 +405,7 @@ impl Payoff for ShortPut {
     /// 
     /// # LaTeX Formula
     /// - \\textit{Short Put Profit} = min(S_{t}-K, 0) + \\textit{Cost}
-    fn profit(&self, s: &Array1<f64>) -> Array1<f64> {
+    fn profit(&self, s: f64) -> f64 {
         self.payoff(s) + self.cost
     }
 
@@ -422,7 +415,7 @@ impl Payoff for ShortPut {
 }
 
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Bull collar strategy payoff and profit.
 /// 
@@ -452,11 +445,17 @@ impl BullCollar {
     pub fn build(k_p: f64, k_c: f64, cost: f64, cost_s: f64) -> Result<Self, DigiFiError> {
         if k_c < k_p {
             return Err(DigiFiError::ParameterConstraint {
-                title: "Bull Collar".to_owned(),
+                title: Self::error_title(),
                 constraint: "The argument `k_p` must be smaller or equal to `k_c`.".to_owned(),
             });
         }
         Ok(BullCollar { k_p, k_c, cost, cost_s })
+    }
+}
+
+impl ErrorTitle for BullCollar {
+    fn error_title() -> String {
+        String::from("Bull Collar")
     }
 }
 
@@ -483,10 +482,10 @@ impl Payoff for BullCollar {
     ///
     /// let bull_collar: BullCollar = BullCollar::build(4.0, 6.0, 0.0, 5.0).unwrap();
     ///
-    /// assert!((bull_collar.payoff(&s) - Array1::from_vec(vec![-1.0, -1.0, -1.0, -0.5, 0.0, 0.5, 1.0, 1.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+    /// assert!((bull_collar.payoff_iter(&s) - Array1::from_vec(vec![-1.0, -1.0, -1.0, -0.5, 0.0, 0.5, 1.0, 1.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     /// ```
-    fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
-        s - self.cost_s + (self.k_p - s).map(| p | p.max(0.0)) + (self.k_c - s).map(| p | p.min(0.0))
+    fn payoff(&self, s: f64) -> f64 {
+        s - self.cost_s + (self.k_p - s).max(0.0) + (self.k_c - s).min(0.0)
     }
 
     /// Bull collar strategy profit.
@@ -499,7 +498,7 @@ impl Payoff for BullCollar {
     /// 
     /// # LaTeX Formula
     /// - \\textit{Bull Collar Profit} = S_{t} - S_{0} + max(K_{p}-S_{t}, 0) + min(K_{c}-S_{t}, 0) - \\textit{Cost}
-    fn profit(&self, s: &Array1<f64>) -> Array1<f64> {
+    fn profit(&self, s: f64) -> f64 {
         self.payoff(s) - self.cost
     }
 
@@ -509,7 +508,7 @@ impl Payoff for BullCollar {
 }
 
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Bear collar strategy payoff and profit.
 /// 
@@ -539,11 +538,17 @@ impl BearCollar {
     pub fn build(k_p: f64, k_c: f64, cost: f64, cost_s: f64) -> Result<Self, DigiFiError> {
         if k_c < k_p {
             return Err(DigiFiError::ParameterConstraint {
-                title: "Bear Collar".to_owned(), 
+                title: Self::error_title(), 
                 constraint: "The argument `k_p` must be smaller or equal to `k_c`.".to_owned(),
             });
         }
         Ok(BearCollar { k_p, k_c, cost, cost_s })
+    }
+}
+
+impl ErrorTitle for BearCollar {
+    fn error_title() -> String {
+        String::from("Bear Collar")
     }
 }
 
@@ -570,10 +575,10 @@ impl Payoff for BearCollar {
     ///
     /// let bear_collar: BearCollar = BearCollar::build(4.0, 6.0, 0.0, 5.0).unwrap();
     ///
-    /// assert!((bear_collar.payoff(&s) - Array1::from_vec(vec![1.0, 1.0, 1.0, 0.5, 0.0, -0.5, -1.0, -1.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+    /// assert!((bear_collar.payoff_iter(&s) - Array1::from_vec(vec![1.0, 1.0, 1.0, 0.5, 0.0, -0.5, -1.0, -1.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     /// ```
-    fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
-        self.cost_s - s + (s - self.k_p).map(| p | p.min(0.0)) + (s - self.k_c).map(| p | p.max(0.0))
+    fn payoff(&self, s: f64) -> f64 {
+        self.cost_s - s + (s - self.k_p).min(0.0) + (s - self.k_c).max(0.0)
     }
 
     /// Bear collar strategy profit.
@@ -586,7 +591,7 @@ impl Payoff for BearCollar {
     /// 
     /// # LaTeX Formula
     /// - \\textit{Bear Collar Profit} = S_{0} - S_{t} + min(S_{t}-K_{p}, 0) + max(S_{t}-K_{c}, 0) - \\textit{Cost}
-    fn profit(&self, s: &Array1<f64>) -> Array1<f64> {
+    fn profit(&self, s: f64) -> f64 {
         self.payoff(s) - self.cost
     }
 
@@ -596,7 +601,7 @@ impl Payoff for BearCollar {
 }
 
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Bull spread option payoff and profit.
 /// 
@@ -623,11 +628,17 @@ impl BullSpread {
     pub fn build(k_l: f64, k_s: f64, cost: f64) -> Result<Self, DigiFiError> {
         if k_s < k_l {
             return Err(DigiFiError::ParameterConstraint {
-                title: "Bull Spread".to_owned(),
+                title: Self::error_title(),
                 constraint: "The argument `k_l` must be smaller or equal to `k_s`.".to_owned(),
             });
         }
         Ok(BullSpread { k_l, k_s, cost })
+    }
+}
+
+impl ErrorTitle for BullSpread {
+    fn error_title() -> String {
+        String::from("Bull Spread")
     }
 }
 
@@ -654,10 +665,10 @@ impl Payoff for BullSpread {
     ///
     /// let bull_spread: BullSpread = BullSpread::build(4.0, 6.0, 1.0).unwrap();
     ///
-    /// assert!((bull_spread.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, 1.0, 2.0, 2.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+    /// assert!((bull_spread.payoff_iter(&s) - Array1::from_vec(vec![0.0, 0.0, 1.0, 2.0, 2.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     /// ```
-    fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
-        (s - self.k_l).map(| p | p.max(0.0)) + (self.k_s - s).map(| p | p.min(0.0))
+    fn payoff(&self, s: f64) -> f64 {
+        (s - self.k_l).max(0.0) + (self.k_s - s).min(0.0)
     }
 
     /// Bull spread option profit.
@@ -670,7 +681,7 @@ impl Payoff for BullSpread {
     /// 
     /// # LaTeX Formula
     /// - \\textit{Bull Spread Profit} = max(S_{t}-K_{l}, 0) + min(K_{s}-S_{t}, 0) - \\textit{Cost}
-    fn profit(&self, s: &Array1<f64>) -> Array1<f64> {
+    fn profit(&self, s: f64) -> f64 {
         self.payoff(s) - self.cost
     }
 
@@ -680,7 +691,7 @@ impl Payoff for BullSpread {
 }
 
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Bear spread option payoff and profit.
 /// 
@@ -707,11 +718,17 @@ impl BearSpread {
     pub fn build(k_l: f64, k_s: f64, cost: f64) -> Result<Self, DigiFiError> {
         if k_l < k_s {
             return Err(DigiFiError::ParameterConstraint {
-                title: "Bear Spread".to_owned(),
+                title: Self::error_title(),
                 constraint: "The argument `k_s` must be smaller or equal to `k_l`.".to_owned(),
             });
         }
         Ok(BearSpread { k_l, k_s, cost })
+    }
+}
+
+impl ErrorTitle for BearSpread {
+    fn error_title() -> String {
+        String::from("Bear Spread")
     }
 }
 
@@ -738,10 +755,10 @@ impl Payoff for BearSpread {
     ///
     /// let bear_spread: BearSpread = BearSpread::build(6.0, 4.0, 1.0).unwrap();
     ///
-    /// assert!((bear_spread.payoff(&s) - Array1::from_vec(vec![2.0, 2.0, 1.0, 0.0, 0.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+    /// assert!((bear_spread.payoff_iter(&s) - Array1::from_vec(vec![2.0, 2.0, 1.0, 0.0, 0.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     /// ```
-    fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
-        (self.k_l - s).map(| p | p.max(0.0)) + (s - self.k_s).map(| p | p.min(0.0))
+    fn payoff(&self, s: f64) -> f64 {
+        (self.k_l - s).max(0.0) + (s - self.k_s).min(0.0)
     }
 
     /// Bear spread option profit.
@@ -754,7 +771,7 @@ impl Payoff for BearSpread {
     /// 
     /// # LaTeX Formula
     /// - \\textit{Bear Spread Profit} = max(K_{l}-S_{t}, 0) + min(S_{t}-K_{s}, 0) - \\textit{Cost}
-    fn profit(&self, s: &Array1<f64>) -> Array1<f64> {
+    fn profit(&self, s: f64) -> f64 {
         self.payoff(s) - self.cost
     }
 
@@ -764,7 +781,7 @@ impl Payoff for BearSpread {
 }
 
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Butterfly spread option payoff and profit.
 /// 
@@ -792,21 +809,26 @@ impl LongButterfly {
     /// # Errors
     /// - Returns an error if the long put strike price is smaller than the short put strike price.
     pub fn build(k1_c: f64, k2_c: f64, k_p: f64, cost: f64) -> Result<Self, DigiFiError> {
-        let error_title: String = String::from("Long Butterfly");
         // Check that k1_c <= k_p <= k2_c
         if k2_c < k_p {
             return Err(DigiFiError::ParameterConstraint {
-                title: error_title,
+                title: Self::error_title(),
                 constraint: "The argument `k_p` must be smaller or equal to `k1_c`.".to_owned(),
             });
         }
         if k_p < k1_c {
             return Err(DigiFiError::ParameterConstraint {
-                title: error_title,
+                title: Self::error_title(),
                 constraint: "The argument `k1_c` must be smaller or equal to `k_p`.".to_owned(),
             });
         }
         Ok(LongButterfly { k1_c, k2_c, k_p, cost })
+    }
+}
+
+impl ErrorTitle for LongButterfly {
+    fn error_title() -> String {
+        String::from("Long Butterfly")
     }
 }
 
@@ -833,10 +855,10 @@ impl Payoff for LongButterfly {
     ///
     /// let long_butterfly: LongButterfly = LongButterfly::build(4.0, 6.0, 5.0, 1.0).unwrap();
     ///
-    /// assert!((long_butterfly.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, 1.0, 0.0, 0.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+    /// assert!((long_butterfly.payoff_iter(&s) - Array1::from_vec(vec![0.0, 0.0, 1.0, 0.0, 0.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     /// ```
-    fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
-        (s - self.k1_c).map(| p | p.max(0.0)) + 2.0*(self.k_p - s).map(| p | p.min(0.0)) + (s - self.k2_c).map(| p | p.max(0.0))
+    fn payoff(&self, s: f64) -> f64 {
+        (s - self.k1_c).max(0.0) + 2.0*(self.k_p - s).min(0.0) + (s - self.k2_c).max(0.0)
     }
 
     /// Long butterfly option profit.
@@ -849,7 +871,7 @@ impl Payoff for LongButterfly {
     /// 
     /// # LaTeX Formula
     /// - \\textit{Butterfly Spread Payoff} = max(S_{t}-K1_{c}, 0) + 2min(K_{p}-S_{t}, 0) + max(S_{t}-K2_{c}, 0) - \\textit{Cost}
-    fn profit(&self, s: &Array1<f64>) -> Array1<f64> {
+    fn profit(&self, s: f64) -> f64 {
         self.payoff(s) - self.cost
     }
 
@@ -859,7 +881,7 @@ impl Payoff for LongButterfly {
 }
 
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Box spread option payoff and profit.
 /// 
@@ -886,11 +908,17 @@ impl BoxSpread {
     pub fn build(k_1: f64, k_2: f64, cost: f64) -> Result<Self, DigiFiError> {
         if k_2 < k_1 {
             return Err(DigiFiError::ParameterConstraint {
-                title: "Box Spread".to_owned(),
+                title: Self::error_title(),
                 constraint: "The argument `k_1` must be smaller or equal to `k_2`.".to_owned(),
             });
         }
         Ok(BoxSpread { k_1, k_2, cost })
+    }
+}
+
+impl ErrorTitle for BoxSpread {
+    fn error_title() -> String {
+        String::from("Box Spread")
     }
 }
 
@@ -917,10 +945,10 @@ impl Payoff for BoxSpread {
     ///
     /// let box_spread: BoxSpread = BoxSpread::build(4.0, 6.0, 1.0).unwrap();
     ///
-    /// assert!((box_spread.payoff(&s) - Array1::from_vec(vec![2.0, 2.0, 2.0, 2.0, 2.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+    /// assert!((box_spread.payoff_iter(&s) - Array1::from_vec(vec![2.0, 2.0, 2.0, 2.0, 2.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     /// ```
-    fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
-        (s - self.k_1).map(| p | p.max(0.0)) + (self.k_2 - s).map(| p | p.min(0.0)) + (self.k_2 - s).map(| p | p.max(0.0)) + (s - self.k_1).map(| p | p.min(0.0))
+    fn payoff(&self, s: f64) -> f64 {
+        (s - self.k_1).max(0.0) + (self.k_2 - s).min(0.0) + (self.k_2 - s).max(0.0) + (s - self.k_1).min(0.0)
     }
 
     /// Box spread option profit.
@@ -933,7 +961,7 @@ impl Payoff for BoxSpread {
     /// 
     /// # LaTeX Formula
     /// - \\textit{Box Spread Payoff} = max(S_{t}-K_{1}, 0) + min(K_{2}-S_{t}, 0) + max(K_{2}-S_{t}, 0) + min(S_{t}-K_{1}, 0) - \\textit{Cost}
-    fn profit(&self, s: &Array1<f64>) -> Array1<f64> {
+    fn profit(&self, s: f64) -> f64 {
         self.payoff(s) - self.cost
     }
 
@@ -943,7 +971,7 @@ impl Payoff for BoxSpread {
 }
 
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Straddle option payoff.
 /// 
@@ -978,10 +1006,10 @@ impl Payoff for Straddle {
     ///
     /// let straddle: Straddle = Straddle { k: 5.0, cost: 1.0 };
     ///
-    /// assert!((straddle.payoff(&s) - Array1::from_vec(vec![2.0, 1.0, 0.0, 1.0, 2.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+    /// assert!((straddle.payoff_iter(&s) - Array1::from_vec(vec![2.0, 1.0, 0.0, 1.0, 2.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     /// ```
-    fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
-        (s - self.k).map(| p | p.max(0.0)) + (self.k - s).map(| p | p.max(0.0))
+    fn payoff(&self, s: f64) -> f64 {
+        (s - self.k).max(0.0) + (self.k - s).max(0.0)
     }
 
     /// Straddle option profit.
@@ -994,7 +1022,7 @@ impl Payoff for Straddle {
     /// 
     /// # LaTeX Formula
     /// - \\textit{Straddle Profit} = max(S_{t}-K, 0) + max(K-S_{t}, 0) - \\textit{Cost}
-    fn profit(&self, s: &Array1<f64>) -> Array1<f64> {
+    fn profit(&self, s: f64) -> f64 {
         self.payoff(s) - self.cost
     }
 
@@ -1004,7 +1032,7 @@ impl Payoff for Straddle {
 }
 
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Strangle option payoff.
 /// 
@@ -1031,11 +1059,17 @@ impl Strangle {
     pub fn build(k_c: f64, k_p: f64, cost: f64) -> Result<Self, DigiFiError> {
         if k_c <= k_p {
             return Err(DigiFiError::ParameterConstraint {
-                title: "Strangle".to_owned(),
+                title: Self::error_title(),
                 constraint: "The argument `k_p` must be smaller than `k_c`.".to_owned(),
             });
         }
         Ok(Strangle { k_c, k_p, cost })
+    }
+}
+
+impl ErrorTitle for Strangle {
+    fn error_title() -> String {
+        String::from("Strangle")
     }
 }
 
@@ -1062,10 +1096,10 @@ impl Payoff for Strangle {
     ///
     /// let strangle: Strangle = Strangle::build(6.0, 4.0, 1.0).unwrap();
     ///
-    /// assert!((strangle.payoff(&s) - Array1::from_vec(vec![1.0, 0.0, 0.0, 0.0, 1.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+    /// assert!((strangle.payoff_iter(&s) - Array1::from_vec(vec![1.0, 0.0, 0.0, 0.0, 1.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     /// ```
-    fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
-        (s - self.k_c).map(| p | p.max(0.0)) + (self.k_p - s).map(| p | p.max(0.0))
+    fn payoff(&self, s: f64) -> f64 {
+        (s - self.k_c).max(0.0) + (self.k_p - s).max(0.0)
     }
 
     /// Strangle option profit.
@@ -1078,7 +1112,7 @@ impl Payoff for Strangle {
     /// 
     /// # LaTeX Formula
     /// - \\textit{Strangle Profit} = max(S_{t}-K_{c}, 0) + max(K_{p}-S_{t}, 0) - \\textit{Cost}
-    fn profit(&self, s: &Array1<f64>) -> Array1<f64> {
+    fn profit(&self, s: f64) -> f64 {
         self.payoff(s) - self.cost
     }
 
@@ -1088,7 +1122,7 @@ impl Payoff for Strangle {
 }
 
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Strip option payoff.
 /// 
@@ -1123,10 +1157,10 @@ impl Payoff for Strip {
     ///
     /// let strip: Strip = Strip { k: 5.0, cost: 1.0 };
     ///
-    /// assert!((strip.payoff(&s) - Array1::from_vec(vec![4.0, 2.0, 0.0, 1.0, 2.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+    /// assert!((strip.payoff_iter(&s) - Array1::from_vec(vec![4.0, 2.0, 0.0, 1.0, 2.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     /// ```
-    fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
-        (s - self.k).map(| p | p.max(0.0)) + 2.0*(self.k - s).map(| p | p.max(0.0))
+    fn payoff(&self, s: f64) -> f64 {
+        (s - self.k).max(0.0) + 2.0*(self.k - s).max(0.0)
     }
 
     /// Strip option profit.
@@ -1139,7 +1173,7 @@ impl Payoff for Strip {
     /// 
     /// # LaTeX Formula
     /// - \\textit{Strip Profit} = max(S_{t}-K, 0) + 2max(K-S_{t}, 0) - \\text{Cost}
-    fn profit(&self, s: &Array1<f64>) -> Array1<f64> {
+    fn profit(&self, s: f64) -> f64 {
         self.payoff(s) - self.cost
     }
 
@@ -1149,7 +1183,7 @@ impl Payoff for Strip {
 }
 
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Strap option payoff.
 /// 
@@ -1184,10 +1218,10 @@ impl Payoff for Strap {
     ///
     ///  let strap: Strap = Strap { k: 5.0, cost: 1.0 };
     ///
-    ///  assert!((strap.payoff(&s) - Array1::from_vec(vec![2.0, 1.0, 0.0, 2.0, 4.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+    ///  assert!((strap.payoff_iter(&s) - Array1::from_vec(vec![2.0, 1.0, 0.0, 2.0, 4.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     /// ```
-    fn payoff(&self, s: &Array1<f64>) -> Array1<f64> {
-        2.0*(s - self.k).map(| p | p.max(0.0)) + (self.k - s).map(| p | p.max(0.0))
+    fn payoff(&self, s: f64) -> f64 {
+        2.0*(s - self.k).max(0.0) + (self.k - s).max(0.0)
     }
 
     /// Strap option profit.
@@ -1200,7 +1234,7 @@ impl Payoff for Strap {
     /// 
     /// # LaTeX Formula
     /// - \\textit{Strap Profit} = 2max(S_{t}-K, 0) + max(K-S_{t}, 0) - \\text{Cost}
-    fn profit(&self, s: &Array1<f64>) -> Array1<f64> {
+    fn profit(&self, s: f64) -> f64 {
         self.payoff(s) - self.cost
     }
 
@@ -1239,7 +1273,7 @@ impl Payoff for Strap {
 /// ```
 pub fn plot_payoff(payoff_obj: &impl Payoff, start_price: f64, stop_price: f64, n_points: usize) -> Plot {
     let prices: Array1<f64> = Array1::linspace(start_price, stop_price, n_points);
-    let payoff: Array1<f64> = payoff_obj.payoff(&prices);
+    let payoff: Array1<f64> = payoff_obj.payoff_iter(&prices);
     let mut plot: Plot = Plot::new();
     plot.add_trace(Scatter::new(prices.to_vec(), payoff.to_vec()));
     let x_axis: Axis = Axis::new().title("Price at Maturity");
@@ -1279,7 +1313,7 @@ pub fn plot_payoff(payoff_obj: &impl Payoff, start_price: f64, stop_price: f64, 
 /// ```
 pub fn plot_profit(payoff_obj: &impl Payoff, start_price: f64, stop_price: f64, n_points: usize) -> Plot {
     let prices: Array1<f64> = Array1::linspace(start_price, stop_price, n_points);
-    let profit: Array1<f64> = payoff_obj.profit(&prices);
+    let profit: Array1<f64> = payoff_obj.profit_iter(&prices);
     let mut plot: Plot = Plot::new();
     plot.add_trace(Scatter::new(prices.to_vec(), profit.to_vec()));
     let x_axis: Axis = Axis::new().title("Price at Maturity");
@@ -1303,7 +1337,7 @@ mod tests {
         use crate::financial_instruments::LongCall;
         let s: Array1<f64> = array![10.0, 9.0, 13.0];
         let long_call: LongCall = LongCall { k: 10.0, cost: 1.0 };
-        assert!((long_call.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, 3.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+        assert!((long_call.payoff_iter(&s) - Array1::from_vec(vec![0.0, 0.0, 3.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
@@ -1311,7 +1345,7 @@ mod tests {
         use crate::financial_instruments::ShortCall;
         let s: Array1<f64> = array![10.0, 9.0, 13.0];
         let short_call: ShortCall = ShortCall { k: 10.0, cost: 1.0 };
-        assert!((short_call.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, -3.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+        assert!((short_call.payoff_iter(&s) - Array1::from_vec(vec![0.0, 0.0, -3.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
@@ -1319,7 +1353,7 @@ mod tests {
         use crate::financial_instruments::LongPut;
         let s: Array1<f64> = array![10.0, 9.0, 13.0];
         let long_put: LongPut = LongPut { k: 10.0, cost: 1.0 };
-        assert!((long_put.payoff(&s) - Array1::from_vec(vec![0.0, 1.0, 0.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+        assert!((long_put.payoff_iter(&s) - Array1::from_vec(vec![0.0, 1.0, 0.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
@@ -1327,7 +1361,7 @@ mod tests {
         use crate::financial_instruments::ShortPut;
         let s: Array1<f64> = array![10.0, 9.0, 13.0];
         let short_put: ShortPut = ShortPut { k: 10.0, cost: 1.0 };
-        assert!((short_put.payoff(&s) - Array1::from_vec(vec![0.0, -1.0, 0.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+        assert!((short_put.payoff_iter(&s) - Array1::from_vec(vec![0.0, -1.0, 0.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
@@ -1335,8 +1369,7 @@ mod tests {
         use crate::financial_instruments::BullCollar;
         let s: Array1<f64> = Array1::range(3.0, 7.0, 0.5);
         let bull_collar: BullCollar = BullCollar::build(4.0, 6.0, 0.0, 5.0).unwrap();
-        println!("{}", bull_collar.profit(&s));
-        assert!((bull_collar.payoff(&s) - Array1::from_vec(vec![-1.0, -1.0, -1.0, -0.5, 0.0, 0.5, 1.0, 1.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+        assert!((bull_collar.payoff_iter(&s) - Array1::from_vec(vec![-1.0, -1.0, -1.0, -0.5, 0.0, 0.5, 1.0, 1.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
@@ -1344,7 +1377,7 @@ mod tests {
         use crate::financial_instruments::BearCollar;
         let s: Array1<f64> = Array1::range(3.0, 7.0, 0.5);
         let bear_collar: BearCollar = BearCollar::build(4.0, 6.0, 0.0, 5.0).unwrap();
-        assert!((bear_collar.payoff(&s) - Array1::from_vec(vec![1.0, 1.0, 1.0, 0.5, 0.0, -0.5, -1.0, -1.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+        assert!((bear_collar.payoff_iter(&s) - Array1::from_vec(vec![1.0, 1.0, 1.0, 0.5, 0.0, -0.5, -1.0, -1.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
@@ -1352,7 +1385,7 @@ mod tests {
         use crate::financial_instruments::BullSpread;
         let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
         let bull_spread: BullSpread = BullSpread::build(4.0, 6.0, 1.0).unwrap();
-        assert!((bull_spread.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, 1.0, 2.0, 2.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+        assert!((bull_spread.payoff_iter(&s) - Array1::from_vec(vec![0.0, 0.0, 1.0, 2.0, 2.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
@@ -1360,7 +1393,7 @@ mod tests {
         use crate::financial_instruments::BearSpread;
         let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
         let bear_spread: BearSpread = BearSpread::build(6.0, 4.0, 1.0).unwrap();
-        assert!((bear_spread.payoff(&s) - Array1::from_vec(vec![2.0, 2.0, 1.0, 0.0, 0.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+        assert!((bear_spread.payoff_iter(&s) - Array1::from_vec(vec![2.0, 2.0, 1.0, 0.0, 0.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
@@ -1368,7 +1401,7 @@ mod tests {
         use crate::financial_instruments::LongButterfly;
         let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
         let long_butterfly: LongButterfly = LongButterfly::build(4.0, 6.0, 5.0, 1.0).unwrap();
-        assert!((long_butterfly.payoff(&s) - Array1::from_vec(vec![0.0, 0.0, 1.0, 0.0, 0.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+        assert!((long_butterfly.payoff_iter(&s) - Array1::from_vec(vec![0.0, 0.0, 1.0, 0.0, 0.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
@@ -1376,7 +1409,7 @@ mod tests {
         use crate::financial_instruments::BoxSpread;
         let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
         let box_spread: BoxSpread = BoxSpread::build(4.0, 6.0, 1.0).unwrap();
-        assert!((box_spread.payoff(&s) - Array1::from_vec(vec![2.0, 2.0, 2.0, 2.0, 2.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+        assert!((box_spread.payoff_iter(&s) - Array1::from_vec(vec![2.0, 2.0, 2.0, 2.0, 2.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
@@ -1384,7 +1417,7 @@ mod tests {
         use crate::financial_instruments::Straddle;
         let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
         let straddle: Straddle = Straddle { k: 5.0, cost: 1.0 };
-        assert!((straddle.payoff(&s) - Array1::from_vec(vec![2.0, 1.0, 0.0, 1.0, 2.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+        assert!((straddle.payoff_iter(&s) - Array1::from_vec(vec![2.0, 1.0, 0.0, 1.0, 2.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
@@ -1392,7 +1425,7 @@ mod tests {
         use crate::financial_instruments::Strangle;
         let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
         let strangle: Strangle = Strangle::build(6.0, 4.0, 1.0).unwrap();
-        assert!((strangle.payoff(&s) - Array1::from_vec(vec![1.0, 0.0, 0.0, 0.0, 1.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+        assert!((strangle.payoff_iter(&s) - Array1::from_vec(vec![1.0, 0.0, 0.0, 0.0, 1.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
@@ -1400,7 +1433,7 @@ mod tests {
         use crate::financial_instruments::Strip;
         let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
         let strip: Strip = Strip { k: 5.0, cost: 1.0 };
-        assert!((strip.payoff(&s) - Array1::from_vec(vec![4.0, 2.0, 0.0, 1.0, 2.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+        assert!((strip.payoff_iter(&s) - Array1::from_vec(vec![4.0, 2.0, 0.0, 1.0, 2.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
@@ -1408,7 +1441,7 @@ mod tests {
         use crate::financial_instruments::Strap;
         let s: Array1<f64> = Array1::from_vec(vec![3.0, 4.0, 5.0, 6.0, 7.0]);
         let strap: Strap = Strap { k: 5.0, cost: 1.0 };
-        assert!((strap.payoff(&s) - Array1::from_vec(vec![2.0, 1.0, 0.0, 2.0, 4.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+        assert!((strap.payoff_iter(&s) - Array1::from_vec(vec![2.0, 1.0, 0.0, 2.0, 4.0])).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[cfg(feature = "plotly")]

@@ -1,12 +1,12 @@
-use ndarray::Array1;
-use crate::error::DigiFiError;
+use ndarray::{Array1, Axis, concatenate};
+use crate::error::{DigiFiError, ErrorTitle};
 use crate::random_generators::{RandomGenerator, generate_seed, uniform_generators::FibonacciGenerator};
 use crate::random_generators::generator_algorithms::{accept_reject, inverse_transform, box_muller, marsaglia, ziggurat};
 use crate::statistics::continuous_distributions::{LaplaceDistribution, NormalDistribution};
 use crate::statistics::ProbabilityDistribution;
 
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 /// Pseudo-random number generator for standard normal distribution.
 /// 
 /// It samples the Laplace distribution to generate the standard normal distribution (i.e., exponential tilting).
@@ -23,21 +23,19 @@ use crate::statistics::ProbabilityDistribution;
 /// use digifi::statistics::covariance;
 /// use digifi::random_generators::{RandomGenerator, StandardNormalAcceptReject};
 ///
-/// let snar: StandardNormalAcceptReject = StandardNormalAcceptReject::new_shuffle(100_000).unwrap();
+/// let snar: StandardNormalAcceptReject = StandardNormalAcceptReject::new_shuffle(1_000_000).unwrap();
 /// let sample: Array1<f64> = snar.generate().unwrap();
 ///
-/// assert!((sample.mean().unwrap() - 0.0).abs() < 1_000_000.0 * TEST_ACCURACY);
-/// assert!((covariance(&sample, &sample, 0).unwrap() - 1.0).abs() < 30_000_000.0 * TEST_ACCURACY);
+/// assert!((sample.mean().unwrap() - 0.0).abs() < 100_000.0 * TEST_ACCURACY);
+/// assert!((covariance(&sample, &sample, 0).unwrap() - 1.0).abs() < 100_000.0 * TEST_ACCURACY);
 /// ```
 pub struct StandardNormalAcceptReject {
     /// The maximum size of the sample to generate
     max_sample_size: usize,
     /// Scale parameter for the Laplace distribution
     lap_b: f64,
-    /// Seed for the first random number generator
-    seed_1: u32,
-    /// Seed for the second random number generator
-    seed_2: u32,
+    /// Seed for the random number generator
+    seed: f64,
 }
 
 impl StandardNormalAcceptReject {
@@ -46,19 +44,24 @@ impl StandardNormalAcceptReject {
     /// # Input
     /// - `sample_size`: The maximum size of the sample to generate
     /// - `lap_b`: Scale parameter for the Laplace distribution
-    /// - `seed_1`: Seed for the first random number generator
-    /// - `seed_2`: Seed for the second random number generator
+    /// - `seed`: Seed for the random number generator
     /// 
     /// # Errors
     /// - Returns an error if the argument `lap_b` is not positive.
-    pub fn build(max_sample_size: usize, lap_b: f64, seed_1: u32, seed_2: u32) -> Result<Self, DigiFiError> {
+    pub fn build(max_sample_size: usize, lap_b: f64, seed: u32) -> Result<Self, DigiFiError> {
         if lap_b <= 0.0 {
             return Err(DigiFiError::ParameterConstraint {
-                title: "Accept-Reject Algorithm".to_owned(),
+                title: Self::error_title(),
                 constraint: "The argument `lap_b` must be positive.".to_owned(),
             });
         }
-        Ok(StandardNormalAcceptReject { max_sample_size, lap_b, seed_1, seed_2 })
+        Ok(StandardNormalAcceptReject { max_sample_size, lap_b, seed: seed as f64 })
+    }
+}
+
+impl ErrorTitle for StandardNormalAcceptReject {
+    fn error_title() -> String {
+        String::from("Accept-Reject Algorithm")
     }
 }
 
@@ -68,7 +71,7 @@ impl RandomGenerator<StandardNormalAcceptReject> for StandardNormalAcceptReject 
     /// # Input
     /// - `sample_size`: The maximum size of the sample to generate
     fn new_shuffle(sample_size: usize) -> Result<Self, DigiFiError> {
-        Ok(StandardNormalAcceptReject { max_sample_size: sample_size, lap_b: 1.0, seed_1: generate_seed()?, seed_2: generate_seed()? })
+        Ok(StandardNormalAcceptReject { max_sample_size: sample_size, lap_b: 1.0, seed: generate_seed()?, })
     }
 
     /// Array of pseudo-random generated numbers based on the Accept-Reject Method and the probability of the Laplace Distribution lap_p.
@@ -76,21 +79,22 @@ impl RandomGenerator<StandardNormalAcceptReject> for StandardNormalAcceptReject 
     /// # Output
     /// - An array of pseudo-random numbers following a standard normal distribution
     fn generate(&self) -> Result<Array1<f64>, DigiFiError> {
-        let u_1: Array1<f64> = FibonacciGenerator::new(self.seed_1, self.max_sample_size, 5, 17, 714_025, 1_366, 150_889).generate()?;
         let m: f64 = (2.0 * std::f64::consts::E / std::f64::consts::PI).sqrt();
-        let u_2: Array1<f64> = FibonacciGenerator::new(self.seed_2, self.max_sample_size, 5, 17, 714_025, 1_366, 150_889).generate()?;
-        // Laplace distribution sampling.
+        let mut u: Array1<f64> = FibonacciGenerator::build(self.seed as u32, self.max_sample_size + 1, 5, 17, 714_025, 1_366, 150_889)?.generate()?;
+        // Laplace distribution sampling
         let laplace_dist: LaplaceDistribution = LaplaceDistribution::build(0.0, self.lap_b)?;
-        let l: Array1<f64> = laplace_dist.inverse_cdf(&u_1)?
+        let mut l: Array1<f64> = laplace_dist.inverse_cdf_iter(u.iter())?
             .map(|i| { if i.is_infinite() && i.is_sign_positive() { 1.0 } else if i.is_infinite() && i.is_sign_negative() { 0.0 } else { *i } });
-        // Accept-Reject algorithm.
+        l.remove_index(Axis(0), 0);
+        u.remove_index(Axis(0), u.len() - 1);
+        // Accept-Reject algorithm
         let standard_normal_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
-        accept_reject(&standard_normal_dist, &laplace_dist, &l, m, &u_2)
+        accept_reject(&standard_normal_dist, &laplace_dist, &l, m, &u)
     }
 }
 
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 /// Pseudo-random number generator for standard normal distribution.
 /// 
 /// It returns the array of values from sampling an inverse CDF.
@@ -148,7 +152,7 @@ impl RandomGenerator<StandardNormalInverseTransform> for StandardNormalInverseTr
 }
 
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 /// Pseudo-random number generator for standard normal distribution.
 /// 
 /// It returns two independent pseudo-random arrays.
@@ -170,19 +174,17 @@ impl RandomGenerator<StandardNormalInverseTransform> for StandardNormalInverseTr
 /// use digifi::statistics::covariance;
 /// use digifi::random_generators::{RandomGenerator, StandardNormalBoxMuller};
 ///
-/// let snbm: StandardNormalBoxMuller = StandardNormalBoxMuller::new_shuffle(100_000).unwrap();
+/// let snbm: StandardNormalBoxMuller = StandardNormalBoxMuller::new_shuffle(1_000_000).unwrap();
 /// let sample: Array1<f64> = snbm.generate().unwrap();
 ///
-/// assert!((sample.mean().unwrap() - 0.0).abs() < 30_000_000.0 * TEST_ACCURACY);
-/// assert!((covariance(&sample, &sample, 0).unwrap() - 1.0).abs() < 30_000_000.0 * TEST_ACCURACY);
+/// assert!((sample.mean().unwrap() - 0.0).abs() < 1_000_000.0 * TEST_ACCURACY);
+/// assert!((covariance(&sample, &sample, 0).unwrap() - 1.0).abs() < 1_000_000.0 * TEST_ACCURACY);
 /// ```
 pub struct StandardNormalBoxMuller {
     /// Number of random samples to generate
     sample_size: usize,
-    /// Seed for the first uniform random number generator
-    seed_1: u32,
-    /// Seed for the second uniform random number generator
-    seed_2: u32,
+    /// Seed for the uniform random number generator
+    seed: f64,
 }
 
 impl StandardNormalBoxMuller {
@@ -190,10 +192,9 @@ impl StandardNormalBoxMuller {
     /// 
     /// # Input
     /// - `sample_size`: Number of random samples to generate
-    /// - `seed_1`: Seed for the first uniform random number generator
-    /// - `seed_2`: Seed for the second uniform random number generator
-    pub fn new(sample_size: usize, seed_1: u32, seed_2: u32) -> Self {
-        StandardNormalBoxMuller { sample_size, seed_1, seed_2 }
+    /// - `seed`: Seed for the uniform random number generator
+    pub fn new(sample_size: usize, seed: u32) -> Self {
+        StandardNormalBoxMuller { sample_size, seed: seed as f64 }
     }
 }
 
@@ -203,7 +204,7 @@ impl RandomGenerator<StandardNormalBoxMuller> for StandardNormalBoxMuller {
     /// # Input
     /// - `sample_size`: Number of pseudo-random numbers to generate
     fn new_shuffle(sample_size: usize) -> Result<Self, DigiFiError> {
-        Ok(StandardNormalBoxMuller { sample_size, seed_1: generate_seed()?, seed_2: generate_seed()? })
+        Ok(StandardNormalBoxMuller { sample_size, seed: generate_seed()?, })
     }
 
     /// One of two independent arrays of pseudo-random generated numbers produced using the Box-Muller Algorithm.
@@ -211,15 +212,22 @@ impl RandomGenerator<StandardNormalBoxMuller> for StandardNormalBoxMuller {
     /// # Output
     /// - Two arrays of pseudo-random numbers following a standard normal distribution
     fn generate(&self) -> Result<Array1<f64>, DigiFiError> {
-        let u_1: Array1<f64> = FibonacciGenerator::new(self.seed_1, self.sample_size, 5, 17, 714_025, 1_366, 150_889).generate()?;
-        let u_2: Array1<f64> = FibonacciGenerator::new(self.seed_2, self.sample_size, 5, 17, 714_025, 1_366, 150_889).generate()?;
-        let normal_arrays: (Array1<f64>, Array1<f64>) = box_muller(&u_1, &u_2);
-        Ok(normal_arrays.0)
+        let n: usize = if self.sample_size.is_multiple_of(2) { self.sample_size } else { self.sample_size + 1 };
+        let u: Array1<f64> = FibonacciGenerator::build(self.seed as u32, n, 5, 17, 714_025, 1_366, 150_889)?.generate()?;
+        let (u_1, u_2) = u.into_iter().enumerate()
+            .fold((Vec::with_capacity(self.sample_size / 2), Vec::with_capacity(self.sample_size / 2)), |(mut u_1, mut u_2), (i, u)| {
+                if  i.is_multiple_of(2) { u_2.push(u); } else { u_1.push(u); }
+                (u_1, u_2)
+            } );
+        let (n_1, n_2) = box_muller(&Array1::from_vec(u_1), &Array1::from_vec(u_2))?;
+        let mut n_: Array1<f64> = concatenate(Axis(0), &[n_1.view(), n_2.view()])?;
+        if n != self.sample_size { n_.remove_index(Axis(0), 0) }
+        Ok(n_)
     }
 }
 
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 /// Pseudo-random number generator for standard normal distribution.
 /// 
 /// It returns two independent pseudo-random arrays.
@@ -242,17 +250,15 @@ impl RandomGenerator<StandardNormalBoxMuller> for StandardNormalBoxMuller {
 /// use digifi::statistics::covariance;
 /// use digifi::random_generators::{RandomGenerator, StandardNormalMarsaglia};
 ///
-/// let snm: StandardNormalMarsaglia = StandardNormalMarsaglia::new_shuffle(10_000).unwrap();
+/// let snm: StandardNormalMarsaglia = StandardNormalMarsaglia::new_shuffle(1_000_000).unwrap();
 /// let sample: Array1<f64> = snm.generate().unwrap();
 ///
-/// assert!((sample.mean().unwrap() - 0.0).abs() < 100_000_000.0 * TEST_ACCURACY);
-/// assert!((covariance(&sample, &sample, 0).unwrap() - 1.0).abs() < 100_000_000.0 * TEST_ACCURACY);
+/// assert!((sample.mean().unwrap() - 0.0).abs() < 3_000_000.0 * TEST_ACCURACY);
+/// assert!((covariance(&sample, &sample, 0).unwrap() - 1.0).abs() < 5_000_000.0 * TEST_ACCURACY);
 /// ```
 pub struct StandardNormalMarsaglia {
     /// Number of random samples to generate
     sample_size: usize,
-    /// Maximum number of iterations for the algorithm
-    max_iterations: usize,
 }
 
 impl StandardNormalMarsaglia {
@@ -260,9 +266,8 @@ impl StandardNormalMarsaglia {
     /// 
     /// # Input
     /// - `sample_size`: Number of random samples to generate
-    /// - `max_iterations`: Maximum number of iterations for the algorithm
-    pub fn new(sample_size: usize, max_iterations: usize) -> Self {
-        StandardNormalMarsaglia { sample_size, max_iterations }
+    pub fn new(sample_size: usize) -> Self {
+        StandardNormalMarsaglia { sample_size }
     }
 }
 
@@ -272,7 +277,7 @@ impl RandomGenerator<StandardNormalMarsaglia> for StandardNormalMarsaglia {
     /// # Input
     /// - `sample_size`: Number of pseudo-random numbers to generate
     fn new_shuffle(sample_size: usize) -> Result<Self, DigiFiError> {
-        Ok(StandardNormalMarsaglia { sample_size, max_iterations: 1_000 })
+        Ok(StandardNormalMarsaglia { sample_size })
     }
 
     /// Two independent arrays of pseudo-random generated numbers based on the Marsaglie Method.
@@ -280,22 +285,20 @@ impl RandomGenerator<StandardNormalMarsaglia> for StandardNormalMarsaglia {
     /// # Output
     /// - Two arrays of pseudo-random numbers following a standard normal distribution
     fn generate(&self) -> Result<Array1<f64>, DigiFiError> {
-        let mut z_1: Array1<f64> = Array1::from_vec(vec![1.0; self.sample_size]);
-        let mut z_2: Array1<f64> = Array1::from_vec(vec![1.0; self.sample_size]);
-        //  Marsaglia method.
-        for i in 0..self.sample_size {
-            (z_1[i], z_2[i]) = marsaglia(self.max_iterations)?
-                .ok_or(DigiFiError::Other {
-                    title: "Marsaglia Algorithm".to_owned(),
-                    details: "Marsaglia algorithm failed to generate pseudo-random numbers.".to_owned(),
-                })?;
+        let n: usize = if self.sample_size.is_multiple_of(2) { self.sample_size } else { self.sample_size + 1 };
+        let mut z: Vec<f64> = Vec::with_capacity(n);
+        for _ in (0..(n / 2)).into_iter() {
+            let (z_1, z_2) = marsaglia()?;
+            z.push(z_1);
+            z.push(z_2);
         }
-        Ok(z_1)
+        if n != self.sample_size { z.pop(); }
+        Ok(Array1::from_vec(z))
     }
 }
 
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 /// Pseudo-random number generator for standard normal distribution.
 /// 
 /// # Links
@@ -362,7 +365,7 @@ impl RandomGenerator<StandardNormalZiggurat> for StandardNormalZiggurat {
         // Initial guess.
         while current_x < self.limit {
             rectangle_length = rectangle_length + self.dx;
-            let current_area: f64 = (standard_normal_dist.pdf(&Array1::from_vec(vec![current_x]))? - standard_normal_dist.pdf(&Array1::from_vec(vec![rectangle_length]))?)[0] * rectangle_length;
+            let current_area: f64 = (standard_normal_dist.pdf(current_x)? - standard_normal_dist.pdf(rectangle_length)?) * rectangle_length;
             if self.rectangle_size < current_area {
                 x_guess.push(rectangle_length);
                 current_x = rectangle_length;
@@ -383,10 +386,10 @@ mod tests {
     fn unit_test_accept_reject() -> () {
         use crate::random_generators::standard_normal_generators::StandardNormalAcceptReject;
         use crate::statistics::covariance;
-        let snar: StandardNormalAcceptReject = StandardNormalAcceptReject::new_shuffle(100_000).unwrap();
+        let snar: StandardNormalAcceptReject = StandardNormalAcceptReject::new_shuffle(1_000_000).unwrap();
         let sample: Array1<f64> = snar.generate().unwrap();
-        assert!((sample.mean().unwrap() - 0.0).abs() < 1_000_000.0 * TEST_ACCURACY);
-        assert!((covariance(&sample, &sample, 0).unwrap() - 1.0).abs() < 30_000_000.0 * TEST_ACCURACY);
+        assert!((sample.mean().unwrap() - 0.0).abs() < 100_000.0 * TEST_ACCURACY);
+        assert!((covariance(&sample, &sample, 0).unwrap() - 1.0).abs() < 100_000.0 * TEST_ACCURACY);
     }
 
     #[test]
@@ -403,20 +406,20 @@ mod tests {
     fn unit_test_box_muller() -> () {
         use crate::random_generators::standard_normal_generators::StandardNormalBoxMuller;
         use crate::statistics::covariance;
-        let snbm: StandardNormalBoxMuller = StandardNormalBoxMuller::new_shuffle(100_000).unwrap();
+        let snbm: StandardNormalBoxMuller = StandardNormalBoxMuller::new_shuffle(1_000_000).unwrap();
         let sample: Array1<f64> = snbm.generate().unwrap();
-        assert!((sample.mean().unwrap() - 0.0).abs() < 30_000_000.0 * TEST_ACCURACY);
-        assert!((covariance(&sample, &sample, 0).unwrap() - 1.0).abs() < 30_000_000.0 * TEST_ACCURACY);
+        assert!((sample.mean().unwrap() - 0.0).abs() < 1_000_000.0 * TEST_ACCURACY);
+        assert!((covariance(&sample, &sample, 0).unwrap() - 1.0).abs() < 1_000_000.0 * TEST_ACCURACY);
     }
 
     #[test]
     fn unit_test_marsaglia() -> () {
         use crate::random_generators::standard_normal_generators::StandardNormalMarsaglia;
         use crate::statistics::covariance;
-        let snm: StandardNormalMarsaglia = StandardNormalMarsaglia::new_shuffle(10_000).unwrap();
+        let snm: StandardNormalMarsaglia = StandardNormalMarsaglia::new_shuffle(1_000_000).unwrap();
         let sample: Array1<f64> = snm.generate().unwrap();
-        assert!((sample.mean().unwrap() - 0.0).abs() < 100_000_000.0 * TEST_ACCURACY);
-        assert!((covariance(&sample, &sample, 0).unwrap() - 1.0).abs() < 100_000_000.0 * TEST_ACCURACY);
+        assert!((sample.mean().unwrap() - 0.0).abs() < 3_000_000.0 * TEST_ACCURACY);
+        assert!((covariance(&sample, &sample, 0).unwrap() - 1.0).abs() < 5_000_000.0 * TEST_ACCURACY);
     }
 
     #[test]
@@ -424,6 +427,7 @@ mod tests {
         use crate::random_generators::standard_normal_generators::StandardNormalZiggurat;
         let snz: StandardNormalZiggurat = StandardNormalZiggurat::new_shuffle(1_000).unwrap();
         let sample: Array1<f64> = snz.generate().unwrap();
+        println!("{}", sample.mean().unwrap());
         assert!((sample.mean().unwrap() - 0.0).abs() < 10_000_000.0 * TEST_ACCURACY);
     }
 }

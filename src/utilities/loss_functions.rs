@@ -1,6 +1,6 @@
-use ndarray::Array1;
+use std::{borrow::Borrow, iter::zip};
 use crate::error::DigiFiError;
-use crate::utilities::compare_array_len;
+use crate::utilities::compare_len;
 
 
 /// Trait for defining a loss function.
@@ -9,22 +9,25 @@ pub trait LossFunction {
     /// Measures an error between observed and predicted values.
     ///
     /// # Input
-    /// - `observed_value`: Observed/empirical value
-    /// - `predicted_value`: Value predicted by the model
+    /// - `observation`: Observed/empirical value
+    /// - `prediction`: Value predicted by the model
     ///
     /// # Output
     /// - An error/loss
-    fn loss(&self, observed_value: f64, predicted_value: f64) -> f64;
+    fn loss(&self, observation: f64, prediction: f64) -> f64;
 
     /// Measures an error between observed and predicted values.
     ///
     /// # Input
-    /// - `observed_value`: An array of observed/empirical values
-    /// - `predicted_value`: An array of values predicted by the model
+    /// - `observations`: An iterator of observed/empirical values
+    /// - `predictions`: An iterator of values predicted by the model
     ///
     /// # Output
-    /// - An array of errors/losses
-    fn loss_array(&self, observed_values: &Array1<f64>, predicted_values: &Array1<f64>) -> Result<f64, DigiFiError>;
+    /// - Error/losse
+    fn loss_iter<T, I>(&self, observations: T, predictions: T) -> Result<f64, DigiFiError>
+    where
+        T: Iterator<Item = I> + ExactSizeIterator,
+        I: Borrow<f64>;
 }
 
 
@@ -40,24 +43,29 @@ pub struct MAE;
 
 impl LossFunction for MAE {
 
-    fn loss(&self, observed_value: f64, predicted_value: f64) -> f64 {
-        (observed_value - predicted_value).abs()
+    fn loss(&self, observation: f64, prediction: f64) -> f64 {
+        (observation - prediction).abs()
     }
 
     /// Measures an error between observed and predicted values.
     ///
     /// # Input
-    /// - `observed_value`: An array of observed/empirical values
-    /// - `predicted_value`: An array of values predicted by the model
+    /// - `observations`: An iterator of observed/empirical values
+    /// - `predictions`: An iterator of values predicted by the model
     ///
     /// # Output
-    /// - An array of errors/losses
+    /// - Error/losse
     ///
     /// # Errors
-    /// - Returns an error if the lengths of `observed_values` and `predicted_values` do not coincide.
-    fn loss_array(&self, observed_values: &Array1<f64>, predicted_values: &Array1<f64>) -> Result<f64, DigiFiError> {
-        compare_array_len(observed_values, predicted_values, "observed_values", "predicted_values")?;
-        Ok((observed_values - predicted_values).map(|v| { v.abs() } ).sum() / (observed_values.len() as f64))
+    /// - Returns an error if the lengths of `observations` and `predictions` do not coincide.
+    fn loss_iter<T, I>(&self, observations: T, predictions: T) -> Result<f64, DigiFiError>
+    where
+        T: Iterator<Item = I> + ExactSizeIterator,
+        I: Borrow<f64>,
+    {
+        compare_len(&observations, &predictions, "observations", "predictions")?;
+        let len: f64 = observations.len() as f64;
+        Ok(zip(observations, predictions).fold(0.0, |sum, (o, p)| { sum + (o.borrow() - p.borrow()).abs() } ) / len)
     }
 }
 
@@ -74,24 +82,29 @@ pub struct MSE;
 
 impl LossFunction for MSE {
 
-    fn loss(&self, observed_value: f64, predicted_value: f64) -> f64 {
-        (observed_value - predicted_value).powi(2)
+    fn loss(&self, observation: f64, prediction: f64) -> f64 {
+        (observation - prediction).powi(2)
     }
 
     /// Measures an error between observed and predicted values.
     ///
     /// # Input
-    /// - `observed_value`: An array of observed/empirical values
-    /// - `predicted_value`: An array of values predicted by the model
+    /// - `observations`: An iterator of observed/empirical values
+    /// - `predictions`: An iterator of values predicted by the model
     ///
     /// # Output
-    /// - An array of errors/losses
+    /// - Error/losse
     ///
     /// # Errors
-    /// - Returns an error if the lengths of `observed_values` and `predicted_values` do not coincide.
-    fn loss_array(&self, observed_values: &Array1<f64>, predicted_values: &Array1<f64>) -> Result<f64, DigiFiError> {
-        compare_array_len(observed_values, predicted_values, "observed_values", "predicted_values")?;
-        Ok((observed_values - predicted_values).map(|v| { v.powi(2) } ).sum() / (observed_values.len() as f64))
+    /// - Returns an error if the lengths of `observations` and `predictions` do not coincide.
+    fn loss_iter<T, I>(&self, observations: T, predictions: T) -> Result<f64, DigiFiError>
+    where
+        T: Iterator<Item = I> + ExactSizeIterator,
+        I: Borrow<f64>,
+    {
+        compare_len(&observations, &predictions, "observations", "predictions")?;
+        let len: f64 = observations.len() as f64;
+        Ok(zip(observations, predictions).fold(0.0, |sum, (o, p)| { sum + (o.borrow() - p.borrow()).powi(2) } ) / len)
     }
 }
 
@@ -108,24 +121,28 @@ pub struct SSE;
 
 impl LossFunction for SSE {
 
-    fn loss(&self, observed_value: f64, predicted_value: f64) -> f64 {
-        (observed_value - predicted_value).powi(2)
+    fn loss(&self, observation: f64, prediction: f64) -> f64 {
+        (observation - prediction).powi(2)
     }
 
     /// Measures an error between observed and predicted values.
     ///
     /// # Input
-    /// - `observed_value`: An array of observed/empirical values
-    /// - `predicted_value`: An array of values predicted by the model
+    /// - `observations`: An iterator of observed/empirical values
+    /// - `predictions`: An iterator of values predicted by the model
     ///
     /// # Output
-    /// - An array of errors/losses
+    /// - Error/losse
     ///
     /// # Errors
-    /// - Returns an error if the lengths of `observed_values` and `predicted_values` do not coincide.
-    fn loss_array(&self, observed_values: &Array1<f64>, predicted_values: &Array1<f64>) -> Result<f64, DigiFiError> {
-        compare_array_len(observed_values, predicted_values, "observed_values", "predicted_values")?;
-        Ok((observed_values - predicted_values).map(|v| { v.powi(2) } ).sum())
+    /// - Returns an error if the lengths of `observations` and `predictions` do not coincide.
+    fn loss_iter<T, I>(&self, observations: T, predictions: T) -> Result<f64, DigiFiError>
+    where
+        T: Iterator<Item = I> + ExactSizeIterator,
+        I: Borrow<f64>,
+    {
+        compare_len(&observations, &predictions, "observations", "predictions")?;
+        Ok(zip(observations, predictions).fold(0.0, |sum, (o, p)| { sum + (o.borrow() - p.borrow()).powi(2) } ))
     }
 }
 
@@ -142,24 +159,28 @@ pub struct StraddleLoss;
 
 impl LossFunction for StraddleLoss {
 
-    fn loss(&self, observed_value: f64, predicted_value: f64) -> f64 {
-        let delta: f64 = predicted_value / observed_value;
-        (delta - 1.0).abs() + (1.0  - delta).abs()
+    fn loss(&self, observation: f64, prediction: f64) -> f64 {
+        2.0 * (prediction / observation - 1.0).abs()
     }
 
     /// Measures an error between observed and predicted values.
     ///
     /// # Input
-    /// - `observed_value`: An array of observed/empirical values
-    /// - `predicted_value`: An array of values predicted by the model
+    /// - `observations`: An iterator of observed/empirical values
+    /// - `predictions`: An iterator of values predicted by the model
     ///
     /// # Output
-    /// - An array of errors/losses
+    /// - Error/losse
     ///
     /// # Errors
-    /// - Returns an error if the lengths of `observed_values` and `predicted_values` do not coincide.
-    fn loss_array(&self, observed_values: &Array1<f64>, predicted_values: &Array1<f64>) -> Result<f64, DigiFiError> {
-        compare_array_len(observed_values, predicted_values, "observed_values", "predicted_values")?;
-        Ok((predicted_values / observed_values).map(|v| { (v - 1.0).abs() + (1.0 - v).abs() } ).sum() / (observed_values.len() as f64))
+    /// - Returns an error if the lengths of `observations` and `predictions` do not coincide.
+    fn loss_iter<T, I>(&self, observations: T, predictions: T) -> Result<f64, DigiFiError>
+    where
+        T: Iterator<Item = I> + ExactSizeIterator,
+        I: Borrow<f64>,
+    {
+        compare_len(&observations, &predictions, "observations", "predictions")?;
+        let len: f64 = observations.len() as f64;
+        Ok(zip(observations, predictions).fold(0.0, |sum, (o, p)| { sum + 2.0 * (p.borrow() / o.borrow() - 1.0).abs() } ) / len)
     }
 }

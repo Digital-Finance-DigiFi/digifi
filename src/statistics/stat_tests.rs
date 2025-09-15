@@ -1,9 +1,9 @@
 use std::cmp;
-use ndarray::{Array1, Array2, arr1, s};
+use ndarray::{Array1, Array2, s};
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
-use crate::error::DigiFiError;
-use crate::utilities::{compare_array_len, data_transformations::differencing};
+use crate::error::{DigiFiError, ErrorTitle};
+use crate::utilities::{compare_len, data_transformations::differencing};
 use crate::statistics::{
     ProbabilityDistribution, linear_regression, se_lr_coefficient,
     continuous_distributions::StudentsTDistribution,
@@ -13,7 +13,7 @@ use crate::statistics::{
 // TODO: Add moderation/mediation test that determines whether the relationship is moderated mediation or mediated moderation
 
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Confidence interval for different tests.
 pub enum ConfidenceLevel {
@@ -40,7 +40,7 @@ impl ConfidenceLevel {
 }
 
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Type of augmented Dickey-Fuller test.
 pub enum ADFType {
@@ -230,12 +230,11 @@ impl ADFResult {
 
     /// Constructs `ADFResult` from parameters of the linear regression.
     pub fn build(params: &Array1<f64>, unit_root_exists: bool, df_statistic: Option<f64>, critical_value: Option<f64>, se_gamma: Option<f64>, adf_type: &ADFType) -> Result<Self, DigiFiError> {
-        let error_title: String = String::from("ADFResult From Params");
         match adf_type {
             ADFType::Simple => {
                 let mut deltas: Vec<f64> = params.to_vec();
                 let gamma: f64 = deltas.pop().ok_or(DigiFiError::Other {
-                    title: error_title,
+                    title: Self::error_title(),
                     details: "Parameters of the linear regression were empty.".to_owned(),
                 })?;
                 Ok(ADFResult { unit_root_exists, df_statistic, critical_value, se_gamma, gamma, deltas, beta: None, alpha: None, adf_type: adf_type.clone(), })
@@ -243,7 +242,7 @@ impl ADFResult {
             ADFType::Constant => {
                 let mut deltas: Vec<f64> = params.to_vec();
                 let gamma: f64 = deltas.pop().ok_or(DigiFiError::Other {
-                    title: error_title,
+                    title: Self::error_title(),
                     details: "Parameters of the linear regression were empty.".to_owned(),
                 })?;
                 let alpha: Option<f64> = deltas.pop();
@@ -252,7 +251,7 @@ impl ADFResult {
             ADFType::ConstantAndTrend => {
                 let mut deltas: Vec<f64> = params.to_vec();
                 let gamma: f64 = deltas.pop().ok_or(DigiFiError::Other {
-                    title: error_title,
+                    title: Self::error_title(),
                     details: "Parameters of the linear regression were empty.".to_owned(),
                 })?;
                 let alpha: Option<f64> = deltas.pop();
@@ -260,6 +259,12 @@ impl ADFResult {
                 Ok(ADFResult { unit_root_exists, df_statistic, critical_value, se_gamma, gamma, deltas, beta, alpha, adf_type: adf_type.clone(), })
             },
         }
+    }
+}
+
+impl ErrorTitle for ADFResult {
+    fn error_title() -> String {
+        String::from("ADFResult Build")
     }
 }
 
@@ -296,12 +301,11 @@ impl ADFResult {
 /// assert_eq!(result.unit_root_exists, false);
 /// ```
 pub fn adf(x: &Array1<f64>, lag: Option<usize>, adf_type: &ADFType, cl: Option<ConfidenceLevel>) -> Result<ADFResult, DigiFiError> {
-    let error_title: String = String::from("ADF");
     let x_len: usize = x.len();
     let lag: usize = match lag {
         Some(v) => {
             if x_len < v {
-                return Err(DigiFiError::IndexOutOfRange { title: error_title.clone(), index: "lag".to_owned(), array: "v".to_owned(), });
+                return Err(DigiFiError::IndexOutOfRange { title: "ADF".to_owned(), index: "lag".to_owned(), array: "v".to_owned(), });
             }
             v
         },
@@ -310,43 +314,28 @@ pub fn adf(x: &Array1<f64>, lag: Option<usize>, adf_type: &ADFType, cl: Option<C
     let diff: Array1<f64> = differencing(&x, 1)?;
     // Left side of linear regression model
     let lr_result: Array1<f64> = diff.slice(s![lag..]).iter().map(|v_| *v_ ).collect();
+    let lr_result_len: usize = lr_result.len();
     // Right side of the linear regression model
     let mut lr_matrix: Vec<Vec<f64>> = Vec::<Vec<f64>>::new();
-    match adf_type {
-        ADFType::Simple => {
-            // Delta terms
-            for j in 0..lag {
-                let upper_index: usize = diff.len() - 1 - j;
-                lr_matrix.push(diff.slice(s![upper_index-lr_result.len()..upper_index]).into_iter().map(|v_| *v_ ).collect());
-            }
-            // Gamma term
-            lr_matrix.push(x.slice(s![lag..(x_len-1)]).into_iter().map(|v_| *v_ ).collect());
-        },
-        ADFType::Constant => {
-            // Delta terms
-            for j in 0..lag {
-                let upper_index: usize = diff.len() - 1 - j;
-                lr_matrix.push(diff.slice(s![upper_index-lr_result.len()..upper_index]).into_iter().map(|v_| *v_ ).collect());
-            }
-            // Gamma term
-            lr_matrix.push(x.slice(s![lag..(x_len-1)]).into_iter().map(|v_| *v_ ).collect());
-            // Constant term (Alpha)
-            lr_matrix.push(vec![1.0; lr_result.len()]);
-        },
-        ADFType::ConstantAndTrend => {
-            // Delta terms
-            for j in 0..lag {
-                let upper_index: usize = diff.len() - 1 - j;
-                lr_matrix.push(diff.slice(s![upper_index-lr_result.len()..upper_index]).into_iter().map(|v_| *v_ ).collect());
-            }
-            // Constant trend term (Beta)
-            lr_matrix.push((x_len-lr_result.len()+1..=x_len).map(|v| v as f64 ).collect());
-            // Constant term (Alpha)
-            lr_matrix.push(vec![1.0; lr_result.len()]);
-            // Gamma term
-            lr_matrix.push(x.slice(s![lag..(x_len-1)]).into_iter().map(|v_| *v_ ).collect());
-        },
+    let delta_terms = |lr_matrix: &mut Vec<Vec<f64>>, diff: &Array1<f64>| {
+        for j in 0..lag {
+            let upper_index: usize = diff.len() - 1 - j;
+            lr_matrix.push(diff.slice(s![(upper_index - lr_result_len)..upper_index]).into_iter().map(|v_| *v_ ).collect());
+        }
+    };
+    // Add features to the linear regression features matrix in the specified order
+    // Delta terms
+    delta_terms(&mut lr_matrix, &diff);
+    // Constant trend term (Beta)
+    if let ADFType::ConstantAndTrend = adf_type {
+        lr_matrix.push(((x_len - lr_result_len + 1)..=x_len).map(|v| v as f64 ).collect());
     }
+    // Constant term (Alpha)
+    if let ADFType::Constant | ADFType::ConstantAndTrend = adf_type {
+        lr_matrix.push(vec![1.0; lr_result_len]);
+    }
+    // Gamma terms
+    lr_matrix.push(x.slice(s![lag..(x_len - 1)]).into_iter().map(|v_| *v_ ).collect());
     // Linear regression
     let data_matrix: Array2<f64> = Array2::from_shape_vec((lr_matrix.len(), lr_matrix[0].len()), lr_matrix.into_iter().flatten().collect())?;
     let params: Array1<f64> = linear_regression(&data_matrix.t().to_owned(), &lr_result)?;
@@ -415,7 +404,7 @@ pub struct CointegrationResult {
 /// }
 /// ```
 pub fn cointegration(x: &Array1<f64>, y: &Array1<f64>, cl: Option<ConfidenceLevel>) -> Result<CointegrationResult, DigiFiError> {
-    compare_array_len(x, y, "x", "y")?;
+    compare_len(&x.iter(), &y.iter(), "x", "y")?;
     let data_matrix: Array2<f64> = Array2::from_shape_vec((x.len(), 1), x.to_vec())?;
     let params: Array1<f64> = linear_regression(&data_matrix, y)?;
     let prediction: Array1<f64> = data_matrix.dot(&params);
@@ -438,7 +427,7 @@ pub fn cointegration(x: &Array1<f64>, y: &Array1<f64>, cl: Option<ConfidenceLeve
 }
 
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Result of the t-test.
 pub struct TTestResult {
@@ -455,7 +444,7 @@ pub struct TTestResult {
 }
 
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Variant of the two sample t-test.
 /// 
@@ -500,10 +489,9 @@ impl TTestTwoSampleCase {
 
     /// Validates the t-test case.
     fn validate(&self, sample_1: &Array1<f64>, sample_2: &Array1<f64>) -> Result<(), DigiFiError> {
-        let error_title: String = String::from("T-test (Two Sample) Validation");
         if sample_1.len() < 1 || sample_2.len() < 1 {
             return Err(DigiFiError::ParameterConstraint {
-                title: error_title,
+                title: Self::error_title(),
                 constraint: "Both samples must contain at least one data point.".to_owned(),
             });
         }
@@ -517,7 +505,7 @@ impl TTestTwoSampleCase {
             TTestTwoSampleCase::SimilarVariance => {
                 if unbiased_std_ratio < 0.5 || 2.0 < unbiased_std_ratio {
                     return Err(DigiFiError::ParameterConstraint {
-                        title: error_title,
+                        title: Self::error_title(),
                         constraint: "The unbiased estimators of variance of `sample_1` and `sample_2` have to satisfy the unequality `0.5 < s^{2}_{1} / s^{2}_{2} < 2` to use `SimilarVariance` two sample t-test case.".to_owned(),
                     })
                 }
@@ -525,13 +513,19 @@ impl TTestTwoSampleCase {
             TTestTwoSampleCase::UnequalVariance => {
                 if 0.5 <= unbiased_std_ratio && unbiased_std_ratio <= 2.0 {
                     return Err(DigiFiError::ParameterConstraint {
-                        title: error_title,
+                        title: Self::error_title(),
                         constraint: "The unbiased estimators of variance of `sample_1` and `sample_2` have to satisfy either the unequality `s_{1} > 2s_{2}` or `2s_{1} < s_{2}` to use `UnequalVariance` two sample t-test case.".to_owned(),
                     })
                 }
             },
         }
         Ok(())
+    }
+}
+
+impl ErrorTitle for TTestTwoSampleCase {
+    fn error_title() -> String {
+        String::from("T-test (Two Sample) Case")
     }
 }
 
@@ -609,7 +603,7 @@ pub fn t_test_two_sample(sample_1: &Array1<f64>, sample_2: &Array1<f64>, cl: Opt
     };
     // Obtain confidence interval value
     let dist: StudentsTDistribution = StudentsTDistribution::build(dof)?;
-    let p_value: f64 = 1.0 - dist.cdf(&arr1(&[t_score]))?[0];
+    let p_value: f64 = 1.0 - dist.cdf(t_score)?;
     let p_cl: f64 = match cl { Some(v) => 1.0 - v.get_p(), None => 1.0 - ConfidenceLevel::default().get_p() };
     let reject_h0: bool = if p_cl < p_value { true } else { false };
     Ok(TTestResult { reject_h0, t_score, dof, p_value, p_cl })
@@ -690,7 +684,7 @@ pub fn t_test_lr(beta: f64, beta_0: Option<f64>, y: &Array1<f64>, y_prediction: 
             details: "There are fewer data points in `y` array than `ddof`.".to_owned(),
         })? as f64;
     let dist: StudentsTDistribution = StudentsTDistribution::build(dof)?;
-    let p_value: f64 = 1.0 - dist.cdf(&arr1(&[t_score]))?[0];
+    let p_value: f64 = 1.0 - dist.cdf(t_score)?;
     let p_cl: f64 = match cl { Some(v) => v.get_p(), None => ConfidenceLevel::default().get_p() };
     let reject_h0: bool = if p_value < p_cl { true } else { false };
     Ok(TTestResult { reject_h0, t_score, dof, p_value, p_cl })

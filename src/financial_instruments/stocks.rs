@@ -1,8 +1,8 @@
 use ndarray::{Array1, Array2};
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
-use crate::error::DigiFiError;
-use crate::utilities::{compare_array_len, time_value_utils::{Compounding, CompoundingType, Perpetuity}};
+use crate::error::{DigiFiError, ErrorTitle};
+use crate::utilities::{compare_len, time_value_utils::{Compounding, CompoundingType, Perpetuity}};
 use crate::financial_instruments::{FinancialInstrument, FinancialInstrumentId};
 use crate::corporate_finance;
 use crate::portfolio_applications::{AssetHistData, PortfolioInstrument};
@@ -10,6 +10,7 @@ use crate::statistics::linear_regression;
 use crate::stochastic_processes::StochasticProcess;
 
 
+#[derive(Clone, Copy, Debug)]
 /// Choice of how to quote the values returned by functions.
 pub enum QuoteValues {
     PerShare,
@@ -40,7 +41,7 @@ pub struct ValuationByComparablesParams {
 }
 
 impl ValuationByComparablesParams {
-    /// # Desscription
+
     /// Parameters for valuation by comparables.
     ///
     /// # Input
@@ -53,7 +54,7 @@ impl ValuationByComparablesParams {
     /// - Returns an error if the number of datapoints (i.e., number of points in arrays) is less than `5`.
     pub fn build(valuations: Array1<f64>, pe_ratios: Option<Array1<f64>>, pb_ratios: Option<Array1<f64>>, ev_to_ebitda: Option<Array1<f64>>) -> Result<Self, DigiFiError> {
         if valuations.len() < 5 {
-            return Err(DigiFiError::ValidationError { title: "Valuation by Comparables Params".to_owned(), details: "Minimum number of datapoints required is `5`.".to_owned(), });
+            return Err(DigiFiError::ValidationError { title: Self::error_title(), details: "Minimum number of datapoints required is `5`.".to_owned(), });
         }
         ValuationByComparablesParams::validate_array(&valuations, &pe_ratios, "pe_ratios")?;
         ValuationByComparablesParams::validate_array(&valuations, &pb_ratios, "pb_ratios")?;
@@ -65,7 +66,7 @@ impl ValuationByComparablesParams {
     fn validate_array(valuations: &Array1<f64>, array: &Option<Array1<f64>>, array_name: &str) -> Result<(), DigiFiError> {
         match array {
             Some(v) => {
-                compare_array_len(&valuations, &v, "valuations", array_name)?;
+                compare_len(&valuations.iter(), &v.iter(), "valuations", array_name)?;
                 Ok(())
             },
             None => Ok(()),
@@ -73,23 +74,29 @@ impl ValuationByComparablesParams {
     }
 
     /// Returns an array of stocks' valuations.
-    pub fn valuations(&self) -> Array1<f64> {
-        self.valuations.clone()
+    pub fn valuations(&self) -> &Array1<f64> {
+        &self.valuations
     }
 
     /// Returns an array of stocks' P/E raatios.
-    pub fn pe_ratios(&self) -> Option<Array1<f64>> {
-        self.pe_ratios.clone()
+    pub fn pe_ratios(&self) -> &Option<Array1<f64>> {
+        &self.pe_ratios
     }
 
     /// Returns an array of stock's P/B ratios.
-    pub fn pb_ratios(&self) -> Option<Array1<f64>> {
-        self.pb_ratios.clone()
+    pub fn pb_ratios(&self) -> &Option<Array1<f64>> {
+        &self.pb_ratios
     }
 
     /// Returns an array of stocks' EV/EBITDA ratios.
-    pub fn ev_to_ebitda(&self) -> Option<Array1<f64>> {
-        self.ev_to_ebitda.clone()
+    pub fn ev_to_ebitda(&self) ->& Option<Array1<f64>> {
+        &self.ev_to_ebitda
+    }
+}
+
+impl ErrorTitle for ValuationByComparablesParams {
+    fn error_title() -> String {
+        String::from("Valuation by Comparables Params")
     }
 }
 
@@ -106,7 +113,7 @@ impl ValuationByComparablesParams {
 ///
 /// ```rust
 /// use ndarray::Array1;
-/// use digifi::utilities::{TEST_ACCURACY, CompoundingType};
+/// use digifi::utilities::{TEST_ACCURACY, Time, CompoundingType};
 /// use digifi::financial_instruments::{FinancialInstrument, FinancialInstrumentId, FinancialInstrumentType, AssetClass};
 /// use digifi::financial_instruments::{QuoteValues, StockValuationType, ValuationByComparablesParams, Stock};
 /// use digifi::portfolio_applications::AssetHistData;
@@ -117,12 +124,12 @@ impl ValuationByComparablesParams {
 ///     instrument_type: FinancialInstrumentType::CashInstrument, asset_class: AssetClass::EquityBasedInstrument, identifier: String::from("32198407128904"),
 /// };
 /// let asset_historical_data: AssetHistData = AssetHistData::build(
-///     Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]), Array1::from_vec(vec![0.0, 1.0])
+///     Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]), Time::new(Array1::from_vec(vec![0.0, 1.0]))
 /// ).unwrap();
-/// let stock: Stock = Stock::build(
+/// let stock: Stock = Stock::new(
 ///     100.0, 1_000_000, 3.0, 2.5, QuoteValues::PerShare, 99.0, compounding_type, 0.0, StockValuationType::DividendDiscountModel, Some(10.0), Some(3.0), Some(6.5),
 ///     5.0, financial_instrument_id, asset_historical_data, None
-/// ).unwrap();
+/// );
 ///
 /// // Theoretical value
 /// let r: f64 = 3.0 / 100.0 + 0.0;
@@ -134,7 +141,7 @@ impl ValuationByComparablesParams {
 ///
 /// ```rust
 /// use ndarray::Array1;
-/// use digifi::utilities::{TEST_ACCURACY, CompoundingType};
+/// use digifi::utilities::{TEST_ACCURACY, Time, CompoundingType};
 /// use digifi::financial_instruments::{FinancialInstrument, FinancialInstrumentId, FinancialInstrumentType, AssetClass};
 /// use digifi::financial_instruments::{QuoteValues, StockValuationType, ValuationByComparablesParams, Stock};
 /// use digifi::portfolio_applications::AssetHistData;
@@ -146,7 +153,7 @@ impl ValuationByComparablesParams {
 ///     identifier: String::from("32198407128904"),
 /// };
 /// let asset_historical_data: AssetHistData = AssetHistData::build(
-///     Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]), Array1::from_vec(vec![0.0, 1.0])
+///     Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]), Time::new(Array1::from_vec(vec![0.0, 1.0]))
 /// ).unwrap();
 ///
 /// // Valuation parameters
@@ -232,10 +239,10 @@ impl Stock {
         }
     }
 
-    fn apply_value_quotation_type(&self, prices_per_share: Array1<f64>) -> Array1<f64> {
+    fn apply_value_quotation_type(&self, value_per_share: f64) -> f64 {
         match self.quote_values {
-            QuoteValues::PerShare => prices_per_share,
-            QuoteValues::Total => prices_per_share * self.n_shares_outstanding,
+            QuoteValues::PerShare => value_per_share,
+            QuoteValues::Total => value_per_share * self.n_shares_outstanding,
         }
     }
     
@@ -265,7 +272,7 @@ impl Stock {
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Earnings_per_share>
     /// - Original Source: N/A
     pub fn trailing_eps(&mut self, net_income: f64, preferred_dividends: f64, n_common_shares_outstanding: usize, in_place: bool) -> f64 {
-        let trailing_eps: f64 = corporate_finance::earnings_per_share(net_income, preferred_dividends, n_common_shares_outstanding).unwrap_or(0.0);
+        let trailing_eps: f64 = corporate_finance::earnings_per_share(net_income, preferred_dividends, n_common_shares_outstanding);
         if in_place {
             self.earnings_per_share = trailing_eps;
         }
@@ -290,15 +297,14 @@ impl Stock {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Price%E2%80%93earnings_ratio>
     /// - Original Source: N/A
-    pub fn trailing_pe(&mut self, in_place: bool) -> Option<f64> {
-        let trailing_pe: Option<f64> = corporate_finance::pe_ratio(self.price_per_share, self.earnings_per_share);
+    pub fn trailing_pe(&mut self, in_place: bool) -> f64 {
+        let trailing_pe: f64 = corporate_finance::pe_ratio(self.price_per_share, self.earnings_per_share);
         if in_place {
-            self.pe = trailing_pe;
+            self.pe = Some(trailing_pe);
         }
         trailing_pe
     }
 
-    /// # Deescription
     /// The ratio of market price to book value.
     /// 
     /// Price-to-Book Ratio = Market Capitalization / Book Value
@@ -316,11 +322,11 @@ impl Stock {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/P/B_ratio>
     /// - Original Source: N/A
-    pub fn pb(&mut self, market_cap: f64, assets: f64, liabilities: f64, in_place: bool) -> Option<f64> {
+    pub fn pb(&mut self, market_cap: f64, assets: f64, liabilities: f64, in_place: bool) -> f64 {
         let book_value: f64 = corporate_finance::book_value(assets, liabilities);
-        let pb: Option<f64> = corporate_finance::pb_ratio(market_cap, book_value);
+        let pb: f64 = corporate_finance::pb_ratio(market_cap, book_value);
         if in_place {
-            self.pb = pb;
+            self.pb = Some(pb);
         }
         pb
     }
@@ -367,7 +373,7 @@ impl Stock {
     /// # Links
     /// - Wikipedia: N/A
     /// - Original Source: N/A
-    pub fn ev_to_revenue(&self, market_cap: f64, total_debt: f64, cash: f64, revenue: f64) -> Option<f64> {
+    pub fn ev_to_revenue(&self, market_cap: f64, total_debt: f64, cash: f64, revenue: f64) -> f64 {
         corporate_finance::ev_to_revenue(market_cap, total_debt, cash, revenue)
     }
 
@@ -391,10 +397,10 @@ impl Stock {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/EV/Ebitda>
     /// - Original Source: N/A
-    pub fn ev_to_ebitda(&mut self, market_cap: f64, total_debt: f64, cash: f64, ebitda: f64, in_place: bool) -> Option<f64> {
-        let ev_to_ebitda: Option<f64> = corporate_finance::ev_to_ebitda(market_cap, total_debt, cash, ebitda);
+    pub fn ev_to_ebitda(&mut self, market_cap: f64, total_debt: f64, cash: f64, ebitda: f64, in_place: bool) -> f64 {
+        let ev_to_ebitda: f64 = corporate_finance::ev_to_ebitda(market_cap, total_debt, cash, ebitda);
         if in_place {
-            self.ev_to_ebitda = ev_to_ebitda;
+            self.ev_to_ebitda = Some(ev_to_ebitda);
         }
         ev_to_ebitda
     }
@@ -444,7 +450,7 @@ impl Stock {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Return_on_equity>
     /// - Original SOurce: N/A
-    pub fn return_on_equity(&self, net_income: f64, equity: f64) -> Option<f64> {
+    pub fn return_on_equity(&self, net_income: f64, equity: f64) -> f64 {
         corporate_finance::return_on_equity(net_income, equity)
     }
 
@@ -466,7 +472,7 @@ impl Stock {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Return_on_assets>
     /// - Original Source: N/A
-    pub fn return_on_assets(&self, net_income: f64, total_assets: f64) -> Option<f64> {
+    pub fn return_on_assets(&self, net_income: f64, total_assets: f64) -> f64 {
         corporate_finance::return_on_assets(net_income, total_assets)
     }
 
@@ -489,7 +495,7 @@ impl Stock {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Return_on_investment>
     /// - Original Source: N/A
-    pub fn return_on_investment(&self, revenue: f64, cost_of_goods_sold: f64) -> Option<f64> {
+    pub fn return_on_investment(&self, revenue: f64, cost_of_goods_sold: f64) -> f64 {
         corporate_finance::return_on_investment(revenue, cost_of_goods_sold)
     }
 
@@ -507,15 +513,10 @@ impl Stock {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Debt-to-equity_ratio>
     /// - Original Source: N/A
-    pub fn debt_to_equity(&self, debt: f64, equity: f64) -> Option<f64> {
-        if equity == 0.0 {
-            None
-        } else {
-            Some(debt / equity)
-        }
+    pub fn debt_to_equity(&self, debt: f64, equity: f64) -> f64 {
+        debt / equity
     }
 
-    /// # Discription
     /// Dividend discount model evaluating the price of the stock.
     ///
     /// Note: This model assumes that the dividend cashflow grows with the rate dividend_growth_rate.
@@ -538,25 +539,17 @@ impl Stock {
             self.dividend_per_share, cost_of_equity_capital, self.dividend_growth_rate, self.compounding_type.clone()
         )?;
         let pv: f64 = dividend_perpetuity.present_value();
-        Ok(self.apply_value_quotation_type(Array1::from_vec(vec![pv]))[0])
+        Ok(self.apply_value_quotation_type(pv))
     }
 
     fn validate_option_pair(&self, v: &Option<f64>, a: &Option<Array1<f64>>, v_name: &str, a_name: &str) -> Result<(), DigiFiError> {
-        let error_title: String = String::from("Stock");
-        match a {
-            Some(_) => {
-                match v {
-                    Some(_) => Ok(()),
-                    None => Err(DigiFiError::ValidationError { title: error_title.clone(), details: format!("The argument `{}` is None, while the argument `{}` is not. They must be the same variant of `Option` enum.", v_name, a_name) }),
-                }
-            },
-            None => {
-                match v {
-                    Some(_) => Err(DigiFiError::ValidationError { title: error_title.clone(), details: format!("The argument `{}` is None, while the argument `{}` is not. They must be the same variant of `Option` enum.", a_name, v_name) }),
-                    None => Ok(()),
-                }
-            },
+        if a.is_some() != v.is_some() {
+            return Err(DigiFiError::ValidationError {
+                title: Self::error_title(),
+                details: format!("The argument `{}` is None, while the argument `{}` is not. They must be the same variant of `Option` enum.", a_name, v_name),
+            });
         }
+        Ok(())
     }
 
     /// Valuation of the stock by comparing its features to the features of similar stocks.
@@ -569,69 +562,48 @@ impl Stock {
     ///
     /// # Output
     /// - Valuation of the stock (Price per share)
-    pub fn valuation_by_comparables(&self, pe: Option<f64>, pb: Option<f64>, ev_to_ebitda: Option<f64>,
-                                    valuation_params: &ValuationByComparablesParams) -> Result<f64, DigiFiError> {
-        let error_title: String = String::from("Valuation by Comparables");
-        let valuations: Array1<f64> = valuation_params.valuations();
-        let pe_ratios: Option<Array1<f64>> = valuation_params.pe_ratios();
-        let pb_ratios: Option<Array1<f64>> = valuation_params.pb_ratios();
-        let ev_to_ebitdas: Option<Array1<f64>> = valuation_params.ev_to_ebitda();
+    pub fn valuation_by_comparables(&self, pe: Option<f64>, pb: Option<f64>, ev_to_ebitda: Option<f64>, valuation_params: &ValuationByComparablesParams) -> Result<f64, DigiFiError> {
+        let valuations: &Array1<f64> = valuation_params.valuations();
+        let pe_ratios: &Option<Array1<f64>> = valuation_params.pe_ratios();
+        let pb_ratios: &Option<Array1<f64>> = valuation_params.pb_ratios();
+        let ev_to_ebitdas: &Option<Array1<f64>> = valuation_params.ev_to_ebitda();
         // Parameters validation
-        self.validate_option_pair(&pe, &pe_ratios, &"pe", &"pe_ratios")?;
-        self.validate_option_pair(&pb, &pb_ratios, &"pb", &"pb_ratios")?;
-        self.validate_option_pair(&ev_to_ebitda, &ev_to_ebitdas, &"ev_to_ebitda", &"ev_to_ebitda")?;
+        self.validate_option_pair(&pe, pe_ratios, "pe", "pe_ratios")?;
+        self.validate_option_pair(&pb, pb_ratios, "pb", "pb_ratios")?;
+        self.validate_option_pair(&ev_to_ebitda, ev_to_ebitdas, "ev_to_ebitda", "ev_to_ebitda")?;
         // Composition of linear regression data matrix
         let mut x: Vec<Vec<f64>> = Vec::<Vec<f64>>::new();
         x.push(vec![1.0; valuations.len()]);
         let mut index: usize = 1;
-        let pe_index: Option<usize> = match pe_ratios {
-            Some(v) => {
-                x.push(v.to_vec());
-                index += 1;
-                Some(index - 1)
-            },
-            None => None,
+        let add_feature = |feature: &Option<Array1<f64>>, x: &mut Vec<Vec<f64>>, index_: &mut usize | -> Option<usize> {
+            match feature {
+                Some(v) => {
+                    x.push(v.to_vec());
+                    *index_ += 1;
+                    Some(*index_ - 1)
+                },
+                None => None,
+            }
         };
-        let pb_index: Option<usize> = match pb_ratios {
-            Some(v) => {
-                x.push(v.to_vec());
-                index += 1;
-                Some(index - 1)
-            },
-            None => None,
-        };
-        let ev_to_ebitda_index: Option<usize> = match ev_to_ebitdas {
-            Some(v) => {
-                x.push(v.to_vec());
-                index += 1;
-                Some(index - 1)
-            },
-            None => None,
-        };
+        let pe_index: Option<usize> = add_feature(pe_ratios, &mut x, &mut index);
+        let pb_index: Option<usize> = add_feature(pb_ratios, &mut x, &mut index);
+        let ev_to_ebitda_index: Option<usize> = add_feature(ev_to_ebitdas, &mut x, &mut index);
         // Linear regression
         let x: Array2<f64> = Array2::from_shape_vec((index, valuations.len()), x.into_iter().flatten().collect())?;
         let params: Array1<f64> = linear_regression(&x.t().to_owned(), &valuations)?;
         // Valuation of stock based on linear regression parameters
         let mut valuation: f64 = params[0];
-        match pe {
-            Some(v) => {
-                valuation += params[pe_index.ok_or(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "No P/E index is defined.".to_owned(), })?] * v;
-            },
-            None => (),
-        }
-        match pb {
-            Some(v) => {
-                valuation += params[pb_index.ok_or(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "No P/B index is defined.".to_owned(), })?] * v;
-            },
-            None => (),
-        }
-        match ev_to_ebitda {
-            Some(v) => {
-                valuation += params[ev_to_ebitda_index.ok_or(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "No EV/EBITDA index is defined.".to_owned(), })?] * v;
-            },
-            None => (),
-        }
-        Ok(self.apply_value_quotation_type(Array1::from_vec(vec![valuation / self.n_shares_outstanding]))[0])
+        let mut apply_feature = |value: &Option<f64>, params: &Array1<f64>, index: Option<usize>, index_name: &str| -> Result<(), DigiFiError> {
+            if let Some(v) = value {
+                let err: DigiFiError = DigiFiError::ParameterConstraint { title: Self::error_title(), constraint: format!("No {} index is defined.", index_name), };
+                valuation += params[index.ok_or(err)?] * v;
+            }
+            Ok(())
+        };
+        apply_feature(&pe, &params, pe_index, "P/E")?;
+        apply_feature(&pb, &params, pb_index, "P/B")?;
+        apply_feature(&ev_to_ebitda, &params, ev_to_ebitda_index, "EV/EBITDA")?;
+        Ok(self.apply_value_quotation_type(valuation / self.n_shares_outstanding))
     }
 
     /// Ratio of dividends to earnings per share.
@@ -651,7 +623,7 @@ impl Stock {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Dividend_payout_ratio>
     /// - Original Source: N/A
-    pub fn payout_ratio(&self) -> Option<f64> {
+    pub fn payout_ratio(&self) -> f64 {
         corporate_finance::payout_ratio(self.dividend_per_share, self.earnings_per_share)
     }
 
@@ -672,7 +644,7 @@ impl Stock {
     /// # Links
     /// - Wikipedia: N/A
     /// - Original Source: N/A
-    pub fn plowback_ratio(&self) -> Option<f64> {
+    pub fn plowback_ratio(&self) -> f64 {
         corporate_finance::plowback_ratio(self.dividend_per_share, self.earnings_per_share)
     }
 
@@ -716,18 +688,20 @@ impl Stock {
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Present_value_of_growth_opportunities>
     /// - Original Source: N/A
     pub fn present_value_of_growth_opportunities(&self, expected_earnings: Option<f64>, expected_dividend: Option<f64>) -> f64 {
-        let expected_earnings: f64 = match expected_earnings {
-            Some(v) => v,
-            None => self.earnings_per_share,
-        };
+        let expected_earnings: f64 = expected_earnings.unwrap_or(self.earnings_per_share);
         let r: f64 = self.cost_of_equity_capital(expected_dividend);
         self.price_per_share - expected_earnings / r
     }
 }
 
+impl ErrorTitle for Stock {
+    fn error_title() -> String {
+        String::from("Stock")
+    }
+}
+
 impl FinancialInstrument for Stock {
 
-    /// # Descdription
     /// Present value of the stock.
     /// 
     /// # Output
@@ -747,7 +721,6 @@ impl FinancialInstrument for Stock {
         }
     }
 
-    /// # Descdription
     /// Net present value of the stock.
     ///
     /// # Output
@@ -756,7 +729,6 @@ impl FinancialInstrument for Stock {
         Ok(self.present_value()? - self.initial_price)
     }
 
-    /// # Descdription
     /// Future value of the stock.
     ///
     /// # Output
@@ -767,27 +739,9 @@ impl FinancialInstrument for Stock {
         Ok(self.present_value()? / discount_term.compounding_term(self.t_f))
     }
 
-    /// Returns an array of stock prices.
-    ///
-    /// # Input
-    /// - `end_index`: Time index beyond which no data will be returned
-    /// - `start_index`: Time index below which no data will be returned
-    fn get_prices(&self, end_index: usize, start_index: Option<usize>) -> Result<Array1<f64>, DigiFiError> {
-        self.asset_historical_data.get_price(end_index, start_index)
-    }
-
-    /// Returns an array of predictable incomes for the stock (i.e., dividends).
-    ///
-    /// # Input
-    /// - `end_index`: Time index beyond which no data will be returned
-    /// - `start_index`: Time index below which no data will be returned
-    fn get_predictable_income(&self, end_index: usize, start_index: Option<usize>) -> Result<Array1<f64>, DigiFiError> {
-        self.asset_historical_data.get_predictable_income(end_index, start_index)
-    }
-
-    /// Returns an array of time steps at which the asset price and predictable_income are recorded.
-    fn get_time_array(&self) -> Array1<f64> {
-        self.asset_historical_data.time_array.clone()
+    /// Returns asset's historical data.
+    fn historical_data(&self) -> &AssetHistData {
+        &self.asset_historical_data
     }
 
     /// Updates historical data of the asset with the newly generated data.
@@ -816,8 +770,7 @@ impl PortfolioInstrument for Stock {
 #[cfg(test)]
 mod tests {
     use ndarray::Array1;
-    use crate::utilities::TEST_ACCURACY;
-    use crate::utilities::time_value_utils::CompoundingType;
+    use crate::utilities::{TEST_ACCURACY, Time, time_value_utils::CompoundingType};
     use crate::financial_instruments::{FinancialInstrument, FinancialInstrumentId, FinancialInstrumentType, AssetClass};
     use crate::financial_instruments::stocks::{QuoteValues, StockValuationType, ValuationByComparablesParams, Stock};
     use crate::portfolio_applications::AssetHistData;
@@ -831,7 +784,7 @@ mod tests {
             identifier: String::from("32198407128904"),
         };
         let asset_historical_data: AssetHistData = AssetHistData::build(
-            Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]), Array1::from_vec(vec![0.0, 1.0])
+            Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]), Time::new(Array1::from_vec(vec![0.0, 1.0]))
         ).unwrap();
         let stock: Stock = Stock::new(
             100.0, 1_000_000, 3.0, 2.5, QuoteValues::PerShare, 99.0, compounding_type, 0.0,
@@ -853,7 +806,7 @@ mod tests {
             identifier: String::from("32198407128904"),
         };
         let asset_historical_data: AssetHistData = AssetHistData::build(
-            Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]), Array1::from_vec(vec![0.0, 1.0])
+            Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]), Time::new(Array1::from_vec(vec![0.0, 1.0]))
         ).unwrap();
         // Valuation parameters
         let valuations: Array1<f64> = Array1::from_vec(vec![200_000_000.0, 1_000_000_000.0, 3_000_000_000.0, 500_000_000.0, 1_500_000_000.0]);

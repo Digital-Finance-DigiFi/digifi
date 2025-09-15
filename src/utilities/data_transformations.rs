@@ -115,11 +115,18 @@ pub fn percent_change(x: &Array1<f64>) -> Array1<f64> {
 /// assert!((log_return_transformation(&x) - array![0.6931471805599453, -0.2231435513142097, 0.0, -32.236990899346836, 0.0]).map(|v| v.abs() ).sum() < TEST_ACCURACY);
 /// ```
 pub fn log_return_transformation(x: &Array1<f64>) -> Array1<f64> {
-    let arithmetic_change: Array1<f64> = percent_change(x);
-    arithmetic_change.map(|v| {
-        let v: f64 = match v { -1.0 => v + NUMERICAL_CORRECTION, _ => *v, };
+    let result: Vec<f64> = x.slice(s![1..(x.len())]).iter().zip(x.slice(s![0..(x.len()-1)]).iter()).map(|(final_, initial)| {
+        let percent_change: f64 = if initial == &0.0 && final_ == &0.0 {
+            0.0
+        } else if initial != &0.0 && final_ != &0.0 {
+            (final_ / initial) - 1.0
+        } else {
+            if initial < final_ { 1.0 } else { -1.0 }
+        };
+        let v: f64 = match percent_change { -1.0 => percent_change + NUMERICAL_CORRECTION, _ => percent_change, };
         (v + 1.0).ln()
-    } )
+    } ).collect();
+    Array1::from_vec(result)
 }
 
 
@@ -153,18 +160,21 @@ pub fn differencing(v: &Array1<f64>, n: usize) -> Result<Array1<f64>, DigiFiErro
     if v_len < n {
         return Err(DigiFiError::Other { title: "Differencing".to_owned(), details: "The `n` must be smaller than the length of the array `v`.".to_owned(), })
     }
-    let mut diff: Vec<f64> = Vec::<f64>::new();
+    let mut diff: Vec<f64> = Vec::with_capacity(v_len - n);
+    let n_u128: u128 = n as u128;
     // Iterate over slices of the time series to compute the time series of differenced values
     for j in (n..v_len).rev() {
         if (j as i32 - n as i32) < 0 {
             continue;
         }
         // Cut array and reverse the order of elements so that they are in time descending order (i.e., t, t-1, etc.)
-        let x: Vec<f64> = v.slice(s![(j-n)..(j+1)]).into_iter().map(|v_| *v_ ).rev().collect();
+        let x: Vec<f64> = v.slice(s![(j - n)..(j + 1)]).into_iter().map(|v_| *v_ ).rev().collect();
         let mut d: f64 = 0.0;
         // Apply differencing (via Binomial expansions for the specific `n`)
-        for i in 0..(n+1) {
-            d += (-1.0_f64).powi(i as i32) * (n_choose_r(n as u128, i as u128)? as f64) * x[i];
+        let mut sign: f64 = 1.0;
+        for i in 0..(n + 1) {
+            d += sign * (n_choose_r(n_u128, i as u128)? as f64) * x[i];
+            sign *= -1.0;
         }
         diff.insert(0, d);
     }
@@ -241,12 +251,13 @@ pub fn rank_transformation(x: &Array1<f64>) -> Array1<f64> {
 /// ```
 pub fn unit_vector_normalization(x: Array1<f64>, p: usize) -> Array1<f64> {
     let p_: i32 = p as i32;
-    let norm: f64 = x.iter().fold(0.0, |prev, curr| { prev + curr.abs().powi(p_) } ).powf(1.0 / p_ as f64);
+    let one_over_p: f64 = 1.0 / p_ as f64;
+    let norm: f64 = x.iter().fold(0.0, |prev, curr| { prev + curr.abs().powi(p_) } ).powf(one_over_p);
     x / norm
 }
 
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Type of data transformation that can be applied to an array of data.
 pub enum TransformationType {

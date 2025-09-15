@@ -16,10 +16,9 @@ fn transpose(v: Vec<Array1<f64>>) -> Vec<Array1<f64>> {
     let length: usize = v[0].len();
     // Transpose the vec of steps into a vec of paths
     let mut iters: Vec<_> = v.into_iter().map(|n| n.to_vec().into_iter() ).collect();
-    let paths: Vec<Vec<f64>> = (0..length).map(|_| {
-        iters.iter_mut().map(|n| n.next().unwrap() ).collect::<Vec<f64>>()
-    }).collect();
-    paths.into_iter().map(|v| Array1::from_vec(v) ).collect()
+    (0..length).map(|_| {
+        Array1::from_vec(iters.iter_mut().map(|n| n.next().unwrap() ).collect::<Vec<f64>>())
+    }).collect()
 }
 
 

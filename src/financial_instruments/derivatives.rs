@@ -3,7 +3,7 @@ use ndarray::Array1;
 use serde::{Serialize, Deserialize};
 #[cfg(feature = "plotly")]
 use plotly::{Plot, Surface, Layout, layout::{Axis, LayoutScene}, common::Title};
-use crate::error::DigiFiError;
+use crate::error::{DigiFiError, ErrorTitle};
 use crate::utilities::time_value_utils::{Compounding, CompoundingType};
 use crate::financial_instruments::{FinancialInstrument, FinancialInstrumentId, Payoff};
 use crate::portfolio_applications::{AssetHistData, PortfolioInstrument};
@@ -33,6 +33,7 @@ pub fn minimum_variance_hedge_ratio(asset_price_sigma: f64, contract_price_sigma
 }
 
 
+#[derive(Clone, Copy, Debug)]
 pub enum ContractType {
     Forward,
     Future,
@@ -48,14 +49,14 @@ pub enum OptionType {
 }
 
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum BlackScholesType {
     Call,
     Put,
 }
 
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum OptionPricingMethod {
     BlackScholes { type_: BlackScholesType },
     Binomial { n_steps: usize },
@@ -111,13 +112,13 @@ pub fn black_scholes_formula(s: f64, k: f64, sigma: f64, time_to_maturity: f64, 
     let d_2: f64 = d_1 - sigma * time_to_maturity.sqrt();
     match type_ {
         BlackScholesType::Call => {
-            let component_1: f64 = s * (-q * time_to_maturity).exp() * normal_dist.cdf(&Array1::from_vec(vec![d_1]))?[0];
-            let component_2: f64 = k * (-r * time_to_maturity).exp() * normal_dist.cdf(&Array1::from_vec(vec![d_2]))?[0];
+            let component_1: f64 = s * (-q * time_to_maturity).exp() * normal_dist.cdf(d_1)?;
+            let component_2: f64 = k * (-r * time_to_maturity).exp() * normal_dist.cdf(d_2)?;
             Ok(component_1 - component_2)
         },
         BlackScholesType::Put => {
-            let component_1: f64 = s * (-q * time_to_maturity).exp() * normal_dist.cdf(&Array1::from_vec(vec![-d_1]))?[0];
-            let component_2: f64 = k * (-r * time_to_maturity).exp() * normal_dist.cdf(&Array1::from_vec(vec![-d_2]))?[0];
+            let component_1: f64 = s * (-q * time_to_maturity).exp() * normal_dist.cdf(-d_1)?;
+            let component_2: f64 = k * (-r * time_to_maturity).exp() * normal_dist.cdf(-d_2)?;
             Ok(component_2 - component_1)
         },
     }
@@ -134,7 +135,7 @@ pub fn black_scholes_formula(s: f64, k: f64, sigma: f64, time_to_maturity: f64, 
 ///
 /// ```rust
 /// use ndarray::Array1;
-/// use digifi::utilities::{TEST_ACCURACY, CompoundingType};
+/// use digifi::utilities::{TEST_ACCURACY, Time, CompoundingType};
 /// use digifi::statistics::{ProbabilityDistribution, NormalDistribution};
 /// use digifi::financial_instruments::{FinancialInstrument, FinancialInstrumentId, FinancialInstrumentType, AssetClass, ContractType, Contract};
 /// use digifi::portfolio_applications::AssetHistData;
@@ -146,7 +147,7 @@ pub fn black_scholes_formula(s: f64, k: f64, sigma: f64, time_to_maturity: f64, 
 ///     identifier: String::from("32198407128904"),
 /// };
 /// let asset_historical_data: AssetHistData = AssetHistData::build(
-///     Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]), Array1::from_vec(vec![0.0, 1.0])
+///     Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]), Time::new(Array1::from_vec(vec![0.0, 1.0]))
 /// ).unwrap();
 /// let contract: Contract = Contract::build(
 ///     ContractType::Future, 1.5, 100.0, 0.03, 2.0, 101.0, compounding_type, financial_instrument_id, asset_historical_data, None
@@ -202,7 +203,10 @@ impl Contract {
         stochastic_model: Option<Box<dyn StochasticProcess>>
     ) -> Result<Self, DigiFiError> {
         if time_to_maturity < 0.0 {
-            return Err(DigiFiError::ParameterConstraint { title: "Contract".to_owned(), constraint: "The argument `time_to_maturity` must be non-negative.".to_owned(), });
+            return Err(DigiFiError::ParameterConstraint {
+                title: Self::error_title(),
+                constraint: "The argument `time_to_maturity` must be non-negative.".to_owned(),
+            });
         }
         Ok(Contract {
             _contract_type, current_contract_price, delivery_price, discount_rate, time_to_maturity, spot_price, compounding_type, financial_instrument_id,
@@ -227,7 +231,10 @@ impl Contract {
     /// - Returns an error if the new time to maturity is negative.
     pub fn update_time_to_maturity(&mut self, new_time_to_maturity: f64) -> Result<(), DigiFiError> {
         if new_time_to_maturity < 0.0 {
-            return Err(DigiFiError::ParameterConstraint { title: "Contract".to_owned(), constraint: "The argument new `time_to_maturity` must be non-negative.".to_owned(), });
+            return Err(DigiFiError::ParameterConstraint {
+                title: Self::error_title(),
+                constraint: "The argument `new_time_to_maturity` must be non-negative.".to_owned(),
+            });
         }
         self.time_to_maturity = new_time_to_maturity;
         Ok(())
@@ -252,6 +259,12 @@ impl Contract {
     pub fn forward_price(&self) -> Result<f64, DigiFiError> {
         let discount_term: Compounding = Compounding::new(self.discount_rate, &self.compounding_type);
         Ok(self.spot_price / discount_term.compounding_term(self.time_to_maturity))
+    }
+}
+
+impl ErrorTitle for Contract {
+    fn error_title() -> String {
+        String::from("Contract")
     }
 }
 
@@ -287,27 +300,9 @@ impl FinancialInstrument for Contract {
         Ok(self.present_value()? / discount_term.compounding_term(self.time_to_maturity))
     }
 
-    /// Returns an array of contract prices.
-    ///
-    /// # Input
-    /// - `end_index`: Time index beyond which no data will be returned
-    /// - `start_index`: Time index below which no data will be returned
-    fn get_prices(&self, end_index: usize, start_index: Option<usize>) -> Result<Array1<f64>, DigiFiError> {
-        self.asset_historical_data.get_price(end_index, start_index)
-    }
-
-    /// Returns an array of predictable incomes for the contract (i.e., predicatble yield, predictable income, storage cost).
-    ///
-    /// # Input
-    /// - `end_index`: Time index beyond which no data will be returned
-    /// - `start_index`: Time index below which no data will be returned
-    fn get_predictable_income(&self, end_index: usize, start_index: Option<usize>) -> Result<Array1<f64>, DigiFiError> {
-        self.asset_historical_data.get_predictable_income(end_index, start_index)
-    }
-
-    /// Returns an array of time steps at which the asset price and predictable_income are recorded.
-    fn get_time_array(&self) -> Array1<f64> {
-        self.asset_historical_data.time_array.clone()
+    /// Returns asset's historical data.
+    fn historical_data(&self) -> &AssetHistData {
+        &self.asset_historical_data
     }
 
     /// Updates historical data of the asset with the newly generated data.
@@ -343,7 +338,7 @@ impl PortfolioInstrument for Contract {
 ///
 /// ```rust
 /// use ndarray::Array1;
-/// use digifi::utilities::{TEST_ACCURACY, CompoundingType};
+/// use digifi::utilities::{TEST_ACCURACY, Time, CompoundingType};
 /// use digifi::statistics::{ProbabilityDistribution, NormalDistribution};
 /// use digifi::financial_instruments::{FinancialInstrument, FinancialInstrumentId, FinancialInstrumentType, AssetClass, LongCall, OptionType,
 ///                                     BlackScholesType, OptionPricingMethod, OptionContract};
@@ -355,7 +350,7 @@ impl PortfolioInstrument for Contract {
 ///     identifier: String::from("32198407128904"),
 /// };
 /// let asset_historical_data: AssetHistData = AssetHistData::build(
-///     Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]), Array1::from_vec(vec![0.0, 1.0])
+///     Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]), Time::new(Array1::from_vec(vec![0.0, 1.0]))
 /// ).unwrap();
 /// let payoff: Box<LongCall> = Box::new(LongCall { k: 100.0, cost: 1.5 });
 /// let option_pricing_method: OptionPricingMethod = OptionPricingMethod::BlackScholes { type_: BlackScholesType::Call };
@@ -365,11 +360,11 @@ impl PortfolioInstrument for Contract {
 ///
 /// // Theoretical value
 /// let normal_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0).unwrap();
-/// let d_1_numerator: f64 = (99.0/100.0_f64).ln() + 3.0  * (0.02 - 0.0 + 0.5*0.2_f64.powi(2));
+/// let d_1_numerator: f64 = (99.0 / 100.0_f64).ln() + 3.0  * (0.02 - 0.0 + 0.5 * 0.2_f64.powi(2));
 /// let d_1: f64 = d_1_numerator / (0.2 * 3.0_f64.sqrt());
 /// let d_2: f64 = d_1 - 0.2 * 3.0_f64.sqrt();
-/// let component_1: f64 = 99.0 * (-0.0 * 3.0_f64).exp() * normal_dist.cdf(&Array1::from_vec(vec![d_1])).unwrap()[0];
-/// let component_2: f64 = 100.0 * (-0.02 * 3.0_f64).exp() * normal_dist.cdf(&Array1::from_vec(vec![d_2])).unwrap()[0];
+/// let component_1: f64 = 99.0 * (-0.0 * 3.0_f64).exp() * normal_dist.cdf(d_1).unwrap();
+/// let component_2: f64 = 100.0 * (-0.02 * 3.0_f64).exp() * normal_dist.cdf(d_2).unwrap();
 /// let pv: f64 = component_1 - component_2;
 /// assert!((option.present_value().unwrap() - pv).abs() < TEST_ACCURACY);
 /// ```
@@ -428,15 +423,17 @@ impl OptionContract {
         payoff: Box<dyn Payoff>, initial_option_price: f64, option_pricing_method: OptionPricingMethod, financial_instrument_id: FinancialInstrumentId,
         asset_historical_data: AssetHistData, stochastic_model: Option<Box<dyn StochasticProcess>>
     ) -> Result<Self, DigiFiError> {
-        let error_title: String = String::from("Option Contract");
         if time_to_maturity < 0.0 {
-            return Err(DigiFiError::ParameterConstraint { title: error_title.clone(), constraint: "The argument `time_to_maturity` must be non-negative.".to_owned(), });
+            return Err(DigiFiError::ParameterConstraint { title: Self::error_title(), constraint: "The argument `time_to_maturity` must be non-negative.".to_owned(), });
         }
         match option_pricing_method {
             OptionPricingMethod::BlackScholes { .. } => {
                 match option_type {
                     OptionType::European => (),
-                    _ => return Err(DigiFiError::ValidationError { title: error_title.clone(), details: "`Black-Scholes` option pricing can only be used for `European` options.".to_owned(), }),
+                    _ => return Err(DigiFiError::ValidationError {
+                        title: Self::error_title(),
+                        details: "`Black-Scholes` option pricing can only be used for `European` options.".to_owned(),
+                    }),
                 }
             },
             _ => (),
@@ -450,12 +447,8 @@ impl OptionContract {
 
     /// Check that the instance is a European option.
     fn is_european(&self) -> Result<(), DigiFiError> {
-        match self.option_type {
-            OptionType::European => Ok(()),
-            _ => {
-                return Err(DigiFiError::ValidationError { title: "Option Contract".to_owned(), details: "The option is not `European`.".to_owned(), });
-            }
-        }
+        if let OptionType::European = self.option_type { return Ok(()) }
+        Err(DigiFiError::ValidationError { title: Self::error_title(), details: "The option is not `European`.".to_owned(), })
     }
 
     /// Measure of sensitivity of the option price to the underlying asset price.
@@ -607,20 +600,8 @@ impl OptionContract {
     /// # Errors
     /// - Returns an error if the option is not European.
     fn european_option_black_scholes(&self, black_scholes_type: &BlackScholesType) -> Result<f64, DigiFiError> {
-        let (d_1, d_2) = self.european_option_black_scholes_params()?;
-        let normal_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
-        match black_scholes_type {
-            BlackScholesType::Call => {
-                let component_1: f64 = self.asset_price * (-self.yield_ * self.time_to_maturity).exp() * normal_dist.cdf(&Array1::from_vec(vec![d_1]))?[0];
-                let component_2: f64 = self.strike_price * (-self.discount_rate * self.time_to_maturity).exp() * normal_dist.cdf(&Array1::from_vec(vec![d_2]))?[0];
-                Ok(component_1 - component_2)
-            },
-            BlackScholesType::Put => {
-                let component_1: f64 = self.asset_price * (-self.yield_ * self.time_to_maturity).exp() * normal_dist.cdf(&Array1::from_vec(vec![-d_1]))?[0];
-                let component_2: f64 = self.strike_price * (-self.discount_rate * self.time_to_maturity).exp() * normal_dist.cdf(&Array1::from_vec(vec![d_2]))?[0];
-                Ok(component_2 - component_1)
-            },
-        }
+        self.is_european()?;
+        black_scholes_formula(self.asset_price, self.strike_price, self.sigma, self.time_to_maturity, self.discount_rate, self.yield_, black_scholes_type)
     }
 
     /// Delta of the European option.
@@ -638,10 +619,10 @@ impl OptionContract {
         let normal_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
         match black_scholes_type {
             BlackScholesType::Call => {
-                Ok((-self.yield_ * self.time_to_maturity).exp() * normal_dist.cdf(&Array1::from_vec(vec![d_1]))?[0])
+                Ok((-self.yield_ * self.time_to_maturity).exp() * normal_dist.cdf(d_1)?)
             },
             BlackScholesType::Put => {
-                Ok(-(-self.yield_ * self.time_to_maturity).exp() * normal_dist.cdf(&Array1::from_vec(vec![-d_1]))?[0])
+                Ok(-(-self.yield_ * self.time_to_maturity).exp() * normal_dist.cdf(-d_1)?)
             },
         }
     }
@@ -659,7 +640,7 @@ impl OptionContract {
     pub fn european_option_vega(&self) -> Result<f64, DigiFiError> {
         let (d_1, _) = self.european_option_black_scholes_params()?;
         let normal_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
-        Ok(self.asset_price * (-self.yield_ * self.time_to_maturity).exp() * normal_dist.cdf(&Array1::from_vec(vec![d_1]))?[0] * self.time_to_maturity.sqrt())
+        Ok(self.asset_price * (-self.yield_ * self.time_to_maturity).exp() * normal_dist.cdf(d_1)? * self.time_to_maturity.sqrt())
     }
 
     /// Theta of the European option.
@@ -677,15 +658,15 @@ impl OptionContract {
         let normal_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
         match black_scholes_type {
             BlackScholesType::Call => {
-                let component_1: f64 = -(-self.yield_ * self.time_to_maturity).exp() * self.asset_price * normal_dist.cdf(&Array1::from_vec(vec![d_1]))?[0] * self.sigma / (2.0 * self.time_to_maturity.sqrt());
-                let component_2: f64 = self.discount_rate * self.strike_price * (-self.discount_rate * self.time_to_maturity).exp() * normal_dist.cdf(&Array1::from_vec(vec![d_2]))?[0];
-                let component_3: f64 = self.yield_ * self.asset_price * (-self.yield_ * self.time_to_maturity).exp() * normal_dist.cdf(&Array1::from_vec(vec![d_1]))?[0];
+                let component_1: f64 = -(-self.yield_ * self.time_to_maturity).exp() * self.asset_price * normal_dist.cdf(d_1)? * self.sigma / (2.0 * self.time_to_maturity.sqrt());
+                let component_2: f64 = self.discount_rate * self.strike_price * (-self.discount_rate * self.time_to_maturity).exp() * normal_dist.cdf(d_2)?;
+                let component_3: f64 = self.yield_ * self.asset_price * (-self.yield_ * self.time_to_maturity).exp() * normal_dist.cdf(d_1)?;
                 Ok(component_1 - component_2 + component_3)
             },
             BlackScholesType::Put => {
-                let component_1: f64 = -(-self.yield_ * self.time_to_maturity).exp() * self.asset_price * normal_dist.cdf(&Array1::from_vec(vec![d_1]))?[0] * self.sigma / (2.0 * self.time_to_maturity.sqrt());
-                let component_2: f64 = self.discount_rate * self.strike_price * (-self.discount_rate * self.time_to_maturity).exp() * normal_dist.cdf(&Array1::from_vec(vec![-d_2]))?[0];
-                let component_3: f64 = self.yield_ * self.asset_price * (-self.yield_ * self.time_to_maturity).exp() * normal_dist.cdf(&Array1::from_vec(vec![-d_1]))?[0];
+                let component_1: f64 = -(-self.yield_ * self.time_to_maturity).exp() * self.asset_price * normal_dist.cdf(d_1)? * self.sigma / (2.0 * self.time_to_maturity.sqrt());
+                let component_2: f64 = self.discount_rate * self.strike_price * (-self.discount_rate * self.time_to_maturity).exp() * normal_dist.cdf(-d_2)?;
+                let component_3: f64 = self.yield_ * self.asset_price * (-self.yield_ * self.time_to_maturity).exp() * normal_dist.cdf(-d_1)?;
                 Ok(component_1+ component_2 - component_3)
             },
         }
@@ -706,10 +687,10 @@ impl OptionContract {
         let normal_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
         match black_scholes_type {
             BlackScholesType::Call => {
-                Ok(self.strike_price * self.time_to_maturity * (-self.discount_rate * self.time_to_maturity).exp() * normal_dist.cdf(&Array1::from_vec(vec![d_2]))?[0])
+                Ok(self.strike_price * self.time_to_maturity * (-self.discount_rate * self.time_to_maturity).exp() * normal_dist.cdf(d_2)?)
             },
             BlackScholesType::Put => {
-                Ok(-self.strike_price * self.time_to_maturity * (-self.discount_rate * self.time_to_maturity).exp() * normal_dist.cdf(&Array1::from_vec(vec![-d_2]))?[0])
+                Ok(-self.strike_price * self.time_to_maturity * (-self.discount_rate * self.time_to_maturity).exp() * normal_dist.cdf(-d_2)?)
             },
         }
     }
@@ -729,10 +710,10 @@ impl OptionContract {
         let normal_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
         match black_scholes_type {
             BlackScholesType::Call => {
-                Ok(-self.asset_price * self.time_to_maturity * (-self.yield_*self.time_to_maturity).exp() * normal_dist.cdf(&Array1::from_vec(vec![d_1]))?[0])
+                Ok(-self.asset_price * self.time_to_maturity * (-self.yield_*self.time_to_maturity).exp() * normal_dist.cdf(d_1)?)
             },
             BlackScholesType::Put => {
-                Ok(self.asset_price * self.time_to_maturity * (-self.yield_*self.time_to_maturity).exp() * normal_dist.cdf(&Array1::from_vec(vec![-d_1]))?[0])
+                Ok(self.asset_price * self.time_to_maturity * (-self.yield_*self.time_to_maturity).exp() * normal_dist.cdf(-d_1)?)
             },
         }
     }
@@ -749,7 +730,7 @@ impl OptionContract {
     pub fn european_option_gamma(&self) -> Result<f64, DigiFiError> {
         let (d_1, _) = self.european_option_black_scholes_params()?;
         let normal_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
-        Ok((-self.yield_ * self.time_to_maturity).exp() * normal_dist.cdf(&Array1::from_vec(vec![d_1]))?[0] / (self.asset_price * self.sigma * self.time_to_maturity.sqrt()))
+        Ok((-self.yield_ * self.time_to_maturity).exp() * normal_dist.cdf(d_1)? / (self.asset_price * self.sigma * self.time_to_maturity.sqrt()))
     }
 
     /// Surface (i.e., underlying asset price vs option value vs time-to-maturity) of the option price as it approaches maturity.
@@ -771,14 +752,14 @@ impl OptionContract {
         let times_to_maturity: Array1<f64> = Array1::linspace(self.time_to_maturity, 0.0, n_time_steps);
         let price_array: Array1<f64> = Array1::linspace(start_price, stop_price, n_prices);
         // Computation of present value for every point on the grid
-        let mut option_pv_matrix: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
+        let mut option_pv_matrix: Vec<Array1<f64>> = Vec::with_capacity(n_time_steps);
         for i in 0..n_time_steps {
             let option_pv_array: Array1<f64>;
             if i == (n_time_steps - 1) {
-                option_pv_array = self.payoff.payoff(&price_array);
+                option_pv_array = self.payoff.payoff_iter(&price_array);
             } else {
                 self.time_to_maturity = times_to_maturity[i];
-                let mut present_values: Vec<f64> = Vec::<f64>::new();
+                let mut present_values: Vec<f64> = Vec::with_capacity(n_prices);
                 for j in 0..n_prices {
                     self.asset_price = price_array[j];
                     present_values.push(self.present_value()?);
@@ -791,6 +772,12 @@ impl OptionContract {
         self.time_to_maturity = initial_time_to_maturity;
         self.asset_price = initial_asset_price;
         Ok(PresentValueSurface { times_to_maturity, price_array, pv_matrix: option_pv_matrix })
+    }
+}
+
+impl ErrorTitle for OptionContract {
+    fn error_title() -> String {
+        String::from("Option Contract")
     }
 }
 
@@ -840,27 +827,9 @@ impl FinancialInstrument for OptionContract {
         Ok(self.present_value()? * (self.discount_rate * self.time_to_maturity).exp())
     }
 
-    /// Returns an array of option prices.
-    ///
-    /// # Input
-    /// - `end_index`: Time index beyond which no data will be returned
-    /// - `start_index`: Time index below which no data will be returned
-    fn get_prices(&self, end_index: usize, start_index: Option<usize>) -> Result<Array1<f64>, DigiFiError> {
-        self.asset_historical_data.get_price(end_index, start_index)
-    }
-
-    /// Returns an array of predictable incomes for the option.
-    ///
-    /// # Input
-    /// - `end_index`: Time index beyond which no data will be returned
-    /// - `start_index`: Time index below which no data will be returned
-    fn get_predictable_income(&self, end_index: usize, start_index: Option<usize>) -> Result<Array1<f64>, DigiFiError> {
-        self.asset_historical_data.get_predictable_income(end_index, start_index)
-    }
-
-    /// Returns an array of time steps at which the asset price and predictable_income are recorded.
-    fn get_time_array(&self) -> Array1<f64> {
-        self.asset_historical_data.time_array.clone()
+    /// Returns asset's historical data.
+    fn historical_data(&self) -> &AssetHistData {
+        &self.asset_historical_data
     }
 
     /// Updates historical data of the asset with the newly generated data.
@@ -915,7 +884,7 @@ impl PortfolioInstrument for OptionContract {
 ///         identifier: String::from("32198407128904"),
 ///     };
 ///     let asset_historical_data: AssetHistData = AssetHistData::build(
-///         Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]), Array1::from_vec(vec![0.0, 1.0])
+///         Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]), Time::new(Array1::from_vec(vec![0.0, 1.0]))
 ///     ).unwrap();
 ///     let payoff: Box<LongCall> = Box::new(LongCall { k: 100.0, cost: 1.5 });
 ///     let option_pricing_method: OptionPricingMethod = OptionPricingMethod::Binomial { n_steps: 50 };
@@ -949,7 +918,7 @@ pub fn plot_present_value_surface(surface: &PresentValueSurface) -> Plot {
 #[cfg(test)]
 mod tests {
     use ndarray::Array1;
-    use crate::utilities::{TEST_ACCURACY, time_value_utils::CompoundingType};
+    use crate::utilities::{TEST_ACCURACY, Time, time_value_utils::CompoundingType};
     use crate::financial_instruments::{FinancialInstrument, FinancialInstrumentId, FinancialInstrumentType, AssetClass, LongCall};
     use crate::financial_instruments::derivatives::{ContractType, Contract, OptionType, OptionPricingMethod, BlackScholesType, OptionContract};
     use crate::portfolio_applications::AssetHistData;
@@ -971,7 +940,8 @@ mod tests {
             identifier: String::from("32198407128904"),
         };
         let asset_historical_data: AssetHistData = AssetHistData::build(
-            Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]), Array1::from_vec(vec![0.0, 1.0])
+            Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]),
+            Time::new(Array1::from_vec(vec![0.0, 1.0]))
         ).unwrap();
         let contract: Contract = Contract::build(
             ContractType::Future, 1.5, 100.0, 0.03, 2.0, 101.0, compounding_type, financial_instrument_id,
@@ -991,7 +961,8 @@ mod tests {
             identifier: String::from("32198407128904"),
         };
         let asset_historical_data: AssetHistData = AssetHistData::build(
-            Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]), Array1::from_vec(vec![0.0, 1.0])
+            Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]),
+            Time::new(Array1::from_vec(vec![0.0, 1.0]))
         ).unwrap();
         let payoff: Box<LongCall> = Box::new(LongCall { k: 100.0, cost: 1.5 });
         let option_pricing_method: OptionPricingMethod = OptionPricingMethod::BlackScholes { type_: BlackScholesType::Call };
@@ -1001,11 +972,11 @@ mod tests {
         ).unwrap();
         // Theoretical value
         let normal_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0).unwrap();
-        let d_1_numerator: f64 = (99.0/100.0_f64).ln() + 3.0  * (0.02 - 0.0 + 0.5*0.2_f64.powi(2));
+        let d_1_numerator: f64 = (99.0 / 100.0_f64).ln() + 3.0  * (0.02 - 0.0 + 0.5 * 0.2_f64.powi(2));
         let d_1: f64 = d_1_numerator / (0.2 * 3.0_f64.sqrt());
         let d_2: f64 = d_1 - 0.2 * 3.0_f64.sqrt();
-        let component_1: f64 = 99.0 * (-0.0 * 3.0_f64).exp() * normal_dist.cdf(&Array1::from_vec(vec![d_1])).unwrap()[0];
-        let component_2: f64 = 100.0 * (-0.02 * 3.0_f64).exp() * normal_dist.cdf(&Array1::from_vec(vec![d_2])).unwrap()[0];
+        let component_1: f64 = 99.0 * (-0.0 * 3.0_f64).exp() * normal_dist.cdf(d_1).unwrap();
+        let component_2: f64 = 100.0 * (-0.02 * 3.0_f64).exp() * normal_dist.cdf(d_2).unwrap();
         let pv: f64 = component_1 - component_2;
         assert!((option.present_value().unwrap() - pv).abs() < TEST_ACCURACY);
     }
@@ -1021,11 +992,15 @@ mod tests {
         use crate::financial_instruments::LongCall;
         let payoff: LongCall = LongCall { k: 105.0, cost: 0.0, };
         // Binomial model
-        let bmbm: BrownianMotionBinomialModel = BrownianMotionBinomialModel::build(Box::new(payoff.clone()), 100.0, 1.0, 0.02, 0.15, 0.0, 1000).unwrap();
+        let bmbm: BrownianMotionBinomialModel = BrownianMotionBinomialModel::build(
+            Box::new(payoff.clone()), 100.0, 1.0, 0.02, 0.15, 0.0, 1000
+        ).unwrap();
         let predicted_value: f64 = bmbm.european().unwrap();
         println!("Binomial: {}", predicted_value);
         // Trinomial model
-        let bmtm: BrownianMotionTrinomialModel = BrownianMotionTrinomialModel::build(Box::new(payoff.clone()), 100.0, 1.0, 0.02, 0.15, 0.0, 1000).unwrap();
+        let bmtm: BrownianMotionTrinomialModel = BrownianMotionTrinomialModel::build(
+            Box::new(payoff.clone()), 100.0, 1.0, 0.02, 0.15, 0.0, 1000
+        ).unwrap();
         let predicted_value: f64 = bmtm.european().unwrap();
         println!("Trinomial: {}", predicted_value);
         // Black-Scholes
@@ -1050,7 +1025,8 @@ mod tests {
             identifier: String::from("32198407128904"),
         };
         let asset_historical_data: AssetHistData = AssetHistData::build(
-            Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]), Array1::from_vec(vec![0.0, 1.0])
+            Array1::from_vec(vec![0.4, 0.5]), Array1::from_vec(vec![0.0, 0.0]),
+            Time::new(Array1::from_vec(vec![0.0, 1.0]))
         ).unwrap();
         let payoff: Box<LongCall> = Box::new(LongCall { k: 100.0, cost: 1.5 });
         let option_pricing_method: OptionPricingMethod = OptionPricingMethod::Binomial { n_steps: 50 };

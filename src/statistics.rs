@@ -23,17 +23,18 @@ pub mod stat_tests;
 mod linear_regression_analysis;
 
 
+use std::borrow::Borrow;
 use ndarray::{Array1, Array2};
 use nalgebra::DMatrix;
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
 use crate::error::DigiFiError;
-use crate::utilities::{compare_array_len, MatrixConversion};
+use crate::utilities::{compare_len, MatrixConversion};
 use crate::utilities::maths_utils::factorial;
 use crate::utilities::loss_functions::{LossFunction, SSE};
 
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ProbabilityDistributionType {
     Discrete,
@@ -43,6 +44,9 @@ pub enum ProbabilityDistributionType {
 
 /// Trait that describes all the available methods for a probability distribution.
 pub trait ProbabilityDistribution {
+    /// Type of probability distribution.
+    fn distribution_type() -> ProbabilityDistributionType;
+
     /// Mean.
     fn mean(&self) -> f64;
 
@@ -65,16 +69,65 @@ pub trait ProbabilityDistribution {
     fn entropy(&self) -> Result<f64, DigiFiError>;
 
     /// Probability density function.
-    fn pdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, DigiFiError>;
+    fn pdf(&self, x: f64) -> Result<f64, DigiFiError>;
 
-    /// Cummulative distribution function (CDF).
-    fn cdf(&self, x: &Array1<f64>) -> Result<Array1<f64>, DigiFiError>;
-
-    /// Moment generating function (MGF).
-    fn mgf(&self, t: &Array1<usize>) -> Array1<f64>;
+    /// Cumulative distribution function (CDF).
+    fn cdf(&self, x: f64) -> Result<f64, DigiFiError>;
 
     /// Inverse cumulative distribution function (CDF), else knwon as quantile function.
-    fn inverse_cdf(&self, p: &Array1<f64>) -> Result<Array1<f64>, DigiFiError>;
+    fn inverse_cdf(&self, p: f64) -> Result<f64, DigiFiError>;
+
+    /// Moment generating function (MGF).
+    fn mgf(&self, t: usize) -> f64;
+
+    /// Probability density function (PDF) applied to the array of values.
+    fn pdf_iter<T, I>(&self, x: T) -> Result<Array1<f64>, DigiFiError>
+    where
+        T: Iterator<Item = I> + ExactSizeIterator,
+        I: Borrow<f64>,
+    {
+        let mut p: Vec<f64> = Vec::with_capacity(x.len());
+        for i in x {
+            p.push(self.pdf(*i.borrow())?);
+        }
+        Ok(Array1::from_vec(p))
+    }
+
+    /// Cumulative distribution function (CDF) applied to the array of values.
+    fn cdf_iter<T, I>(&self, x: T) -> Result<Array1<f64>, DigiFiError>
+    where
+        T: Iterator<Item = I> + ExactSizeIterator,
+        I: Borrow<f64>,
+    {
+        let mut p: Vec<f64> = Vec::with_capacity(x.len());
+        for i in x {
+            p.push(self.cdf(*i.borrow())?);
+        }
+        Ok(Array1::from_vec(p))
+    }
+
+    /// Inverse cumulative distribution function (CDF) applied to the array of values.
+    fn inverse_cdf_iter<T, I>(&self, p: T) -> Result<Array1<f64>, DigiFiError>
+    where
+        T: Iterator<Item = I> + ExactSizeIterator,
+        I: Borrow<f64>,
+    {
+        let mut xs: Vec<f64> = Vec::with_capacity(p.len());
+        for i in p {
+            xs.push(self.inverse_cdf(*i.borrow())?);
+        }
+        Ok(Array1::from_vec(xs))
+    }
+
+    /// Moment generating function (MGF) applied to the array of values.
+    fn mgf_iter<T, I>(&self, t: T) -> Result<Array1<f64>, DigiFiError>
+    where
+        T: Iterator<Item = I>,
+        I: Borrow<usize>
+    {
+        let ts: Vec<f64> = t.map(|t| self.mgf(*t.borrow()) ).collect();
+        Ok(Array1::from_vec(ts))
+    }
 }
 
 
@@ -115,7 +168,7 @@ pub trait ProbabilityDistribution {
 /// ```
 pub fn covariance(array_1: &Array1<f64>, array_2: &Array1<f64>, ddof: usize) -> Result<f64, DigiFiError> {
     let error_title: String = String::from("Covariance");
-    compare_array_len(array_1, array_2, "array_1", "array_2")?;
+    compare_len(&array_1.iter(), &array_2.iter(), "array_1", "array_2")?;
     let array_1_mean: f64 = match array_1.mean() {
         Some(mean) => mean,
         None => return Err(DigiFiError::MeanCalculation { title: error_title, series: "array_1".to_owned(), }),
@@ -124,9 +177,11 @@ pub fn covariance(array_1: &Array1<f64>, array_2: &Array1<f64>, ddof: usize) -> 
         Some(v) => v,
         None => return Err(DigiFiError::MeanCalculation { title: error_title, series: "array_2".to_owned(), })
     };
-    let x: Array1<f64> = array_1 - array_1_mean;
-    let y: Array1<f64> = array_2 - array_2_mean;
-    Ok((&x * &y).sum() / (x.len() - ddof) as f64)
+    Ok(
+        array_1.iter()
+            .zip(array_2.iter())
+            .fold(0.0, |total, (x, y)| total + (x - array_1_mean) * (y - array_2_mean) ) / (array_1.len() - ddof) as f64
+    )
 }
 
 
@@ -164,24 +219,16 @@ pub fn covariance(array_1: &Array1<f64>, array_2: &Array1<f64>, ddof: usize) -> 
 /// ```
 pub fn skewness(array: &Array1<f64>) -> Result<f64, DigiFiError> {
     let error_title: String = String::from("Skewness");
+    if array.len() <= 1 {
+        return Err(DigiFiError::ValidationError { title: error_title, details: "The length of `array` must be at least `2`.".to_owned(), });
+    }
     let mean: f64 = match array.mean() {
         Some(v) => v,
         None => return Err(DigiFiError::MeanCalculation { title: error_title, series: "array".to_owned(), }),
     };
-    let difference: Array1<f64> = array - mean;
-    let numerator: f64 = match difference.map(| i | i.powi(3)).mean() {
-        Some(v) => v,
-        None => return Err(DigiFiError::MeanCalculation { title: error_title, series: "difference array".to_owned(), }),
-    };
-    let denominator: f64 = match difference.map(| i | i.powi(2)).mean() {
-        Some(v) => v.powf(3.0/2.0),
-        None => return Err(DigiFiError::MeanCalculation { title: error_title, series: "difference array".to_owned(), }),
-    };
-    if denominator == 0.0 {
-        Ok(f64::NAN)
-    } else {
-        Ok(numerator / denominator)
-    }
+    let (num, denom) = array.iter().fold((0.0, 0.0),  |(num, denom), v| (num + (v - mean).powi(3), denom + (v - mean).powi(2)) );
+    let array_len: f64 = array.len() as f64;
+    Ok((num / array_len) / (denom / array_len).powf(3.0/2.0))
 }
 
 
@@ -219,24 +266,32 @@ pub fn skewness(array: &Array1<f64>) -> Result<f64, DigiFiError> {
 /// ```
 pub fn kurtosis(array: &Array1<f64>) -> Result<f64, DigiFiError> {
     let error_title: String = String::from("Kurtosis");
+    if array.len() <= 1 {
+        return Err(DigiFiError::ValidationError { title: error_title, details: "The length of `array` must be at least `2`.".to_owned(), });
+    }
     let mean: f64 = match array.mean() {
         Some(v) => v,
         None => return Err(DigiFiError::MeanCalculation { title: error_title, series: "array".to_owned(), }),
     };
-    let difference: Array1<f64> = array - mean;
-    let numerator: f64 = match difference.map(| i | i.powi(2)).mean() {
-        Some(v) => v,
-        None => return Err(DigiFiError::MeanCalculation { title: error_title, series: "difference array".to_owned(), }),
-    };
-    let denominator: f64 = match difference.map(| i | i.powi(2)).mean() {
-        Some(v) => v.powi(2),
-        None => return Err(DigiFiError::MeanCalculation { title: error_title, series: "difference array".to_owned(), }),
-    };
-    if denominator == 0.0 {
-        Ok(f64::NAN)
-    } else {
-        Ok(numerator / denominator)
-    }
+    let (num, denom) = array.iter().fold((0.0, 0.0), |(num, denom), v| (num + (v - mean).powi(2), denom + (v - mean).powi(2)) );
+    let array_len: f64 = array.len() as f64;
+    Ok((num / array_len) / (denom / array_len).powi(2))
+}
+
+
+/// Changes the period for which the standard deviation applies by multiplying standard deviation by factor `sqrt(n)`.
+/// 
+/// Note: This is useful when you want to obtain estimated standard deviation for large period of time from data that is high frequency
+/// (e.g., standard deviation of daily returns can be annualized by settings `n=252`)
+/// 
+/// # Input
+/// - `std`: Standard deviation of data with higher frequency
+/// - `n`: Number of data points in the desired re-sampled standard deviation.
+/// 
+/// # Output
+/// - Standard deviation of returns over a certain period
+pub fn change_frequency_std(std: f64, n: f64) -> f64 {
+    std * n.sqrt()
 }
 
 
@@ -276,9 +331,8 @@ pub fn kurtosis(array: &Array1<f64>) -> Result<f64, DigiFiError> {
 /// ```
 pub fn pearson_correlation(array_1: &Array1<f64>, array_2: &Array1<f64>, ddof: usize) -> Result<f64, DigiFiError> {
     let cov: f64 = covariance(array_1, array_2, ddof)?;
-    let sigma_1: f64 = covariance(array_1, array_1, ddof)?.sqrt();
-    let sigma_2: f64 = covariance(array_2, array_2, ddof)?.sqrt();
-    Ok(cov / (sigma_1 * sigma_2))
+    let ddof: f64 = ddof as f64;
+    Ok(cov / (array_1.std(ddof) * array_2.std(ddof)))
 }
 
 
@@ -385,14 +439,14 @@ pub fn linear_regression(x: &Array2<f64>, y: &Array1<f64>) -> Result<Array1<f64>
 /// - Original Source: N/A
 pub fn se_lr_coefficient(y: &Array1<f64>, y_prediction: &Array1<f64>, x: &Array1<f64>, ddof: usize) -> Result<f64, DigiFiError> {
     let error_title: String = String::from("Standard Error of Linear Regression Coefficient");
-    compare_array_len(x, y_prediction, "x", "y_prediction")?;
-    compare_array_len(x, y, "x", "y")?;
+    compare_len(&x.iter(), &y_prediction.iter(), "x", "y_prediction")?;
+    compare_len(&x.iter(), &y.iter(), "x", "y")?;
     let loss_function: SSE = SSE;
     let denominator: f64 = match y.len().checked_sub(ddof) {
         Some(v) => v as f64, // Number of data points (degrees of freedom) minus constrained degrees of freedom by the model (i.e., number of features)
         None => return Err(DigiFiError::Other { title: error_title, details: "There are fewer data points in `y` array than `ddof`.".to_owned(), }),
     };
-    let estimated_var: f64 = loss_function.loss_array(y, y_prediction)? / denominator;
+    let estimated_var: f64 = loss_function.loss_iter(y.iter(), y_prediction.iter())? / denominator;
     let mean_of_x: f64 = x.mean().ok_or(DigiFiError::MeanCalculation { title: error_title, series: "x".to_owned(), })?;
     let estimated_var_beta_denominator: f64 = x.map(|v| (v - mean_of_x).powi(2) ).sum();
     Ok((estimated_var / estimated_var_beta_denominator).sqrt())
@@ -416,11 +470,14 @@ pub fn se_lr_coefficient(y: &Array1<f64>, y_prediction: &Array1<f64>, x: &Array1
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Coefficient_of_determination>
 /// - Original Source: N/A
 pub fn r_squared(real_values: &Array1<f64>, predicted_values: &Array1<f64>) -> Result<f64, DigiFiError> {
-    compare_array_len(&real_values, &predicted_values, "real_values", "predicted_values")?;
-    let residual_sum: f64 = (real_values - predicted_values).map(|x| x.powi(2)).sum();
-    let total_sum: f64 = (real_values - real_values.mean()
-        .ok_or(DigiFiError::MeanCalculation { title: "R Square".to_owned(), series: "real_values".to_owned(), })?).map(|x| x.powi(2)).sum();
-    Ok(1.0 - residual_sum/total_sum)
+    compare_len(&real_values.iter(), &predicted_values.iter(), "real_values", "predicted_values")?;
+    let real_values_mean: f64 = real_values.mean()
+        .ok_or(DigiFiError::MeanCalculation { title: "R Square".to_owned(), series: "real_values".to_owned(), })?;
+    let (residual_sum, total_sum) = real_values.iter().zip(predicted_values.iter())
+        .fold((0.0, 0.0), |(residual_sum, total_sum), (real, predicted)| {
+            (residual_sum + (real - predicted).powi(2), total_sum + (real - real_values_mean).powi(2))
+        } );
+    Ok(1.0 - residual_sum / total_sum)
 }
 
 
@@ -442,7 +499,7 @@ pub fn r_squared(real_values: &Array1<f64>, predicted_values: &Array1<f64>) -> R
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Coefficient_of_determination#Adjusted_R2>
 /// - Original Source: N/A
 pub fn adjusted_r_squared(real_values: &Array1<f64>, predicted_values: &Array1<f64>, sample_size: usize, k_variables: usize) -> Result<f64, DigiFiError> {
-    Ok(1.0 - (1.0-r_squared(real_values, predicted_values)?) * (sample_size as f64 - 1.0) / ((sample_size-k_variables) as f64 - 1.0))
+    Ok(1.0 - (1.0-r_squared(real_values, predicted_values)?) * (sample_size as f64 - 1.0) / ((sample_size - k_variables) as f64 - 1.0))
 }
 
 
@@ -469,10 +526,8 @@ pub fn variance_inflation_factor(xis: &Vec<Array1<f64>>, xi: &Array1<f64>) -> Re
     let lr: LinearRegressionAnalysis = LinearRegressionAnalysis::new(settings);
     let lr_result: LinearRegressionResult = lr.run(xis, xi)?;
     match lr_result.r_squared {
-        Some(r) => {
-            if r == 1.0 { return Ok(None) } else { Ok(Some(1.0 / (1.0 - r))) }
-        },
-        None => Ok(None),
+        Some(r) if r != 1.0 => Ok(Some(1.0 / (1.0 - r))),
+        _ => Ok(None),
     }
 }
 

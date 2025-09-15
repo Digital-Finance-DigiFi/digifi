@@ -35,7 +35,7 @@ pub mod sample_data;
 
 use ndarray::{Array1, Array2};
 use nalgebra::DMatrix;
-use crate::error::DigiFiError;
+use crate::error::{DigiFiError, ErrorTitle};
 
 
 pub const TEST_ACCURACY: f64 = 0.00000001;
@@ -52,71 +52,117 @@ pub enum ParameterType {
     TimeSeries { values: Array1<f64> },
 }
 
+impl ParameterType {
+
+    /// Converts `ParameterType` to `Array1`.
+    /// 
+    /// # Input
+    /// - `len`: The length of the output array (Needed to create an array from single value, or to validate the length of time series array)
+    /// 
+    /// #  Errors
+    /// - Returns an error if `values` inside `ParameterType::TimeSeries` variant is not of length `len`.
+    pub fn into_array(self, len: usize) -> Result<Array1<f64>, DigiFiError> {
+        match self {
+            ParameterType::Value { value } => Ok(Array1::from_vec(vec![value; len])),
+            ParameterType::TimeSeries { values } => {
+                if values.len() != len {
+                    return Err(DigiFiError::WrongLength { title: Self::error_title(), arg: "values".to_owned(), len, });
+                }
+                Ok(values)
+            },
+        }
+    }
+}
+
+impl ErrorTitle for ParameterType {
+    fn error_title() -> String {
+        String::from("Parameter Type")
+    }
+}
+
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// Struct for generating time array.
+/// Struct that stores an array of time steps.
 ///
 /// # Examples
 ///
 /// ```rust
 /// use ndarray::Array1;
 /// use digifi::utilities::{TEST_ACCURACY, Time};
-/// let time_1: Time = Time::Range { initial_time: 0.0, final_time: 1.0, time_step: 0.2 };
-/// let time_2: Time = Time::Sequence { times: Array1::from_vec(vec![0.0, 0.2, 0.4, 0.6, 0.8, 1.0]) };
-///
-/// let time_array_1: Array1<f64> = time_1.get_time_array();
-/// let time_array_2: Array1<f64> = time_2.get_time_array();
+/// let time_1: Time = Time::new_from_range(0.0, 1.0, 0.2);
+/// let time_2: Time = Time::new(Array1::from_vec(vec![0.0, 0.2, 0.4, 0.6, 0.8, 1.0]));
 /// 
-/// assert!((time_array_1 - time_array_2).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+/// assert!((time_1.time_array() - time_2.time_array()).map(|v| v.abs() ).sum() < TEST_ACCURACY);
 /// ```
-pub enum Time {
-    /// Creates a range of time steps given the provided settings.
-    Range { initial_time: f64, final_time: f64, time_step: f64 },
-    /// Uses provided array as the space of time steps.
-    Sequence { times: Array1<f64> },
-}
+pub struct Time(Array1<f64>);
 
 impl Time {
-    /// Generates the time array from the provided settings.
-    pub fn get_time_array(&self) -> Array1<f64> {
-        match self {
-            Time::Range { initial_time, final_time, time_step } => {
-                Array1::range(*initial_time, *final_time + *time_step, *time_step)
-            },
-            Time::Sequence { times } => {
-                times.clone()
-            },
-        }
+
+    /// Creates a new instance of `Time`.
+    /// 
+    /// # Input
+    /// - `time_array`: Array of time steps
+    pub fn new(time_array: Array1<f64>) -> Self {
+        Time(time_array)
+    }
+
+    /// Creates a range of time steps given the provided range definition.
+    /// 
+    /// # Input
+    /// - `initial_time`: Initial time setp
+    /// - `final_time`: Final time step (inclusive)
+    /// - `dt`: Difference between consequtive time steps.
+    pub fn new_from_range(initial_time: f64, final_time: f64, dt: f64) -> Self {
+        Time(Array1::range(initial_time, final_time + dt, dt))
+    }
+
+    /// Returns the length of the time array.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Returns a reference to an array of time steps.
+    /// 
+    /// Note: This is a useful method for code readability.
+    pub fn time_array(&self) -> &Array1<f64> {
+        &self.0
+    }
+
+    /// Returns a mutable reference to an array of time steps.
+    /// 
+    /// Note: This is a useful method for code readability.
+    pub fn time_array_mut(&mut self) -> &mut Array1<f64> {
+        &mut self.0
     }
 }
 
 
-/// Asserts that the two arrays provided are of the same length, while also verifying that both arrays are of np.ndarray type.
+/// Asserts that the two iterators provided are of the same length.
 /// 
 /// # Input
-/// - `array_1`: First array
-/// - `array_2`: Second array
-/// - `array_1_name`: Name of the first array, which will be printed in case of an error
-/// - `array_1_name`: Name of the second array, which will be printed in case of an error
+/// - `iter_1`: First iterator
+/// - `iter_2`: Second iterator
+/// - `iter_1_name`: Name of the first iterator
+/// - `iter_1_name`: Name of the second iterator
 /// 
 /// # Errors
-/// - Returns an error if the length of arrays do not match.
+/// - Returns an error if the length of iterators do not match.
 ///
 /// # Examples
 ///
 /// ```rust
 /// use ndarray::Array1;
-/// use digifi::utilities::compare_array_len;
+/// use digifi::utilities::compare_len;
 ///
-/// let a: Array1<i32> = Array1::from_vec(vec![1, 2, 3]);
-/// let b: Array1<i32> = Array1::from_vec(vec![4, 5, 6]);
+/// let a: Vec<i32> = vec![1, 2, 3];
+/// let b: Vec<i32> = vec![4, 5, 6];
 ///
-/// compare_array_len(&a, &b, "a", "b").unwrap();
+/// compare_len(&a.iter(), &b.iter(), "a", "b").unwrap();
 /// ```
-pub fn compare_array_len<T>(array_1: &Array1<T>, array_2: &Array1<T>, array_1_name: &str, array_2_name: &str) -> Result<(), DigiFiError> {
-    if array_1.len() != array_2.len() {
-        return Err(DigiFiError::UnmatchingLength { array_1: array_1_name.to_owned(), array_2: array_2_name.to_owned(), });
+pub fn compare_len<U: ExactSizeIterator, V: ExactSizeIterator>(iter_1: &U, iter_2: &V, iter_1_name: &str, iter_2_name: &str) -> Result<(), DigiFiError> {
+    if iter_1.len() != iter_2.len() {
+        return Err(DigiFiError::UnmatchingLength { array_1: iter_1_name.to_owned(), array_2: iter_2_name.to_owned(), });
     }
     Ok(())
 }
@@ -177,19 +223,17 @@ mod tests {
     #[test]
     fn unit_test_time_struct() -> () {
         use crate::utilities::Time;
-        let time_1: Time = Time::Range { initial_time: 0.0, final_time: 1.0, time_step: 0.2 };
-        let time_2: Time = Time::Sequence { times: Array1::from_vec(vec![0.0, 0.2, 0.4, 0.6, 0.8, 1.0]) };
-        let time_array_1: Array1<f64> = time_1.get_time_array();
-        let time_array_2: Array1<f64> = time_2.get_time_array();
-        assert!((time_array_1 - time_array_2).map(|v| v.abs() ).sum() < TEST_ACCURACY);
+        let time_1: Time = Time::new_from_range(0.0, 1.0, 0.2);
+        let time_2: Time = Time::new(Array1::from_vec(vec![0.0, 0.2, 0.4, 0.6, 0.8, 1.0]));
+        assert!((time_1.time_array() - time_2.time_array()).map(|v| v.abs() ).sum() < TEST_ACCURACY);
     }
 
     #[test]
-    fn unit_test_compare_vec_len() -> () {
-        use crate::utilities::compare_array_len;
-        let a: Array1<i32> = Array1::from_vec(vec![1, 2, 3]);
-        let b: Array1<i32> = Array1::from_vec(vec![4, 5, 6]);
-        compare_array_len(&a, &b, "a", "b").unwrap();
+    fn unit_test_compare_len() -> () {
+        use crate::utilities::compare_len;
+        let a: Vec<i32> = vec![1, 2, 3];
+        let b: Vec<i32> = vec![4, 5, 6];
+        compare_len(&a.iter(), &b.iter(), "a", "b").unwrap();
     }
 
     #[test]

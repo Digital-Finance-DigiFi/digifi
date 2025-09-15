@@ -3,7 +3,7 @@
 //! Contains functionality for running Monte Carlo simulations for pricing instruments with payoff functions.
 
 
-use ndarray::{Array1, arr1};
+use ndarray::Array1;
 use crate::error::DigiFiError;
 use crate::financial_instruments::Payoff;
 use crate::stochastic_processes::StochasticProcess;
@@ -48,19 +48,16 @@ use crate::stochastic_processes::StochasticProcess;
 /// // Theoretical value (Black-Scholes formula)
 /// let theoretical_value: f64 = black_scholes_formula(10.0, 11.0, 0.2, 1.0, 0.02, 0.0, &BlackScholesType::Call).unwrap();
 ///
-/// assert!((predicted_value - theoretical_value).abs() < 10_000_000.0*TEST_ACCURACY);
+/// assert!((predicted_value - theoretical_value).abs() < 10_000_000.0 * TEST_ACCURACY);
 /// ```
-pub fn monte_carlo_simulation(stochastic_process: &dyn StochasticProcess, payoff_object: &dyn Payoff, r: f64, exercise_time_steps: &Option<Vec<bool>>) -> Result<f64, DigiFiError> {
+pub fn monte_carlo_simulation(stochastic_process: &impl StochasticProcess, payoff_object: &impl Payoff, r: f64, exercise_time_steps: &Option<Vec<bool>>) -> Result<f64, DigiFiError> {
     // Data validation
     let n_steps: usize = stochastic_process.get_n_steps();
     let dt: f64 = stochastic_process.get_t_f() / (n_steps as f64);
     let exercise_time_steps: &Vec<bool> = match exercise_time_steps {
         Some(exercise_time_steps_vec) => {
             if exercise_time_steps_vec.len() != n_steps {
-                return Err(DigiFiError::Other {
-                    title: "Monte-Carlo Simulation".to_owned(),
-                    details: format!("The argument exercise time steps should be of length {} as defined by the stochastic process.", n_steps),
-                });
+                return Err(DigiFiError::WrongLength { title: "Monte-Carlo Simulation".to_owned(), arg: "exercise time steps".to_owned(), len: n_steps, });
             }
             exercise_time_steps_vec
         },
@@ -68,20 +65,18 @@ pub fn monte_carlo_simulation(stochastic_process: &dyn StochasticProcess, payoff
     };
     // Stochastic model
     let stochastic_paths: Vec<Array1<f64>> = stochastic_process.get_paths()?;
-    let n_paths: f64 = stochastic_paths.len() as f64;
-    let mut payoffs_of_processes: Vec<f64> = vec![0.0; n_steps];
-    for i_process in stochastic_paths {
-        let mut value: f64 = payoff_object.payoff(&arr1(&[i_process[i_process.len() - 1]]))[0];
-        for i in (0..(i_process.len() - 1)).rev() {
-            value *= (-dt * r).exp();
+    let sum_of_payoffs: f64 = stochastic_paths.iter().fold(0.0, |total, path| {
+        let value: f64 = (0..(path.len() - 1)).rev().fold(payoff_object.payoff(path[path.len() - 1]), |value, i| {
+            let mut value: f64 = value * (-dt * r).exp();
             if exercise_time_steps[i] {
-                let exercise: f64 = payoff_object.payoff(&arr1(&[i_process[i]]))[0];
+                let exercise: f64 = payoff_object.payoff(path[i]);
                 value = value.max(exercise);
             }
-        }
-        payoffs_of_processes.push(value);
-    }
-    Ok(payoffs_of_processes.iter().sum::<f64>() / n_paths)
+            value
+        } );
+        total + value
+    } );
+    Ok(sum_of_payoffs / stochastic_paths.len() as f64)
 }
 
 
@@ -108,6 +103,6 @@ mod tests {
         ).unwrap();
         // Theoretical value (Black-Scholes formula)
         let theoretical_value: f64 = black_scholes_formula(10.0, 11.0, 0.2, 1.0, 0.02, 0.0, &BlackScholesType::Call).unwrap();
-        assert!((predicted_value - theoretical_value).abs() < 10_000_000.0*TEST_ACCURACY);
+        assert!((predicted_value - theoretical_value).abs() < 10_000_000.0 * TEST_ACCURACY);
     }
 }

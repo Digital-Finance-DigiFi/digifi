@@ -15,7 +15,7 @@ pub use crate::technical_indicators::{plot_moving_average, plot_macd, plot_bolli
 use ndarray::Array1;
 use plotly::{Plot, Bar, Candlestick, Layout, layout::{Axis, RangeSlider}};
 use crate::error::DigiFiError;
-use crate::utilities::compare_array_len;
+use crate::utilities::compare_len;
 
 
 /// Plots the candlestick chart.
@@ -55,9 +55,9 @@ use crate::utilities::compare_array_len;
 /// }
 /// ```
 pub fn plot_candlestick_chart(open: &Array1<f64>, high: &Array1<f64>, low: &Array1<f64>, close: &Array1<f64>, times: &Vec<String>) -> Result<Plot, DigiFiError> {
-    compare_array_len(&open, &high, "open", "high")?;
-    compare_array_len(&open, &low, "open", "low")?;
-    compare_array_len(&open, &close, "open", "close")?;
+    compare_len(&open.iter(), &high.iter(), "open", "high")?;
+    compare_len(&open.iter(), &low.iter(), "open", "low")?;
+    compare_len(&open.iter(), &close.iter(), "open", "close")?;
     if open.len() != times.len() {
         return Err(DigiFiError::UnmatchingLength { array_1: "times".to_owned(), array_2: "open price".to_owned(), });
     }

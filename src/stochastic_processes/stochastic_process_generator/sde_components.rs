@@ -1,7 +1,9 @@
 use ndarray::Array1;
-use crate::error::DigiFiError;
-use crate::statistics::{continuous_distributions::ContinuousUniformDistribution, discrete_distributions::PoissonDistribution};
-use crate::random_generators::{RandomGenerator, generator_algorithms::inverse_transform, standard_normal_generators::StandardNormalInverseTransform};
+use crate::error::{DigiFiError, ErrorTitle};
+use crate::statistics::{discrete_distributions::PoissonDistribution};
+use crate::random_generators::{
+    RandomGenerator, generator_algorithms::inverse_transform, uniform_generators::FibonacciGenerator, standard_normal_generators::StandardNormalBoxMuller,
+};
 
 
 pub trait CustomSDEComponent {
@@ -15,6 +17,11 @@ pub trait CustomSDEComponent {
     /// - `dt`: Time step increment
     fn comp_func(&self, n_paths: usize, stochastic_values: &Array1<f64>, t: f64, dt: f64) -> Result<Array1<f64>, DigiFiError>;
 
+    /// Error title associated with this custom SDE term.
+    /// 
+    /// Note: This title will be displayed in the case of validation error.
+    fn error_title(&self) -> String;
+
     /// Validates a custom SDE component function ensuring it meets computational requirements.
     ///
     /// # Input
@@ -23,13 +30,9 @@ pub trait CustomSDEComponent {
     /// # Errors
     /// - Returns an error if the custom function does not return an array of the same length as there are number of paths.
     fn validate(&self, n_paths: usize) -> Result<(), DigiFiError> {
-        let cont_uni_dist: ContinuousUniformDistribution = ContinuousUniformDistribution::build(0.0, 1.0)?;
-        let sample: Array1<f64> = inverse_transform(&cont_uni_dist, 2)?;
+        let sample: Array1<f64> = FibonacciGenerator::new_shuffle(2)?.generate()?;
         if self.comp_func(n_paths, &Array1::from_vec(vec![1.0; n_paths]), sample[0], sample[1])?.len() != n_paths {
-            return Err(DigiFiError::ValidationError {
-                title: "Custom SDE Component".to_owned(),
-                details: "Custom function does not produce an array of the same size as the defined number of paths.".to_owned(),
-            });
+            return Err(DigiFiError::CustomFunctionLengthVal { title: self.error_title() });
         }
         Ok(())
     }
@@ -103,18 +106,17 @@ impl SDEComponent {
     /// - Returns an error if in convergence-to-value component the argument `final_time` is non-positive.
     /// - Returns an error if the custom function does not return an array of the same length as there are number of paths.
     pub fn validate(&self, n_paths: usize) -> Result<(), DigiFiError> {
-        let error_title: String = String::from("SDE Component Function Type");
         match &self {
             SDEComponent::ConvergenceToValue { final_time, a, b } => {
                 if b <= a {
                     return Err(DigiFiError::ParameterConstraint {
-                        title: error_title,
+                        title: Self::error_title(),
                         constraint: "The argument `b` must be larger that the argument `a`.".to_owned(),
                     });
                 }
-                if final_time <= &0.0 {
+                if *final_time <= 0.0 {
                     return Err(DigiFiError::ParameterConstraint {
-                        title: error_title,
+                        title: Self::error_title(),
                         constraint: "The argument `final_time` must be positive.".to_owned(),
                     });
                 }
@@ -140,17 +142,14 @@ impl SDEComponent {
     /// - Returns an error if the argument `stochastic_values` has length that is not same as the value of `n_paths`.
     pub fn get_component_values(&self, n_paths: usize, stochastic_values: &Array1<f64>, t: f64, dt: f64) -> Result<Array1<f64>, DigiFiError> {
         if stochastic_values.len() != n_paths {
-            return Err(DigiFiError::ParameterConstraint {
-                title: "SDE Component".to_owned(),
-                constraint: "The argument `stochastic_values` must have the length of `n_paths`.".to_owned(),
-            });
+            return Err(DigiFiError::WrongLength { title: Self::error_title(), arg: "stochastic_values".to_owned(), len: n_paths, });
         }
         match &self {
             SDEComponent::Linear { a } => {
                 Ok(Array1::from_vec(vec![*a; n_paths]))
             },
             SDEComponent::QuadraticTime { a, b } => {
-                Ok(Array1::from_vec(vec![2.0*a + b; n_paths]))
+                Ok(Array1::from_vec(vec![2.0 * a + b; n_paths]))
             },
             SDEComponent::PowerStochastic { a, power } => {
                 Ok(*a * stochastic_values.map(|v| v.powf(*power) ))
@@ -168,6 +167,12 @@ impl SDEComponent {
     }
 }
 
+impl ErrorTitle for SDEComponent {
+    fn error_title() -> String {
+        String::from("SDE Component")
+    }
+}
+
 
 pub trait CustomNoise {
 
@@ -178,18 +183,19 @@ pub trait CustomNoise {
     /// - `dt`: Time step increment
     fn noise_func(&self, n_paths: usize, dt: f64) -> Result<Array1<f64>, DigiFiError>;
 
+    /// Error title associated with this custom noise term.
+    /// 
+    /// Note: This title will be displayed in the case of validation error.
+    fn error_title(&self) -> String;
+
     /// Validates a custom noise function ensuring it meets computational requirements.
     ///
     /// # Errors
     /// - Returns an error if the custom function does not return an array of the same length as there are number of paths.
     fn validate(&self, n_paths: usize) -> Result<(), DigiFiError> {
-        let cont_uni_dist: ContinuousUniformDistribution = ContinuousUniformDistribution::build(0.0, 1.0)?;
-        let dt: f64 = inverse_transform(&cont_uni_dist, 2)?[0];
+        let dt: f64 = FibonacciGenerator::new_shuffle(1)?.generate()?[0];
         if self.noise_func(n_paths, dt)?.len() != n_paths {
-            return Err(DigiFiError::ValidationError {
-                title: "Custom Noise Function".to_owned(),
-                details: "Custom function does not produce an array of the same size as the defined number of paths.".to_owned(),
-            });
+            return Err(DigiFiError::CustomFunctionLengthVal { title: self.error_title() });
         }
         Ok(())
     }
@@ -244,10 +250,10 @@ impl Noise {
     pub fn get_noise(&self, n_paths: usize, dt: f64) -> Result<Array1<f64>, DigiFiError> {
         match &self {
             Noise::StandardWhiteNoise => {
-                StandardNormalInverseTransform::new_shuffle(n_paths)?.generate()
+                StandardNormalBoxMuller::new_shuffle(n_paths)?.generate()
             },
             Noise::WeinerProcess => {
-                Ok(dt.sqrt() * StandardNormalInverseTransform::new_shuffle(n_paths)?.generate()?)
+                Ok(dt.sqrt() * StandardNormalBoxMuller::new_shuffle(n_paths)?.generate()?)
             },
             Noise::Custom { f } => { f.noise_func(n_paths, dt) }
         }
@@ -263,18 +269,19 @@ pub trait CustomJump {
     /// - `dt`:Time step increment
     fn jump_func(&self, n_paths: usize, dt: f64) -> Result<Array1<f64>, DigiFiError>;
 
+    /// Error title associated with this custom jump term.
+    /// 
+    /// Note: This title will be displayed in the case of validation error.
+    fn error_title(&self) -> String;
+
     /// Validates a custom jump function ensuring it meets computational requirements.
     ///
     /// # Errors
     /// - Returns an error if the custom function does not return an array of the same length as there are number of paths.
     fn validate(&self, n_paths: usize) -> Result<(), DigiFiError> {
-        let cont_uni_dist: ContinuousUniformDistribution = ContinuousUniformDistribution::build(0.0, 1.0)?;
-        let dt: f64 = inverse_transform(&cont_uni_dist, 2)?[0];
+        let dt: f64 = FibonacciGenerator::new_shuffle(1)?.generate()?[0];
         if self.jump_func(n_paths, dt)?.len() != n_paths {
-            return Err(DigiFiError::ValidationError {
-                title: "Custom Jump Function".to_owned(),
-                details: "Custom function does not produce an array of the same size as the defined number of paths.".to_owned(),
-            });
+            return Err(DigiFiError::CustomFunctionLengthVal { title: self.error_title() });
         }
         Ok(())
     }
@@ -328,13 +335,12 @@ impl Jump {
     /// - Returns an error if the argument `lambda_j` of the compound Poisson bilateral jump be negative.
     /// - Returns an error if the rgument `p` of the compound Poisson bilateral jump is not in the range \[0, 1\].
     pub fn validate(&self, n_paths: usize) -> Result<(), DigiFiError> {
-        let error_title: String = String::from("Jump Type");
         match &self {
             Jump::NoJumps => Ok(()),
             Jump::CompoundPoissonNormal { lambda_j, .. } => {
                 if lambda_j <= &0.0 {
                     return Err(DigiFiError::ParameterConstraint {
-                        title: error_title,
+                        title: Self::error_title(),
                         constraint: "The argument `lambda_j` of the compound Poisson normal jump must be positive.".to_owned(),
                     });
                 }
@@ -343,13 +349,13 @@ impl Jump {
             Jump::CompoundPoissonBilateral { lambda_j, p, .. } => {
                 if lambda_j <= &0.0 {
                     return Err(DigiFiError::ParameterConstraint {
-                        title: error_title,
+                        title: Self::error_title(),
                         constraint: "The argument `lambda_j` of the compound Poisson bilateral jump must be positive.".to_owned(),
                     });
                 }
                 if (p < &0.0) || (&1.0 < p) {
                     return Err(DigiFiError::ParameterConstraint {
-                        title: error_title,
+                        title: Self::error_title(),
                         constraint: "The argument `p` of the compound Poisson bilateral jump must be in the range `[0, 1]`.".to_owned(),
                     });
                 }
@@ -368,28 +374,35 @@ impl Jump {
         match &self {
             Jump::NoJumps => { Ok(Array1::from_vec(vec![0.0; n_paths])) },
             Jump::CompoundPoissonNormal { lambda_j, mu_j, sigma_j } => {
-                let pois_dist: PoissonDistribution = PoissonDistribution::build(lambda_j*dt)?;
+                let pois_dist: PoissonDistribution = PoissonDistribution::build(lambda_j * dt)?;
                 let dp: Array1<f64> = inverse_transform(&pois_dist, n_paths)?;
-                Ok(*mu_j * &dp + *sigma_j * dp.map(|v| v.sqrt() ) * StandardNormalInverseTransform::new_shuffle(n_paths)?.generate()?)
+                Ok(*mu_j * &dp + *sigma_j * dp.map(|v| v.sqrt() ) * StandardNormalBoxMuller::new_shuffle(n_paths)?.generate()?)
             },
             Jump::CompoundPoissonBilateral { lambda_j, p, eta_d, eta_u } => {
-                let pois_dist: PoissonDistribution = PoissonDistribution::build(lambda_j*dt)?;
+                let pois_dist: PoissonDistribution = PoissonDistribution::build(lambda_j * dt)?;
                 let dp: Array1<f64> = inverse_transform(&pois_dist, n_paths)?;
                 // Assymetric double exponential distribution
-                let cont_uni_dist: ContinuousUniformDistribution = ContinuousUniformDistribution::build(0.0, 1.0)?;
-                let u: Array1<f64> = inverse_transform(&cont_uni_dist, n_paths)?;
+                let u: Array1<f64> = FibonacciGenerator::new_shuffle(n_paths)?.generate()?;
                 let mut y: Array1<f64> = Array1::from_vec(vec![0.0; n_paths]);
-                for i in 0..u.len() {
+                let neg_one_over_eta_u: f64 = -1.0 / eta_u;
+                let one_over_eta_d: f64 = 1.0 / eta_d;
+                let q: f64 = 1.0 - p;
+                for i in 0..n_paths {
                     if p <= &u[i] {
-                        y[i] = -1.0 / eta_u * ((1.0 - u[i]) / p).ln()
+                        y[i] = ((neg_one_over_eta_u * ((1.0 - u[i]) / p).ln()).exp() - 1.0) * dp[i]
                     } else {
-                        y[i] = 1.0 / eta_d * (u[i] / (1.0 - p)).ln()
+                        y[i] = ((one_over_eta_d * (u[i] / q).ln()).exp() - 1.0) * dp[i]
                     }
                 }
-                // Distribution of jumps
-                Ok(y.map(|v| v.exp() - 1.0 ) * dp)
+                Ok(y)
             },
             Jump::CustomJump { f } => { f.jump_func(n_paths, dt) },
         }
+    }
+}
+
+impl ErrorTitle for Jump {
+    fn error_title() -> String {
+        String::from("Jump Type")
     }
 }

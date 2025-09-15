@@ -68,7 +68,7 @@ pub mod statistics;
 pub mod stochastic_processes;
 pub mod technical_indicators;
 pub mod utilities;
-// TODO: Optimize code to use iterators and closures over for loops
+
 
 // Plotly feature
 #[cfg(feature = "plotly")]

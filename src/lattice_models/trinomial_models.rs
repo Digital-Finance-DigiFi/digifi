@@ -4,7 +4,7 @@ use crate::financial_instruments::Payoff;
 use crate::lattice_models::LatticeModel;
 
 
-/// Binomial tree with the defined parameters presented as an array of layers.
+/// Trinomial tree with the defined parameters presented as an array of layers.
 /// 
 /// # Input
 /// - `s_0`: Starting value
@@ -41,12 +41,13 @@ pub fn trinomial_tree_nodes(s_0: f64, u: f64, d: f64, n_steps: usize) -> Result<
         });
     }
     let s: f64 = (u * d).sqrt();
-    let mut trinomial_tree: Vec<Array1<f64>> = vec![Array1::from_vec(vec![s_0])];
+    let mut trinomial_tree: Vec<Array1<f64>> = Vec::with_capacity(n_steps + 1);
+    trinomial_tree.push(Array1::from_vec(vec![s_0; 1]));
     for _ in 1..(n_steps as i32 + 1) {
         let current_layer: Array1<f64> = s * &trinomial_tree[trinomial_tree.len()-1];
         let u_node: f64 = u * trinomial_tree[trinomial_tree.len()-1][current_layer.len()-1];
         let d_node: f64 = d * trinomial_tree[trinomial_tree.len()-1][0];
-        let mut current_layer = current_layer.to_vec();
+        let mut current_layer: Vec<f64> = current_layer.to_vec();
         current_layer.insert(0, d_node);
         current_layer.push(u_node);
         trinomial_tree.push(Array1::from_vec(current_layer));
@@ -138,34 +139,32 @@ pub fn trinomial_model(payoff_object: &dyn Payoff, s_0: f64, u: f64, d: f64, p_u
         });
     }
     let p_s: f64 = 1.0 - p_u - p_d;
-    let exercise_time_steps_: Vec<bool>;
-    match exercise_time_steps {
+    let exercise_time_steps: Vec<bool> = match exercise_time_steps {
         Some(exercise_time_steps_vec) => {
             if exercise_time_steps_vec.len() != n_steps {
-                return Err(DigiFiError::ParameterConstraint {
-                    title: error_title,
-                    constraint: "The argument `exercise_time_steps` should be of length `n_steps`.".to_owned(),
-                });
+                return Err(DigiFiError::WrongLength { title: error_title, arg: "exercise_time_steps".to_owned(), len: n_steps, });
             }
-            exercise_time_steps_ = exercise_time_steps_vec
+            exercise_time_steps_vec
         },
-        None => { exercise_time_steps_ = vec![true; n_steps]; },
-    }
+        None => vec![true; n_steps],
+    };
     // Trinomial model
     let mut trinomial_tree: Vec<Array1<f64>> = trinomial_tree_nodes(s_0, u, d, n_steps)?;
     let final_payoff_step: usize = trinomial_tree.len() - 1;
-    trinomial_tree[final_payoff_step] = payoff_object.payoff(&trinomial_tree[final_payoff_step]);
-    for i in (0..(trinomial_tree.len()-1)).rev() {
-        let mut layer: Vec<f64> = Vec::<f64>::new();
-        for j in 1..(2 * (i+1)) {
-            let value: f64 = p_d * trinomial_tree[i+1][j-1] + p_s * trinomial_tree[i+1][j] + p_u * trinomial_tree[i+1][j+1];
-            if exercise_time_steps_[i] {
-                let exercise: f64 = payoff_object.payoff(&Array1::from_vec(vec![trinomial_tree[i][layer.len()-1]]))[0];
-                layer.push(value.max(exercise));
-            } else {
-                layer.push(value);
-            }
-        }
+    trinomial_tree[final_payoff_step] = payoff_object.payoff_iter(&trinomial_tree[final_payoff_step]);
+    for i in (0..(trinomial_tree.len() - 1)).rev() {
+        let layer: Vec<f64> = (1..(2 * (i + 1))).into_iter()
+            .fold(Vec::with_capacity(2 * (i + 1)), |mut layer, j| {
+                let value: f64 = p_d * trinomial_tree[i+1][j-1] + p_s * trinomial_tree[i+1][j] + p_u * trinomial_tree[i+1][j+1];
+                match exercise_time_steps[i] {
+                    true => {
+                        let exercise: f64 = payoff_object.payoff(trinomial_tree[i][layer.len()-1]);
+                        layer.push(value.max(exercise));
+                    },
+                    false => layer.push(value),
+                }
+                layer
+            } );
         trinomial_tree[i] = Array1::from_vec(layer);
     }
     Ok(trinomial_tree[0][0])

@@ -22,7 +22,7 @@ use ndarray::Array1;
 use plotly::{Plot, Trace, Layout, Scatter, layout::Axis};
 use crate::error::DigiFiError;
 #[cfg(feature = "plotly")]
-use crate::utilities::compare_array_len;
+use crate::utilities::compare_len;
 
 
 pub trait StochasticProcess {
@@ -158,7 +158,7 @@ pub fn plot_stochastic_paths(paths: &Vec<Array1<f64>>, expected_path: Option<&Ar
     let mut traces: Vec<Box<dyn Trace>> = Vec::<Box<dyn Trace>>::new();
     match expected_path {
         Some(p) => {
-            compare_array_len(&t, &p, "path", "expected_path")?;
+            compare_len(&t.iter(), &p.iter(), "path", "expected_path")?;
             traces.push(Scatter::new(t.to_vec(), p.to_vec()).name("Expected Path"));
         },
         None => (),

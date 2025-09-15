@@ -1,7 +1,6 @@
 use ndarray::Array1;
-use crate::error::DigiFiError;
-use crate::statistics::continuous_distributions::ContinuousUniformDistribution;
-use crate::random_generators::{RandomGenerator, generator_algorithms::inverse_transform, standard_normal_generators::StandardNormalInverseTransform};
+use crate::error::{DigiFiError, ErrorTitle};
+use crate::random_generators::{RandomGenerator, uniform_generators::FibonacciGenerator, standard_normal_generators::StandardNormalBoxMuller};
 
 
 /// Type of drift that the stochastic process has.
@@ -20,6 +19,11 @@ pub trait CustomTrendStationary {
     /// - `t`: Current time step
     fn trend_func(&self, n_paths: usize, t: f64) -> Result<Array1<f64>, DigiFiError>;
 
+    /// Error title associated with this custom trend-stationary term.
+    /// 
+    /// Note: This title will be displayed in the case of validation error.
+    fn error_title(&self) -> String;
+
     /// Validate custom trend-stationary component function object to satisfy the computational requirements.
     ///
     /// # Input
@@ -28,13 +32,9 @@ pub trait CustomTrendStationary {
     /// # Errors
     /// - Returns an error if the custom function does not return an array of the same length as there are number of paths.
     fn validate(&self, n_paths: usize) -> Result<(), DigiFiError> {
-        let cont_uni_dist: ContinuousUniformDistribution = ContinuousUniformDistribution::build(0.0, 1.0)?;
-        let t: f64 = inverse_transform(&cont_uni_dist, 1)?[0];
+        let t: f64 = FibonacciGenerator::new_shuffle(1)?.generate()?[0];
         if self.trend_func(n_paths, t)?.len() != n_paths {
-            return Err(DigiFiError::ValidationError {
-                title: "Custom Trend Stationary Function".to_owned(),
-                details: "Custom function does not produce an array of the same size as the defined number of paths.".to_owned(),
-            });
+            return Err(DigiFiError::CustomFunctionLengthVal { title: self.error_title() });
         }
         Ok(())
     }
@@ -68,9 +68,9 @@ impl TrendStationary {
         match &self {
             TrendStationary::Linear { .. } => Ok(()),
             TrendStationary::Quadratic { a, .. } => {
-                if a == &0.0 {
+                if *a == 0.0 {
                     return Err(DigiFiError::ParameterConstraint {
-                        title: "Trend Stationary Tren Type".to_owned(),
+                        title: Self::error_title(),
                         constraint: "The argument `a` for quadratic trend stationary trend type must be non-zero.".to_owned(),
                     });
                 }
@@ -94,10 +94,16 @@ impl TrendStationary {
         let base_shape: Array1<f64> = Array1::from_vec(vec![1.0; n_paths]);
         match &self {
             TrendStationary::Linear { a, b } => { Ok((a*t + b) * base_shape) },
-            TrendStationary::Quadratic { a, b, c } => { Ok((a*t.powi(2) + b*t + c) * base_shape) },
+            TrendStationary::Quadratic { a, b, c } => { Ok((a * t.powi(2) + b * t + c) * base_shape) },
             TrendStationary::Exponential { a, b } => { Ok((b * (a * t).exp()) * base_shape) },
             TrendStationary::Custom { f } => { f.trend_func(n_paths, t) },
         }
+    }
+}
+
+impl ErrorTitle for TrendStationary {
+    fn error_title() -> String {
+        String::from("Trend Stationary Trend Type")
     }
 }
 
@@ -111,6 +117,11 @@ pub trait CustomStationaryError {
     /// - `dt`: Time step increment
     fn error_func(&self, n_paths: usize, dt: f64) -> Result<Array1<f64>, DigiFiError>;
 
+    /// Error title associated with this custom stationary error term.
+    /// 
+    /// Note: This title will be displayed in the case of validation error.
+    fn error_title(&self) -> String;
+
     /// Validate custom error component function object to satisfy the computational requirements.
     ///
     /// # Input
@@ -119,13 +130,9 @@ pub trait CustomStationaryError {
     /// # Errors
     /// - Returns an error if the custom function does not return an array of the same length as there are number of paths.
     fn validate(&self, n_paths: usize) -> Result<(), DigiFiError> {
-        let cont_uni_dist: ContinuousUniformDistribution = ContinuousUniformDistribution::build(0.0, 1.0)?;
-        let dt: f64 = inverse_transform(&cont_uni_dist, 1)?[0];
+        let dt: f64 = FibonacciGenerator::new_shuffle(1)?.generate()?[0];
         if self.error_func(n_paths, dt)?.len() != n_paths {
-            return Err(DigiFiError::ValidationError {
-                title: "Custom Error Function".to_owned(),
-                details: "Custom function does not produce an array of the same size as the defined number of paths.".to_owned(),
-            });
+            return Err(DigiFiError::CustomFunctionLengthVal { title: self.error_title() });
         }
         Ok(())
     }
@@ -169,7 +176,7 @@ impl StationaryError {
     pub fn get_error(&self, n_paths: usize, dt: f64) -> Result<Array1<f64>, DigiFiError> {
         match &self {
             StationaryError::Weiner { sigma } => {
-                let n: Array1<f64> = StandardNormalInverseTransform::new_shuffle(n_paths)?.generate()?;
+                let n: Array1<f64> = StandardNormalBoxMuller::new_shuffle(n_paths)?.generate()?;
                 Ok(sigma.powi(2) * dt * n)
             },
             StationaryError::Custom { f } => f.error_func(n_paths, dt)
@@ -220,19 +227,15 @@ impl DifferenceStationary {
     /// - Returns an error if the length of `values` does not match the number of paths.
     /// - Returns an error if an array in `values` has different length to parameters of autoregression.
     fn validate_values(n_paths: usize, values: &Vec<Array1<f64>>) -> Result<(), DigiFiError> {
-        let error_title: String = String::from("Difference Stationary");
         let process_order: usize = values.len();
         // Input validation
         if values.len() != n_paths {
-            return Err(DigiFiError::ValidationError {
-                title: error_title,
-                details: "The length of previous values must match the number of paths.".to_owned(),
-            });
+            return Err(DigiFiError::WrongLength { title: Self::error_title(), arg: "previous values".to_owned(), len: n_paths, });
         }
         for v in values {
             if v.len() != process_order {
                 return Err(DigiFiError::Other {
-                    title: error_title,
+                    title: Self::error_title(),
                     details: format!("All arrays of previous values must match the order of process, {}.", process_order),
                 });
             }
@@ -260,10 +263,16 @@ impl DifferenceStationary {
     pub fn get_autoregression(&self, previous_values: &Vec<Array1<f64>>) -> Result<Vec<f64>, DigiFiError> {
         DifferenceStationary::validate_values(self.n_paths, previous_values)?;
         // Autoregression
-        let mut result: Vec<f64> = Vec::<f64>::new();
+        let mut result: Vec<f64> = Vec::with_capacity(previous_values.len());
         for process in previous_values {
             result.push(process.dot(&self.autoregression_params));
         }
         Ok(result)
+    }
+}
+
+impl ErrorTitle for DifferenceStationary {
+    fn error_title() -> String {
+        String::from("Difference Stationary")
     }
 }

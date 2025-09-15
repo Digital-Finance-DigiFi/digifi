@@ -223,10 +223,10 @@ pub fn multivariate_beta(a: &Array1<f64>) -> Result<f64, DigiFiError> {
             });
         }
     }
-    let a_cum: f64 = a.iter().fold(0.0, |prev, next| prev + next );
-    let denominator: f64 = gamma(a_cum);
-    let numerator: f64 = a.iter().fold(1.0,  |prev, next| prev * gamma(*next) );
-    Ok(numerator / denominator)
+    let (a_cum, numerator) = a.iter().fold((0.0, 1.0), |(a_cum, numerator), a| {
+        (a_cum + a, numerator * gamma(*a))
+    } );
+    Ok(numerator / gamma(a_cum))
 }
 
 

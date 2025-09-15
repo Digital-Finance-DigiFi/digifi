@@ -4,11 +4,14 @@ use ndarray::{Array1, Array2, Axis, arr1, concatenate};
 use serde::{Serialize, Deserialize};
 #[cfg(feature = "plotly")]
 use plotly::{Plot, Trace, Scatter, Layout, layout::Axis as PlotAxis, common::{Mode, Marker, MarkerSymbol, HoverInfo, color::NamedColor}};
-use crate::error::DigiFiError;
-use crate::utilities::loss_functions::{LossFunction, StraddleLoss};
-use crate::utilities::numerical_engines::nelder_mead;
+use crate::error::{DigiFiError, ErrorTitle};
+use crate::utilities::{
+    data_transformations::percent_change,
+    loss_functions::{LossFunction, StraddleLoss},
+    numerical_engines::nelder_mead
+};
 use crate::statistics::covariance;
-use crate::portfolio_applications::{ReturnsMethod, ReturnsTransformation, returns_average, AssetHistData, PortfolioInstrument, prices_to_returns};
+use crate::portfolio_applications::{ReturnsMethod, returns_average, AssetHistData, PortfolioInstrument};
 use crate::portfolio_applications::portfolio_performance::PortfolioPerformanceMetric;
 
 
@@ -127,11 +130,17 @@ impl Asset {
     pub fn validate(&self) -> Result<(), DigiFiError> {
         if self.weight.is_nan() || self.weight.is_infinite() {
             return Err(DigiFiError::ValidationError {
-                title: "Asset".to_owned(),
+                title: Self::error_title(),
                 details: "The `weight` of the portfolio asset cannot be infinite or `NAN`.".to_owned(),
             });
         }
         Ok(())
+    }
+}
+
+impl ErrorTitle for Asset {
+    fn error_title() -> String {
+        String::from("Asset")
     }
 }
 
@@ -171,7 +180,7 @@ pub fn generate_portfolio(financial_instruments: Vec<impl PortfolioInstrument>, 
 /// ```rust
 /// use std::collections::HashMap;
 /// use ndarray::Array1;
-/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::utilities::{TEST_ACCURACY, Time};
 /// use digifi::portfolio_applications::{AssetHistData, SharpeRatio, Asset, EfficientFrontier, Portfolio, PortfolioOptimizationResult};
 ///
 /// #[cfg(feature = "sample_data")]
@@ -185,7 +194,7 @@ pub fn generate_portfolio(financial_instruments: Vec<impl PortfolioInstrument>, 
 ///     let dummy_array: Array1<f64> = Array1::from_vec(vec![0.0; time.len()]);
 ///     let mut assets: HashMap<String, Asset> = HashMap::<String, Asset>::new();
 ///     for (k, v) in data.into_iter() {
-///         let hist_data: AssetHistData = AssetHistData::build(v, dummy_array.clone(), dummy_array.clone()).unwrap();
+///         let hist_data: AssetHistData = AssetHistData::build(v, dummy_array.clone(), Time::new(dummy_array.clone())).unwrap();
 ///         assets.insert(k, Asset { hist_data, weight, });
 ///     }
 ///     let performance_metric: Box<SharpeRatio> = Box::new(SharpeRatio { rf: 0.02 });
@@ -205,7 +214,7 @@ pub fn generate_portfolio(financial_instruments: Vec<impl PortfolioInstrument>, 
 /// ```rust
 /// use std::collections::HashMap;
 /// use ndarray::Array1;
-/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::utilities::{TEST_ACCURACY, Time};
 /// use digifi::portfolio_applications::{AssetHistData, SharpeRatio, Asset, EfficientFrontier, Portfolio, PortfolioOptimizationResult};
 ///
 /// #[cfg(feature = "sample_data")]
@@ -219,7 +228,7 @@ pub fn generate_portfolio(financial_instruments: Vec<impl PortfolioInstrument>, 
 ///     let dummy_array: Array1<f64> = Array1::from_vec(vec![0.0; time.len()]);
 ///     let mut assets: HashMap<String, Asset> = HashMap::<String, Asset>::new();
 ///     for (k, v) in data.into_iter() {
-///         let hist_data: AssetHistData = AssetHistData::build(v, dummy_array.clone(), dummy_array.clone()).unwrap();
+///         let hist_data: AssetHistData = AssetHistData::build(v, dummy_array.clone(), Time::new(dummy_array.clone())).unwrap();
 ///         assets.insert(k, Asset { hist_data, weight, });
 ///     }
 ///     let performance_metric: Box<SharpeRatio> = Box::new(SharpeRatio { rf: 0.02 });
@@ -239,7 +248,7 @@ pub fn generate_portfolio(financial_instruments: Vec<impl PortfolioInstrument>, 
 /// ```rust
 /// use std::collections::HashMap;
 /// use ndarray::Array1;
-/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::utilities::{TEST_ACCURACY, Time};
 /// use digifi::portfolio_applications::{AssetHistData, SharpeRatio, Asset, EfficientFrontier, Portfolio, PortfolioOptimizationResult};
 ///
 /// #[cfg(feature = "sample_data")]
@@ -253,7 +262,7 @@ pub fn generate_portfolio(financial_instruments: Vec<impl PortfolioInstrument>, 
 ///     let dummy_array: Array1<f64> = Array1::from_vec(vec![0.0; time.len()]);
 ///     let mut assets: HashMap<String, Asset> = HashMap::<String, Asset>::new();
 ///     for (k, v) in data.into_iter() {
-///         let hist_data: AssetHistData = AssetHistData::build(v, dummy_array.clone(), dummy_array.clone()).unwrap();
+///         let hist_data: AssetHistData = AssetHistData::build(v, dummy_array.clone(), Time::new(dummy_array.clone())).unwrap();
 ///         assets.insert(k, Asset { hist_data, weight, });
 ///     }
 ///     let performance_metric: Box<SharpeRatio> = Box::new(SharpeRatio { rf: 0.02 });
@@ -314,14 +323,14 @@ impl Portfolio {
             // Validation of the asset (dependent on other assets)
             match time_series_len {
                 Some(l) => {
-                    if v.hist_data.get_n_datapoints() != l {
+                    if v.hist_data.len() != l {
                         return Err(DigiFiError::ValidationError {
-                            title: "Portfolio".to_owned(),
+                            title: Self::error_title(),
                             details: "The assets provided do not have time series of the same length.".to_owned(),
                         });
                     }
                 },
-                None => { time_series_len = Some(v.hist_data.get_n_datapoints()); },
+                None => { time_series_len = Some(v.hist_data.len()); },
             }
             // Generation of data for portfolio
             weights.push(v.weight);
@@ -360,7 +369,7 @@ impl Portfolio {
         }
         let diff: f64 = cumsum - 1.0;
         if rounding_error_tol < diff.abs() {
-            return Err(DigiFiError::ValidationError { title: "Portfolio".to_owned(), details: "The sum of protfolio weights is not equal to `1`.".to_owned(), });
+            return Err(DigiFiError::ValidationError { title: Self::error_title(), details: "The sum of protfolio weights is not equal to `1`.".to_owned(), });
         }
         weights[0] = weights[0] + diff;
         Ok(())
@@ -385,7 +394,7 @@ impl Portfolio {
     /// - Rerutns an error if the sum of portfolio weights is not equal to 1 (Subject to `rounding_error_tol`).
     pub fn change_weights(&mut self, mut new_weights: Vec<f64>) -> Result<(), DigiFiError> {
         if self.assets.len() != new_weights.len() {
-            return Err(DigiFiError::ValidationError { title: "Portfolio".to_owned(), details: "The number of weights does not match the number of assets.".to_owned() });
+            return Err(DigiFiError::ValidationError { title: Self::error_title(), details: "The number of weights does not match the number of assets.".to_owned() });
         }
         Portfolio::validate_and_clean_weights(&mut new_weights, self.rounding_error_tol)?;
         self.weights = new_weights;
@@ -405,14 +414,14 @@ impl Portfolio {
     pub fn add_assets(&mut self, new_assets: HashMap<String, Asset>) -> Result<(), DigiFiError> {
         let mut new_assets_names: Vec<String> = Vec::<String>::new();
         let mut new_hist_data: Vec<AssetHistData> = Vec::<AssetHistData>::new();
-        let time_series_len: usize = self.assets[0].get_n_datapoints();
+        let time_series_len: usize = self.assets[0].len();
         for (k, v) in new_assets {
             // Validation of the asset (independent of other assets)
             v.validate()?;
             // Validation of the asset (dependend of other assets)
-            if v.hist_data.get_n_datapoints() != time_series_len {
+            if v.hist_data.len() != time_series_len {
                 return Err(DigiFiError::ValidationError {
-                    title: "Portfolio".to_owned(),
+                    title: Self::error_title(),
                     details: "The assets provided do not have time series of the same length.".to_owned(),
                 });
             }
@@ -472,7 +481,7 @@ impl Portfolio {
         let mut returns: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
         for a in &self.assets {
             let extra_returns: Array1<f64> = Portfolio::predictable_income_to_return(&a.price_array, &a.predictable_income);
-            let returns_: Array1<f64> = prices_to_returns(&a.price_array, &ReturnsTransformation::Arithmetic);
+            let returns_: Array1<f64> = percent_change(&a.price_array);
             // Append 0.0 to the front of the arithmetic returns array
             let returns_: Array1<f64> = concatenate![Axis(0), Array1::from_vec(vec![0.0]), returns_];
             returns.push(returns_ + extra_returns);
@@ -497,7 +506,7 @@ impl Portfolio {
     /// - Time series of portfolio returns (Regular or cumulative)
     pub fn portfolio_returns(&self, portfolio_returns_type: &PortfolioReturnsType) -> Array1<f64> {
         let asset_returns: Vec<Array1<f64>> = self.asset_returns(&AssetReturnsType::WeightedReturnsOfAssets);
-        let mut portfolio_returns: Array1<f64> = Array1::from_vec(vec![0.0; self.assets[0].get_n_datapoints()]);
+        let mut portfolio_returns: Array1<f64> = Array1::from_vec(vec![0.0; self.assets[0].len()]);
         for a in asset_returns {
             portfolio_returns = portfolio_returns + a;
         }
@@ -517,7 +526,8 @@ impl Portfolio {
     pub fn mean_return(&self) -> Result<f64, DigiFiError> {
         let mut mean: f64 = 0.0;
         for i in 0..self.assets.len() {
-            mean += returns_average(&self.assets[i].price_array, &self.returns_method, &ReturnsTransformation::Arithmetic, self.n_periods)? * self.weights[i];
+            let returns: Array1<f64> = percent_change(&self.assets[i].price_array);
+            mean += returns_average(&returns, &self.returns_method, self.n_periods)? * self.weights[i];
         }
         Ok(mean)
     }
@@ -678,6 +688,12 @@ impl Portfolio {
     }
 }
 
+impl ErrorTitle for Portfolio {
+    fn error_title() -> String {
+        String::from("Portfolio")
+    }
+}
+
 
 #[cfg(feature = "plotly")]
 /// Plots the efficient frontier.
@@ -693,6 +709,7 @@ impl Portfolio {
 /// ```rust,ignore
 /// use std::collections::HashMap;
 /// use ndarray::Array1;
+/// use digifi::utilities::Time;
 /// use digifi::portfolio_applications::{AssetHistData, SharpeRatio, Asset, EfficientFrontier, Portfolio};
 ///
 /// #[cfg(all(feature = "plotly", feature = "sample_data"))]
@@ -708,7 +725,7 @@ impl Portfolio {
 ///     let dummy_array: Array1<f64> = Array1::from_vec(vec![0.0; time.len()]);
 ///     let mut assets: HashMap<String, Asset> = HashMap::<String, Asset>::new();
 ///     for (k, v) in data.into_iter() {
-///         let hist_data: AssetHistData = AssetHistData::build(v, dummy_array.clone(), dummy_array.clone()).unwrap();
+///         let hist_data: AssetHistData = AssetHistData::build(v, dummy_array.clone(), Time::new(dummy_array.clone())).unwrap();
 ///         assets.insert(k, Asset { hist_data, weight, });
 ///     }
 ///     let performance_metric: Box<SharpeRatio> = Box::new(SharpeRatio { rf: 0.02 });
@@ -784,7 +801,7 @@ mod tests {
     use ndarray::Array1;
     use crate::portfolio_applications::{AssetHistData, portfolio_performance::SharpeRatio};
     use crate::portfolio_applications::portfolio_composition::{Asset, EfficientFrontier, Portfolio, PortfolioOptimizationResult};
-    use crate::utilities::{TEST_ACCURACY, sample_data::SampleData};
+    use crate::utilities::{TEST_ACCURACY, Time, sample_data::SampleData};
 
     #[test]
     fn unit_test_portfolio_maximize_performance() -> () {
@@ -795,7 +812,7 @@ mod tests {
         let dummy_array: Array1<f64> = Array1::from_vec(vec![0.0; time.len()]);
         let mut assets: HashMap<String, Asset> = HashMap::<String, Asset>::new();
         for (k, v) in data.into_iter() {
-            let hist_data: AssetHistData = AssetHistData::build(v, dummy_array.clone(), dummy_array.clone()).unwrap();
+            let hist_data: AssetHistData = AssetHistData::build(v, dummy_array.clone(), Time::new(dummy_array.clone())).unwrap();
             assets.insert(k, Asset { hist_data, weight, });
         }
         let performance_metric: Box<SharpeRatio> = Box::new(SharpeRatio { rf: 0.02 });
@@ -816,7 +833,7 @@ mod tests {
         let dummy_array: Array1<f64> = Array1::from_vec(vec![0.0; time.len()]);
         let mut assets: HashMap<String, Asset> = HashMap::<String, Asset>::new();
         for (k, v) in data.into_iter() {
-            let hist_data: AssetHistData = AssetHistData::build(v, dummy_array.clone(), dummy_array.clone()).unwrap();
+            let hist_data: AssetHistData = AssetHistData::build(v, dummy_array.clone(), Time::new(dummy_array.clone())).unwrap();
             assets.insert(k, Asset { hist_data, weight, });
         }
         let performance_metric: Box<SharpeRatio> = Box::new(SharpeRatio { rf: 0.02 });
@@ -837,7 +854,7 @@ mod tests {
         let dummy_array: Array1<f64> = Array1::from_vec(vec![0.0; time.len()]);
         let mut assets: HashMap<String, Asset> = HashMap::<String, Asset>::new();
         for (k, v) in data.into_iter() {
-            let hist_data: AssetHistData = AssetHistData::build(v, dummy_array.clone(), dummy_array.clone()).unwrap();
+            let hist_data: AssetHistData = AssetHistData::build(v, dummy_array.clone(), Time::new(dummy_array.clone())).unwrap();
             assets.insert(k, Asset { hist_data, weight, });
         }
         let performance_metric: Box<SharpeRatio> = Box::new(SharpeRatio { rf: 0.02 });
@@ -863,7 +880,7 @@ mod tests {
         let dummy_array: Array1<f64> = Array1::from_vec(vec![0.0; time.len()]);
         let mut assets: HashMap<String, Asset> = HashMap::<String, Asset>::new();
         for (k, v) in data.into_iter() {
-            let hist_data: AssetHistData = AssetHistData::build(v, dummy_array.clone(), dummy_array.clone()).unwrap();
+            let hist_data: AssetHistData = AssetHistData::build(v, dummy_array.clone(), Time::new(dummy_array.clone())).unwrap();
             assets.insert(k, Asset { hist_data, weight, });
         }
         let performance_metric: Box<SharpeRatio> = Box::new(SharpeRatio { rf: 0.02 });
