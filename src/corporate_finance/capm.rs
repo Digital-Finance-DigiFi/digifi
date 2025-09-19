@@ -1,9 +1,9 @@
-use ndarray::{Array1, Array2};
+use ndarray::Array1;
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
 use crate::error::{DigiFiError, ErrorTitle};
-use crate::utilities::compare_len;
-use crate::statistics::{covariance, linear_regression};
+use crate::utilities::{compare_len, FeatureCollection};
+use crate::statistics::{covariance, LinearRegressionSettings, LinearRegressionResult, LinearRegressionAnalysis};
 
 
 #[derive(Clone, Copy, Debug)]
@@ -201,42 +201,33 @@ impl CAPM {
     }
 
     fn train(&self, risk_premium: &Array1<f64>) -> Result<CAPMParams, DigiFiError> {
-        let mut data_vec: Vec<Vec<f64>> = vec![(&self.market_returns - &self.rf).to_vec()];
-        data_vec.push(vec![1.0; data_vec[0].len()]);
+        let mut fc: FeatureCollection = FeatureCollection::new();
+        fc.add_constant = true;
+        fc.add_feature((&self.market_returns - &self.rf).into_iter(), "Market Premium")?;
         match &self.capm_type {
-            CAPMType::Standard => {
-                let data_matrix: Array2<f64> = Array2::from_shape_vec((2, risk_premium.len()), data_vec.into_iter().flatten().collect())?;
-                let params: Array1<f64> = linear_regression(&data_matrix.t().to_owned(), &risk_premium)?;
-                self.unstack_parameters(&mut params.into_iter())
-
-            },
+            CAPMType::Standard => (),
             CAPMType::ThreeFactorFamaFrench { smb, hml } => {
-                data_vec.push(smb.to_vec());
-                data_vec.push(hml.to_vec());
-                let data_matrix: Array2<f64> = Array2::from_shape_vec((4, risk_premium.len()), data_vec.into_iter().flatten().collect())?;
-                let params: Array1<f64> = linear_regression(&data_matrix.t().to_owned(), &risk_premium)?;
-                self.unstack_parameters(&mut params.into_iter())
+                fc.add_feature(smb.iter(), "SMB")?;
+                fc.add_feature(hml.iter(), "HML")?;
             },
             CAPMType::FiveFactorFamaFrench { smb, hml, rmw, cma } => {
-                data_vec.push(smb.to_vec());
-                data_vec.push(hml.to_vec());
-                data_vec.push(rmw.to_vec());
-                data_vec.push(cma.to_vec());
-                let data_matrix: Array2<f64> = Array2::from_shape_vec((6, risk_premium.len()), data_vec.into_iter().flatten().collect())?;
-                let params: Array1<f64> = linear_regression(&data_matrix.t().to_owned(), &risk_premium)?;
-                self.unstack_parameters(&mut params.into_iter())
+                fc.add_feature(smb.iter(), "SMB")?;
+                fc.add_feature(hml.iter(), "HML")?;
+                fc.add_feature(rmw.iter(), "RMW")?;
+                fc.add_feature(cma.iter(), "CMA")?;
             },
         }
+        let lra_result: LinearRegressionResult = LinearRegressionAnalysis::new(LinearRegressionSettings::disable_all()).run(&fc, &risk_premium)?;
+        self.unstack_parameters(lra_result.all_coefficients.into_iter())
     }
 
     /// Converts an iterator over parameters of linear regression model to `CAPMParams` instance.
-    fn unstack_parameters(&self, params: &mut impl Iterator<Item = f64>) -> Result<CAPMParams, DigiFiError> {
+    fn unstack_parameters(&self, mut params: impl Iterator<Item = f64>) -> Result<CAPMParams, DigiFiError> {
         let mut reg_params: CAPMParams = CAPMParams { alpha: None, beta: 0.0, beta_s: None, beta_h: None, beta_r: None, beta_c: None };
         reg_params.beta = match params.next() {
             Some(v) => v,
             None => return Err(DigiFiError::Other { title: Self::error_title(), details: "No `beta` was found.".to_owned(), }),
         };
-        reg_params.alpha = params.next();
         if let CAPMType::ThreeFactorFamaFrench { .. } | CAPMType::FiveFactorFamaFrench { .. } = &self.capm_type {
             reg_params.beta_s = params.next();
             reg_params.beta_h = params.next();
@@ -245,6 +236,7 @@ impl CAPM {
             reg_params.beta_r = params.next();
             reg_params.beta_c = params.next();
         }
+        reg_params.alpha = params.next();
         Ok(reg_params)
     }
 

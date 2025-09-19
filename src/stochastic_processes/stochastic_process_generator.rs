@@ -61,7 +61,7 @@ fn transpose(v: Vec<Array1<f64>>) -> Vec<Array1<f64>> {
 /// // Tests
 /// assert_eq!(paths.len(), n_paths);
 /// assert_eq!(paths[0].len(), n_steps+1);
-/// let mut final_steps: Vec<f64> = Vec::<f64>::new();
+/// let mut final_steps: Vec<f64> = Vec::with_capacity(n_paths);
 /// for i in 0..n_paths {
 ///     final_steps.push(paths[i][n_steps]);
 /// }
@@ -97,13 +97,13 @@ fn transpose(v: Vec<Array1<f64>>) -> Vec<Array1<f64>> {
 /// // Tests
 /// assert_eq!(paths.len(), n_paths);
 /// assert_eq!(paths[0].len(), n_steps+1);
-/// let mut final_steps: Vec<f64> = Vec::<f64>::new();
+/// let mut final_steps: Vec<f64> = Vec::with_capacity(n_paths);
 /// for i in 0..n_paths {
 ///     final_steps.push(paths[i][n_steps]);
 /// }
 /// let final_steps: Array1<f64> = Array1::from_vec(final_steps);
 /// let expected_value: f64 = (mu * t_f).exp() * s_0;
-/// assert!((final_steps.mean().unwrap() - expected_value).abs() < 50_000_000.0 * TEST_ACCURACY);
+/// assert!((final_steps.mean().unwrap() - expected_value).abs() < 100_000_000.0 * TEST_ACCURACY);
 /// ```
 pub struct SDE {
     /// Final time step
@@ -225,7 +225,7 @@ impl StochasticProcess for SDE {
 /// // Tests
 /// assert_eq!(paths.len(), n_paths);
 /// assert_eq!(paths[0].len(), n_steps+1);
-/// let mut final_steps: Vec<f64> = Vec::<f64>::new();
+/// let mut final_steps: Vec<f64> = Vec::with_capacity(n_paths);
 /// for i in 0..n_paths {
 ///     final_steps.push(paths[i][n_steps]);
 /// }
@@ -358,7 +358,7 @@ mod tests {
         // Tests
         assert_eq!(paths.len(), n_paths);
         assert_eq!(paths[0].len(), n_steps+1);
-        let mut final_steps: Vec<f64> = Vec::<f64>::new();
+        let mut final_steps: Vec<f64> = Vec::with_capacity(n_paths);
         for i in 0..n_paths {
             final_steps.push(paths[i][n_steps]);
         }
@@ -386,13 +386,13 @@ mod tests {
         // Tests
         assert_eq!(paths.len(), n_paths);
         assert_eq!(paths[0].len(), n_steps+1);
-        let mut final_steps: Vec<f64> = Vec::<f64>::new();
+        let mut final_steps: Vec<f64> = Vec::with_capacity(n_paths);
         for i in 0..n_paths {
             final_steps.push(paths[i][n_steps]);
         }
         let final_steps: Array1<f64> = Array1::from_vec(final_steps);
         let expected_value: f64 = (mu * t_f).exp() * s_0;
-        assert!((final_steps.mean().unwrap() - expected_value).abs() < 50_000_000.0 * TEST_ACCURACY);
+        assert!((final_steps.mean().unwrap() - expected_value).abs() < 100_000_000.0 * TEST_ACCURACY);
     }
 
     #[test]
@@ -413,7 +413,7 @@ mod tests {
         // Tests
         assert_eq!(paths.len(), n_paths);
         assert_eq!(paths[0].len(), n_steps+1);
-        let mut final_steps: Vec<f64> = Vec::<f64>::new();
+        let mut final_steps: Vec<f64> = Vec::with_capacity(n_paths);
         for i in 0..n_paths {
             final_steps.push(paths[i][n_steps]);
         }

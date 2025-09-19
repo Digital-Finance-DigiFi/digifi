@@ -17,6 +17,7 @@ pub use self::time_value_utils::{
     CompoundingType, present_value, net_present_value, future_value, internal_rate_of_return, real_interest_rate,
     ptp_compounding_transformation, ptc_compounding_transformation, ctp_compounding_transformation, Compounding, forward_rate, Cashflow, Perpetuity, Annuity,
 };
+pub use self::feature_collection::FeatureCollection;
 #[cfg(feature = "sample_data")]
 pub use self::sample_data::SampleData;
 #[cfg(feature = "serde")]
@@ -29,6 +30,7 @@ pub mod numerical_engines;
 pub mod loss_functions;
 pub mod data_transformations;
 pub mod time_value_utils;
+mod feature_collection;
 #[cfg(feature = "sample_data")]
 pub mod sample_data;
 
@@ -43,6 +45,10 @@ pub const TEST_ACCURACY: f64 = 0.00000001;
 /// Constant used for numerical corrections of values in order to make the numerical method well-defined
 /// (i.e., Numerical integration upper and lower bounds, log returns)
 pub const NUMERICAL_CORRECTION: f64 = 0.00000000000001;
+
+pub const LARGE_TEXT_BREAK: &str = "--------------------------------------------------------------------------------------\n";
+
+pub const SMALL_TEXT_BREAK: &str = "\t----------------------------------------------------\n";
 
 
 #[derive(Clone, Debug)]
@@ -190,11 +196,12 @@ impl MatrixConversion {
     ///
     /// let matrix: Array2<f64> = arr2(&[[0.0, 1.0], [2.0, 3.0], [4.0, 5.0]]);
     /// let matrix_dim: (usize, usize) = matrix.dim();
-    /// let result: DMatrix<f64> = MatrixConversion::ndarray_to_nalgebra(&matrix);
+    /// let result: DMatrix<f64> = MatrixConversion::ndarray_to_nalgebra(matrix);
+    /// 
     /// assert_eq!(result.row(0).len(), matrix_dim.1);
     /// assert_eq!(result.column(0).len(), matrix_dim.0);
     /// ```
-    pub fn ndarray_to_nalgebra(matrix: &Array2<f64>) -> DMatrix<f64> {
+    pub fn ndarray_to_nalgebra(matrix: Array2<f64>) -> DMatrix<f64> {
         let (n_rows, n_columns) = matrix.dim();
         let n_matrix: DMatrix<f64> = DMatrix::from_vec(n_columns, n_rows, matrix.clone().into_raw_vec_and_offset().0);
         n_matrix.transpose()
@@ -207,7 +214,7 @@ impl MatrixConversion {
     /// 
     /// # Ouput
     /// - ndarray matrix
-    pub fn nalgebra_to_ndarray(matrix: &DMatrix<f64>) -> Result<Array2<f64>, DigiFiError> {
+    pub fn nalgebra_to_ndarray(matrix: DMatrix<f64>) -> Result<Array2<f64>, DigiFiError> {
         let dim = (matrix.row(0).len(), matrix.column(0).len());
         Ok(Array2::from_shape_vec(dim, matrix.as_slice().to_vec())?)
     }
@@ -242,7 +249,7 @@ mod tests {
         use crate::utilities::MatrixConversion;
         let matrix: Array2<f64> = arr2(&[[0.0, 1.0], [2.0, 3.0], [4.0, 5.0]]);
         let matrix_dim: (usize, usize) = matrix.dim();
-        let result: DMatrix<f64> = MatrixConversion::ndarray_to_nalgebra(&matrix);
+        let result: DMatrix<f64> = MatrixConversion::ndarray_to_nalgebra(matrix);
         assert_eq!(result.row(0).len(), matrix_dim.1);
         assert_eq!(result.column(0).len(), matrix_dim.0);
     }

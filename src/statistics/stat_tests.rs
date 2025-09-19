@@ -1,16 +1,14 @@
-use std::cmp;
+use std::{cmp, fmt::Display};
 use ndarray::{Array1, Array2, s};
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
 use crate::error::{DigiFiError, ErrorTitle};
-use crate::utilities::{compare_len, data_transformations::differencing};
+use crate::utilities::{LARGE_TEXT_BREAK, compare_len, FeatureCollection, data_transformations::differencing};
 use crate::statistics::{
     ProbabilityDistribution, linear_regression, se_lr_coefficient,
     continuous_distributions::StudentsTDistribution,
+    linear_regression_analysis::{LinearRegressionSettings, LinearRegressionFeatureResult, LinearRegressionResult, LinearRegressionAnalysis}, 
 };
-// TODO: Add Baron and Kenny mediation analysis
-// TODO: Add Sobel's mediation test
-// TODO: Add moderation/mediation test that determines whether the relationship is moderated mediation or mediated moderation
 
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -36,6 +34,12 @@ impl ConfidenceLevel {
             ConfidenceLevel::TwoHalf => 0.25,
             ConfidenceLevel::One => 0.01,
         }
+    }
+}
+
+impl Display for ConfidenceLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.get_p().to_string())
     }
 }
 
@@ -201,6 +205,16 @@ impl ADFType {
     }
 }
 
+impl Display for ADFType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ADFType::Simple => write!(f, "Simple (No constant or trend terms)"),
+            ADFType::Constant => write!(f, "Constant (Constant term in the ADF test regression)"),
+            ADFType::ConstantAndTrend => write!(f, "Constant and Trend (Constant and trend terms in the ADF test regression)"),
+        }
+    }
+}
+
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -268,6 +282,25 @@ impl ErrorTitle for ADFResult {
     }
 }
 
+impl Display for ADFResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let result: String = LARGE_TEXT_BREAK.to_owned()
+            + "Augmented Dickey-Fuller Test Result\n"
+            + LARGE_TEXT_BREAK
+            + &format!("Unit Root Exists: {}\n", self.unit_root_exists)
+            + &format!("df-statistic: {}\n", self.df_statistic.unwrap_or(f64::NAN))
+            + &format!("Critical Value: {}\n", self.critical_value.unwrap_or(f64::NAN))
+            + &format!("Gamma Term: {}\n", self.gamma)
+            + &format!("Standard Error of Gamma: {}\n", self.se_gamma.unwrap_or(f64::NAN))
+            + "Autoregressive Terms (Delta): " + &self.deltas.iter().map(|v| v.to_string() ).collect::<Vec<String>>().join(", ") + "\n"
+            + &format!("Trend Term (Beta): {}\n", self.beta.unwrap_or(f64::NAN))
+            + &format!("Constant Term (Alpha): {}\n", self.alpha.unwrap_or(f64::NAN))
+            + &format!("ADF Test Type: {}\n", self.adf_type)
+            + LARGE_TEXT_BREAK;
+        write!(f, "{}", result)
+    }
+}
+
 
 /// Augmented Dickey–Fuller test (ADF) tests the null hypothesis that a unit root is present in a time series sample.
 /// The alternative hypothesis depends on which version of the test is used, but is usually stationarity or trend-stationarity.
@@ -301,11 +334,12 @@ impl ErrorTitle for ADFResult {
 /// assert_eq!(result.unit_root_exists, false);
 /// ```
 pub fn adf(x: &Array1<f64>, lag: Option<usize>, adf_type: &ADFType, cl: Option<ConfidenceLevel>) -> Result<ADFResult, DigiFiError> {
+    let error_title: String = String::from("ADF");
     let x_len: usize = x.len();
     let lag: usize = match lag {
         Some(v) => {
             if x_len < v {
-                return Err(DigiFiError::IndexOutOfRange { title: "ADF".to_owned(), index: "lag".to_owned(), array: "v".to_owned(), });
+                return Err(DigiFiError::IndexOutOfRange { title: error_title.clone(), index: "lag".to_owned(), array: "v".to_owned(), });
             }
             v
         },
@@ -316,43 +350,41 @@ pub fn adf(x: &Array1<f64>, lag: Option<usize>, adf_type: &ADFType, cl: Option<C
     let lr_result: Array1<f64> = diff.slice(s![lag..]).iter().map(|v_| *v_ ).collect();
     let lr_result_len: usize = lr_result.len();
     // Right side of the linear regression model
-    let mut lr_matrix: Vec<Vec<f64>> = Vec::<Vec<f64>>::new();
-    let delta_terms = |lr_matrix: &mut Vec<Vec<f64>>, diff: &Array1<f64>| {
-        for j in 0..lag {
-            let upper_index: usize = diff.len() - 1 - j;
-            lr_matrix.push(diff.slice(s![(upper_index - lr_result_len)..upper_index]).into_iter().map(|v_| *v_ ).collect());
-        }
-    };
-    // Add features to the linear regression features matrix in the specified order
+    let mut fc: FeatureCollection = FeatureCollection::new();
     // Delta terms
-    delta_terms(&mut lr_matrix, &diff);
+    for j in 0..lag {
+        let upper_index: usize = diff.len() - 1 - j;
+        let feature_name: String = format!("Delta Term (Upper Index: {})", upper_index);
+        fc.add_feature(diff.slice(s![(upper_index - lr_result_len)..upper_index]).iter().map(|v_| *v_ ), &feature_name)?;
+    }
     // Constant trend term (Beta)
     if let ADFType::ConstantAndTrend = adf_type {
-        lr_matrix.push(((x_len - lr_result_len + 1)..=x_len).map(|v| v as f64 ).collect());
-    }
+        let (range_start, range_end) = ((x_len - lr_result_len + 1) as i16, x_len as i16);
+        fc.add_feature((range_start..=range_end).map(|v| v as f64 ), &format!("Constant Trend Term (Beta)"))?;    }
     // Constant term (Alpha)
     if let ADFType::Constant | ADFType::ConstantAndTrend = adf_type {
-        lr_matrix.push(vec![1.0; lr_result_len]);
+        fc.add_constant = true;
     }
-    // Gamma terms
-    lr_matrix.push(x.slice(s![lag..(x_len - 1)]).into_iter().map(|v_| *v_ ).collect());
+    // Gamma term
+    let gamma_label: String = String::from("Gamma Term");
+    fc.add_feature(x.slice(s![lag..(x_len - 1)]).iter().map(|v_| *v_ ), &gamma_label)?;
     // Linear regression
-    let data_matrix: Array2<f64> = Array2::from_shape_vec((lr_matrix.len(), lr_matrix[0].len()), lr_matrix.into_iter().flatten().collect())?;
-    let params: Array1<f64> = linear_regression(&data_matrix.t().to_owned(), &lr_result)?;
+    let mut lra_settings: LinearRegressionSettings = LinearRegressionSettings::disable_all();
+    lra_settings.enable_se = true;
+    let lra: LinearRegressionAnalysis = LinearRegressionAnalysis::new(lra_settings);
+    let lra_result: LinearRegressionResult = lra.run(&mut fc, &lr_result)?;
+    let gamma: &LinearRegressionFeatureResult = &lra_result.coefficients[fc.get_feature_index(&gamma_label)?];
     // If gamma is positive no unit root exists as the process is not stationary
-    let gamma: f64 = params[params.len()-1];
-    if 0.0 < gamma {
-        return ADFResult::build(&params, false, None, None, None, adf_type);
+    if 0.0 < gamma.coefficient {
+        return ADFResult::build(&lra_result.all_coefficients, false, None, None, None, adf_type);
     }
-    // Compute standard error for estimated gamma
-    let prediction: Array1<f64> = data_matrix.t().dot(&params);
-    let se_gamma: f64 = se_lr_coefficient(&lr_result, &prediction, &data_matrix.slice(s![data_matrix.dim().0-1, ..]).to_owned(), params.len())?;
+    let se_gamma: f64 = gamma.standard_error.ok_or(DigiFiError::NotFound { title: error_title, data: "standard error of gamma".to_owned(), })?;
     // Calculate Dickey-Fuller statistic (i.e., gamma / SE(gamma))
-    let df_statistic: f64 = gamma / se_gamma;
+    let df_statistic: f64 = gamma.coefficient / se_gamma;
     let cl: ConfidenceLevel = match cl { Some(cl) => cl, None => ConfidenceLevel::default(), };
     let critical_value: f64 = adf_type.get_critical_value(x_len, &cl);
     let unit_root_exists: bool = if df_statistic < critical_value { false } else { true };
-    ADFResult::build(&params, unit_root_exists, Some(df_statistic), Some(critical_value), Some(se_gamma), adf_type)
+    ADFResult::build(&lra_result.all_coefficients, unit_root_exists, Some(df_statistic), Some(critical_value), Some(se_gamma), adf_type)
 }
 
 
@@ -362,6 +394,23 @@ pub fn adf(x: &Array1<f64>, lag: Option<usize>, adf_type: &ADFType, cl: Option<C
 pub struct CointegrationResult {
     pub cointegrated: bool,
     pub adf_results: Option<Vec<ADFResult>>,
+}
+
+impl Display for CointegrationResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let result: String = match &self.adf_results {
+                Some(tests) => {
+                    tests.iter().map(|t| t.to_string() ).collect::<Vec<String>>().join("\n\n")
+                },
+                None => "".to_owned(),
+            } + "\n\n"
+            + LARGE_TEXT_BREAK
+            + "Cointegration Test Result\n"
+            + LARGE_TEXT_BREAK
+            + &format!("Cointegrated: {}\n", self.cointegrated)
+            + LARGE_TEXT_BREAK;
+        write!(f, "{}", result)
+    }
 }
 
 
@@ -414,7 +463,7 @@ pub fn cointegration(x: &Array1<f64>, y: &Array1<f64>, cl: Option<ConfidenceLeve
     let mut cointegrated: bool = false;
     let mut adf_results: Vec<ADFResult> = Vec::<ADFResult>::new();
     for adf_type in &adf_variations {
-        let adf_result: ADFResult = adf(&u_t, None, adf_type, cl.clone())?;
+        let adf_result: ADFResult = adf(&u_t, None, adf_type, cl)?;
         let stationary_u_t: bool = !adf_result.unit_root_exists;
         adf_results.push(adf_result);
         // If unit root does not exists then `u_t` is stationary, so the processes `x` and `y` are cointegrated
@@ -439,8 +488,23 @@ pub struct TTestResult {
     pub dof: f64,
     /// p-value of the t-test
     pub p_value: f64,
-    /// Conficdence level for t-test (Quoted as probability to compare `p_value` against)
+    /// Confidence level for t-test (Quoted as probability to compare `p_value` against)
     pub p_cl: f64,
+}
+
+impl Display for TTestResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let result: String = LARGE_TEXT_BREAK.to_owned()
+            + "t-Test Result\n"
+            + LARGE_TEXT_BREAK
+            + &format!("Degrees of Freedom: {}\n", self.dof)
+            + &format!("Reject Null Hypothesis: {}\n", self.reject_h0)
+            + &format!("t-Test t-score: {}\n", self.t_score)
+            + &format!("t-Test p-value: {}\n", self.p_value)
+            + &format!("Confidence Level: {}\n", self.p_cl)
+            + LARGE_TEXT_BREAK;
+            write!(f, "{}", result)
+    }
 }
 
 
@@ -529,6 +593,16 @@ impl ErrorTitle for TTestTwoSampleCase {
     }
 }
 
+impl Display for TTestTwoSampleCase {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TTestTwoSampleCase::EqualVariance => write!(f, "Equal Variance"),
+            TTestTwoSampleCase::SimilarVariance => write!(f, "Similar Variance"),
+            TTestTwoSampleCase::UnequalVariance => write!(f, "Unequal Variance"),
+        }
+    }
+}
+
 
 /// Two sample t-test. It is used to test whether two samples have an equal mean. The null hypothesis is that the populations of both samples have equal mean.
 /// 
@@ -602,8 +676,7 @@ pub fn t_test_two_sample(sample_1: &Array1<f64>, sample_2: &Array1<f64>, cl: Opt
         },
     };
     // Obtain confidence interval value
-    let dist: StudentsTDistribution = StudentsTDistribution::build(dof)?;
-    let p_value: f64 = 1.0 - dist.cdf(t_score)?;
+    let p_value: f64 = 1.0 - StudentsTDistribution::build(dof)?.cdf(t_score)?;
     let p_cl: f64 = match cl { Some(v) => 1.0 - v.get_p(), None => 1.0 - ConfidenceLevel::default().get_p() };
     let reject_h0: bool = if p_cl < p_value { true } else { false };
     Ok(TTestResult { reject_h0, t_score, dof, p_value, p_cl })
@@ -683,8 +756,7 @@ pub fn t_test_lr(beta: f64, beta_0: Option<f64>, y: &Array1<f64>, y_prediction: 
             title: "T-test (Linear Regression)".to_owned(),
             details: "There are fewer data points in `y` array than `ddof`.".to_owned(),
         })? as f64;
-    let dist: StudentsTDistribution = StudentsTDistribution::build(dof)?;
-    let p_value: f64 = 1.0 - dist.cdf(t_score)?;
+    let p_value: f64 = 1.0 - StudentsTDistribution::build(dof)?.cdf(t_score)?;
     let p_cl: f64 = match cl { Some(v) => v.get_p(), None => ConfidenceLevel::default().get_p() };
     let reject_h0: bool = if p_value < p_cl { true } else { false };
     Ok(TTestResult { reject_h0, t_score, dof, p_value, p_cl })

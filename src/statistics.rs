@@ -13,6 +13,10 @@ pub use self::continuous_distributions::{
 };
 pub use self::stat_tests::{ConfidenceLevel, ADFType, ADFResult, adf, CointegrationResult, cointegration, TTestResult, TTestTwoSampleCase, t_test_two_sample, t_test_lr};
 pub use self::linear_regression_analysis::{LinearRegressionFeatureResult, LinearRegressionResult, LinearRegressionSettings, LinearRegressionAnalysis};
+pub use self::mediation_analysis::{
+    BKMediationAnalysisStep, BKMediationAnalysisFinalStep, BKMediationAnalysisResult, BaronKennyMeriationAnalysis, SobelTestResult, sobel_test,
+    MJYAnalysisStep, MJYAnalysisFinalStep, MJYAnalysisResult, MullerJuddYzerbytAnalysis,
+};
 
 
 mod gamma;
@@ -21,6 +25,7 @@ pub mod continuous_distributions;
 pub mod discrete_distributions;
 pub mod stat_tests;
 mod linear_regression_analysis;
+pub mod mediation_analysis;
 
 
 use std::borrow::Borrow;
@@ -29,9 +34,11 @@ use nalgebra::DMatrix;
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
 use crate::error::DigiFiError;
-use crate::utilities::{compare_len, MatrixConversion};
-use crate::utilities::maths_utils::factorial;
-use crate::utilities::loss_functions::{LossFunction, SSE};
+use crate::utilities::{
+    compare_len, MatrixConversion, FeatureCollection,
+    maths_utils::factorial,
+    loss_functions::{LossFunction, SSE},
+};
 
 
 #[derive(Clone, Copy, Debug)]
@@ -407,10 +414,10 @@ pub fn linear_regression(x: &Array2<f64>, y: &Array1<f64>) -> Result<Array1<f64>
     }
     let square_matrix: Array2<f64> = x.t().dot(x);
     // Matrix inverse is done via nalgebra.
-    let n_square_matrix: DMatrix<f64> = MatrixConversion::ndarray_to_nalgebra(&square_matrix);
+    let n_square_matrix: DMatrix<f64> = MatrixConversion::ndarray_to_nalgebra(square_matrix);
     let n_inv_matrix: DMatrix<f64> = n_square_matrix.try_inverse()
         .ok_or(DigiFiError::Other { title: "Linear Regression".to_owned(), details: "No matrix inverse exists to perform linear regression.".to_owned(), })?;
-    let inv_matrix: Array2<f64> = MatrixConversion::nalgebra_to_ndarray(&n_inv_matrix)?;
+    let inv_matrix: Array2<f64> = MatrixConversion::nalgebra_to_ndarray(n_inv_matrix)?;
     Ok(inv_matrix.dot(&x.t().dot(&y.t())))
 }
 
@@ -519,9 +526,9 @@ pub fn adjusted_r_squared(real_values: &Array1<f64>, predicted_values: &Array1<f
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Variance_inflation_factor>
 /// - Original Source: N/A
-pub fn variance_inflation_factor(xis: &Vec<Array1<f64>>, xi: &Array1<f64>) -> Result<Option<f64>, DigiFiError> {
+pub fn variance_inflation_factor(xis: &mut FeatureCollection, xi: &Array1<f64>) -> Result<Option<f64>, DigiFiError> {
+    xis.add_constant = true;
     let mut settings: LinearRegressionSettings = LinearRegressionSettings::disable_all();
-    settings.add_constant = true;
     settings.enable_r_squared = true;
     let lr: LinearRegressionAnalysis = LinearRegressionAnalysis::new(settings);
     let lr_result: LinearRegressionResult = lr.run(xis, xi)?;
