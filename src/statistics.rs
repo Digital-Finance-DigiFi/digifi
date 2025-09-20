@@ -10,6 +10,7 @@ pub use self::beta::{ln_beta, beta, incomplete_beta, regularized_incomplete_beta
 pub use self::discrete_distributions::{BernoulliDistribution, BinomialDistribution, DiscreteUniformDistribution, PoissonDistribution};
 pub use self::continuous_distributions::{
     ContinuousUniformDistribution, NormalDistribution, ExponentialDistribution, LaplaceDistribution, GammaDistribution, StudentsTDistribution,
+    ParetoDistribution, LogNormalDistribution,
 };
 pub use self::stat_tests::{ConfidenceLevel, ADFType, ADFResult, adf, CointegrationResult, cointegration, TTestResult, TTestTwoSampleCase, t_test_two_sample, t_test_lr};
 pub use self::linear_regression_analysis::{LinearRegressionFeatureResult, LinearRegressionResult, LinearRegressionSettings, LinearRegressionAnalysis};
@@ -33,7 +34,7 @@ use ndarray::{Array1, Array2};
 use nalgebra::DMatrix;
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
-use crate::error::DigiFiError;
+use crate::error::{DigiFiError, ErrorTitle};
 use crate::utilities::{
     compare_len, MatrixConversion, FeatureCollection,
     maths_utils::factorial,
@@ -134,6 +135,82 @@ pub trait ProbabilityDistribution {
     {
         let ts: Vec<f64> = t.map(|t| self.mgf(*t.borrow()) ).collect();
         Ok(Array1::from_vec(ts))
+    }
+}
+
+
+/// This trait contains methods applicable to using probability distributions as risk measures.
+pub trait RiskMeasure: ProbabilityDistribution + ErrorTitle {
+    fn validate_alpha(&self, alpha: f64) -> Result<(), DigiFiError> {
+        if (alpha < 0.0) || (1.0 < alpha) {
+            return Err(DigiFiError::ParameterConstraint {
+                title: Self::error_title(),
+                constraint: "The argument `alpha` must be in the range `[0, 1]`.".to_owned(),
+            });
+        }
+        Ok(())
+    }
+
+    /// Measure of the risk of a portfolio estimating how much a portfolio can lose in a specified period.
+    /// 
+    /// Note: This function uses the convention where 95% V@R of $1 million means that $1 million is the maximum possible loss
+    /// in the specified time horizon after excluding all worse outcomes whose combined probability is at most 5%.
+    /// 
+    /// Note: This V@R implementation assumes that the distribution provided is the distribution of losses (i.e., the positive numbers are losses,
+    /// negative numbers are profits).
+    /// 
+    /// Note: The V@R is quoted as a positive number, if V@R is negative it implies that the portfolio has very high chance of making a profit.
+    /// 
+    /// # Input
+    /// - `alpha`: Probability level for V@R
+    /// - `losses_distribution`: Probability distribution object with an inverse CDF method
+    /// 
+    /// # Output
+    /// - Value at risk (V@R)
+    /// 
+    /// # Errors
+    /// - Returns an error if the argument `alpha` is not in the range \[0, 1\].
+    ///
+    /// # Links
+    /// - Wikipedia: <https://en.wikipedia.org/wiki/Value_at_risk#>
+    /// - Original Source: N/A
+    fn value_at_risk(&self, alpha: f64) -> Result<f64, DigiFiError> {
+        self.validate_alpha(alpha)?;
+        Ok(self.inverse_cdf(alpha)?)
+    }
+
+    /// Measure of the risk of a portfolio that evaluates the expected return of a portfolio in the worst percentage of cases.
+    /// 
+    /// Note: This function uses the convention where ES at 95% is the expected shortfall of the 5% of worst cases.
+    /// 
+    /// # Input
+    /// - `alpha`: Probability level for ES
+    /// 
+    /// # Output
+    /// - Expected shortfall (ES)
+    /// 
+    /// # Errors
+    /// - Returns an error if the argument `alpha` is not in the range \[0, 1\].
+    ///
+    /// # Links
+    /// - Wikipedia: <https://en.wikipedia.org/wiki/Expected_shortfall>
+    /// - Original Source: N/A
+    fn expected_shortfall(&self, alpha: f64) -> Result<f64, DigiFiError>;
+
+    fn value_at_risk_iter<T, I>(&self, alphas: T) -> Result<Array1<f64>, DigiFiError>
+    where
+        T: Iterator<Item = I>,
+        I: Borrow<f64>,
+    {
+        alphas.map(|alpha| self.value_at_risk(*alpha.borrow()) ).collect()
+    }
+
+    fn expected_shortfall_iter<T, I>(&self, alphas: T) -> Result<Array1<f64>, DigiFiError>
+    where
+        T: Iterator<Item = I>,
+        I: Borrow<f64>,
+    {
+        alphas.map(|alpha| self.expected_shortfall(*alpha.borrow()) ).collect()
     }
 }
 

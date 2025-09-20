@@ -3,7 +3,7 @@ use serde::{Serialize, Deserialize};
 use crate::error::{DigiFiError, ErrorTitle};
 use crate::utilities::{maths_utils::{erf, erfinv, derivative}, numerical_engines::nelder_mead};
 use crate::statistics::{
-    ProbabilityDistribution, ProbabilityDistributionType,
+    ProbabilityDistributionType, ProbabilityDistribution, RiskMeasure,
     gamma::{gamma, lower_incomplete_gamma, digamma},
     beta::{beta, regularized_incomplete_beta},
 };
@@ -315,6 +315,14 @@ impl ProbabilityDistribution for NormalDistribution {
     }
 }
 
+impl RiskMeasure for NormalDistribution {
+    fn expected_shortfall(&self, alpha: f64) -> Result<f64, DigiFiError> {
+        self.validate_alpha(alpha)?;
+        let std_norm_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
+        Ok(self.mu + self.sigma * std_norm_dist.pdf(std_norm_dist.inverse_cdf(alpha)?)? / (1.0 - alpha))
+    }
+}
+
 
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -462,6 +470,13 @@ impl ProbabilityDistribution for ExponentialDistribution {
     }
 }
 
+impl RiskMeasure for ExponentialDistribution {
+    fn expected_shortfall(&self, alpha: f64) -> Result<f64, DigiFiError> {
+        self.validate_alpha(alpha)?;
+        Ok((-(1.0 - alpha).ln() + 1.0) / self.lambda)
+    }
+}
+
 
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -505,8 +520,23 @@ impl LaplaceDistribution {
     /// # Input
     /// - `mu`: Location parameter, which is the peak of the distribution
     /// - `b`: Scale parameter, which controls the spread of the distribution
+    /// 
+    /// # Errors
+    /// - Returns an error if `b` is not positive.
     pub fn build(mu: f64, b: f64) -> Result<Self, DigiFiError> {
+        if b <= 0.0 {
+            return Err(DigiFiError::ParameterConstraint {
+                title: Self::error_title(),
+                constraint: "The argument `b` must be positive.".to_owned(),
+            });
+        }
         Ok(LaplaceDistribution { mu, b, })
+    }
+}
+
+impl ErrorTitle for LaplaceDistribution {
+    fn error_title() -> String {
+        String::from("Laplace Distribution")
     }
 }
 
@@ -602,6 +632,17 @@ impl ProbabilityDistribution for LaplaceDistribution {
     }
 }
 
+impl RiskMeasure for LaplaceDistribution {
+    fn expected_shortfall(&self, alpha: f64) -> Result<f64, DigiFiError> {
+        self.validate_alpha(alpha)?;
+        if alpha < 0.5 {
+            Ok(self.mu + self.b * alpha * (1.0 - (2.0 * alpha).ln()) / (1.0 - alpha))
+        } else {
+            Ok(self.mu + self.b * (1.0 - (2.0 - 2.0 * alpha).ln()))
+        }
+    }
+}
+
 
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -645,6 +686,10 @@ impl GammaDistribution {
     /// # Input
     /// - `k`: Shape parameter, which controls the shape of the distribution
     /// - `theta`: Scale parameter, which controls the spread of the distribution
+    /// 
+    /// # Errors
+    /// - Returns an error if `k` is not positive.
+    /// - Returns an error if `theta` is not positive.
     pub fn build(k: f64, theta: f64) -> Result<Self, DigiFiError> {
         if k <= 0.0 {
             return Err(DigiFiError::ParameterConstraint { title: Self::error_title(), constraint: "The argument `k` must be positive.".to_owned(), });
@@ -848,6 +893,9 @@ impl StudentsTDistribution {
     ///
     /// # Input
     /// - `v`: Degrees of freedom
+    /// 
+    /// # Errors
+    /// - Returns an error if `v` is not positive.
     pub fn build(v: f64) -> Result<Self, DigiFiError> {
         if v <= 0.0 {
             return Err(DigiFiError::ParameterConstraint {
@@ -908,12 +956,6 @@ impl ProbabilityDistribution for StudentsTDistribution {
     /// # Output
     /// - PDF value at the given `x`
     fn pdf(&self, x: f64) -> Result<f64, DigiFiError> {
-        // Ok(x.map(|t| {
-        //     let v_: f64 = (self.v + 1.0) / 2.0;
-        //     let num: f64 = gamma(v_) * (1.0 + t.powi(2) / self.v).powf(-v_);
-        //     let denom: f64 = gamma(self.v / 2.0) * (std::f64::consts::PI * self.v).sqrt();
-        //     num / denom
-        // } ))
         let v_: f64 = (self.v + 1.0) / 2.0;
         let num: f64 = gamma(v_) * (1.0 + x.powi(2) / self.v).powf(-v_);
         let denom: f64 = gamma(self.v / 2.0) * (std::f64::consts::PI * self.v).sqrt();
@@ -949,28 +991,28 @@ impl ProbabilityDistribution for StudentsTDistribution {
     fn inverse_cdf(&self, p: f64) -> Result<f64, DigiFiError> {
         if (p < 0.0) || (1.0 < p) { return Ok(f64::NAN) }
         // Shortcut approximations for some degrees of freedom
-        if self.v == 1.0 {
-            Ok((std::f64::consts::PI * (p - 0.5)).tan())
-        } else if self.v == 2.0 {
-            let alpha: f64 = 4.0 * p * (1.0 - p);
-            Ok(2.0 * (p - 0.5) * (2.0 / alpha).sqrt())
-        } else if self.v == 4.0 {
-            let alpha: f64 = 4.0 * p * (1.0 - p);
-            let q: f64 = (alpha.sqrt().acos() / 3.0).cos() / alpha.sqrt();
-            let sign: f64 = if (p - 0.5) < 0.0 { -1.0 } else if 0.0 < (p - 0.5) { 1.0 } else { 0.0 };
-            Ok(sign * 2.0 * (q - 1.0).sqrt())
-        } else if self.v < 30.0 {
-            // Cornish-Fisher extension
-            let dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
-            let z: f64 = dist.inverse_cdf(p)?;
-            let result: f64 = z + z*(z.powi(2) + 1.0)/(4.0 * self.v) + z*(5.0 * z.powi(4) + 16.0 * z.powi(2) + 3.0)/(96.0 * self.v.powi(2))
-                + z*(3.0 * z.powi(7) + 19.0 * z.powi(5) + 17.0 * z.powi(3) - 16.0 * z)/(384.0 * self.v.powi(3))
-                + z*(79.0 * z.powi(9) + 776.0 * z.powi(7) + 1482.0 * z.powi(5) - 1920.0 * z.powi(3) - 945.0 * z)/(96160.0 * self.v.powi(4));
-            Ok(result)
-        } else {
-            // Approximation via Normal distribution for high number of degrees of freedom
-            let dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
-            dist.inverse_cdf(p)
+        match self.v {
+            1.0 => Ok((std::f64::consts::PI * (p - 0.5)).tan()),
+            2.0 => Ok(2.0 * (p - 0.5) * (2.0 / (4.0 * p * (1.0 - p))).sqrt()),
+            4.0 => {
+                let alpha: f64 = 4.0 * p * (1.0 - p);
+                let q: f64 = (alpha.sqrt().acos() / 3.0).cos() / alpha.sqrt();
+                let sign: f64 = if (p - 0.5) < 0.0 { -1.0 } else if 0.0 < (p - 0.5) { 1.0 } else { 0.0 };
+                Ok(sign * 2.0 * (q - 1.0).sqrt())
+            },
+            v if v < 30.0 => {
+                // Cornish-Fisher extension
+                let dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
+                let z: f64 = dist.inverse_cdf(p)?;
+                let result: f64 = z + z*(z.powi(2) + 1.0)/(4.0 * self.v) + z*(5.0 * z.powi(4) + 16.0 * z.powi(2) + 3.0)/(96.0 * self.v.powi(2))
+                    + z*(3.0 * z.powi(7) + 19.0 * z.powi(5) + 17.0 * z.powi(3) - 16.0 * z)/(384.0 * self.v.powi(3))
+                    + z*(79.0 * z.powi(9) + 776.0 * z.powi(7) + 1482.0 * z.powi(5) - 1920.0 * z.powi(3) - 945.0 * z)/(96160.0 * self.v.powi(4));
+                Ok(result)
+            },
+            _ => {
+                // Approximation via Normal distribution for high number of degrees of freedom
+                NormalDistribution::build(0.0, 1.0)?.inverse_cdf(p)
+            },
         }
     }
 
@@ -987,6 +1029,362 @@ impl ProbabilityDistribution for StudentsTDistribution {
     }
 }
 
+impl RiskMeasure for StudentsTDistribution {
+    fn expected_shortfall(&self, alpha: f64) -> Result<f64, DigiFiError> {
+        self.validate_alpha(alpha)?;
+        let inv_cdf_alpha: f64 = self.inverse_cdf(alpha)?;
+        Ok((self.v + inv_cdf_alpha.powi(2)) * self.pdf(inv_cdf_alpha)? / ((self.v - 1.0) * (1.0 - alpha)))
+    }
+}
+
+
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+/// Methods and properties of Pareto distribution.
+/// 
+/// # Links
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Pareto_distribution>
+/// - Original Source: N/A
+/// 
+/// # Examples
+/// 
+/// ```rust
+/// use ndarray::{Array1, arr1};
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::statistics::{ProbabilityDistribution, ParetoDistribution};
+/// 
+/// // Standard scale (scale = 1)
+/// let dist: ParetoDistribution = ParetoDistribution::build(1.0, 3.0).unwrap();
+/// let x: f64 = 1.5;
+/// 
+/// // PDF test
+/// let pdf_v: f64 = dist.pdf(x).unwrap();
+/// assert!((pdf_v - 0.5925925925925926).abs() < TEST_ACCURACY);
+/// 
+/// // CDF test
+/// let cdf_v: f64 = dist.cdf(x).unwrap();
+/// assert!((cdf_v - 0.7037037037037037).abs() < TEST_ACCURACY);
+/// 
+/// // Inverse CDF test
+/// let icdf_v: f64 = dist.inverse_cdf(0.7037037037037037).unwrap();
+/// assert!((icdf_v - x).abs() < TEST_ACCURACY);
+/// 
+/// 
+/// // Non-standard scale (scale = 2)
+/// let dist: ParetoDistribution = ParetoDistribution::build(2.0, 3.0).unwrap();
+/// let x: f64 = 2.5;
+/// 
+/// // PDF test
+/// let pdf_v: f64 = dist.pdf(x).unwrap();
+/// assert!((pdf_v - 0.6144000000000001).abs() < TEST_ACCURACY);
+/// 
+/// // CDF test
+/// let cdf_v: f64 = dist.cdf(x).unwrap();
+/// assert!((cdf_v - 0.488).abs() < TEST_ACCURACY);
+/// 
+/// // Inverse CDF test
+/// let icdf_v: f64 = dist.inverse_cdf(0.488).unwrap();
+/// assert!((icdf_v - x).abs() < TEST_ACCURACY);
+/// ```
+pub struct ParetoDistribution {
+    /// Scale parameter (i.e., minimum possible value of the distribution)
+    scale: f64,
+    /// Shape parameter
+    a: f64,
+}
+
+impl ParetoDistribution {
+
+    /// Creates a new `ParetoDistribution` instance.
+    ///
+    /// # Input
+    /// - `scale`: Scale parameter (i.e., minimum possible value of the distribution)
+    /// - `a`: Shape parameter
+    /// 
+    /// # Errors
+    /// - Returns an error if `scale` is not positive.
+    /// - Returns and error if `a` is not positive.
+    pub fn build(scale: f64, a: f64) -> Result<Self, DigiFiError> {
+        if scale <= 0.0 {
+            return Err(DigiFiError::ParameterConstraint {
+                title: Self::error_title(),
+                constraint: "The argument `scale` must be positive.".to_owned(),
+            });
+        }
+        if a <= 0.0 {
+            return Err(DigiFiError::ParameterConstraint {
+                title: Self::error_title(),
+                constraint: "The argument `a` must be positive.".to_owned(),
+            });
+        }
+        Ok(ParetoDistribution { scale, a, } )
+    }
+}
+
+impl ErrorTitle for ParetoDistribution {
+    fn error_title() -> String {
+        String::from("Pareto Distribution")
+    }
+}
+
+impl ProbabilityDistribution for ParetoDistribution {
+    fn distribution_type() -> ProbabilityDistributionType {
+        ProbabilityDistributionType::Continuous
+    }
+    
+    fn mean(&self) -> f64 {
+        if self.a <= 1.0 { f64::INFINITY } else { self.a * self.scale / (self.a - 1.0) }
+    }
+
+    fn median(&self) -> Vec<f64> {
+        vec![self.scale * 2.0_f64.powf(1.0 / self.a)]
+    }
+
+    fn mode(&self) -> Vec<f64> {
+        vec![self.scale]
+    }
+
+    fn variance(&self) -> f64 {
+        if self.a <= 2.0 { f64::INFINITY } else { self.scale.powi(2) * self.a / ((self.a - 1.0).powi(2) * (self.a - 2.0)) }
+    }
+
+    fn skewness(&self) -> f64 {
+        if 3.0 < self.a { (2.0 * (1.0 + self.a) / (self.a - 3.0)) * ((self.a - 2.0) / self.a).sqrt() } else { f64::NAN }
+    }
+
+    fn excess_kurtosis(&self) -> f64 {
+        if 4.0 < self.a { 6.0 * (self.a.powi(3) + self.a.powi(2) - 6.0 * self.a - 2.0) / (self.a * (self.a - 3.0) * (self.a - 4.0)) } else { f64::NAN }
+    }
+
+    fn entropy(&self) -> Result<f64, DigiFiError> {
+        Ok((self.scale * (1.0 + 1.0 / self.a).exp() / self.a).ln())
+    }
+
+    /// Calculates the Probability Density Function (PDF) for a Pareto distribution.
+    /// 
+    /// # Input
+    /// - `x`: Value at which to calculate the PDF
+    /// 
+    /// # Output
+    /// - PDF value at the given `x`
+    fn pdf(&self, x: f64) -> Result<f64, DigiFiError> {
+        Ok(self.a * self.scale.powf(self.a) / x.powf(self.a + 1.0))
+    }
+
+    /// Computes the Cumulative Distribution Function (CDF) for a Pareto distribution.
+    /// 
+    /// # Input
+    /// - `x`: Value at which to calculate the CDF
+    /// 
+    /// # Output
+    /// - CDF value at the given `x`
+    fn cdf(&self, x: f64) -> Result<f64, DigiFiError> {
+        Ok(1.0 - (self.scale / x).powf(self.a))
+    }
+
+    /// Computes the Inverse Cumulative Distribution Function (Inverse CDF) for a Pareto distribution.
+    /// 
+    /// # Input
+    /// - `p`: Probability value for which to calculate the inverse CDF
+    /// 
+    /// # Output
+    /// - Inverse CDF value for the given probabilities
+    fn inverse_cdf(&self, p: f64) -> Result<f64, DigiFiError> {
+        Ok(self.scale * (1.0 - p).powf(-1.0 / self.a))
+    }
+
+    /// Calculates the Moment Generating Function (MGF) for a Pareto distribution.
+    /// Note: Since MGF is not defined this function will always return undefined values.
+    /// 
+    /// # Input
+    /// - `t`: Input value for the MGF
+    /// 
+    /// # Output
+    /// - MGF value at the given `t`
+    fn mgf(&self, _t: usize) -> f64 {
+        f64::NAN
+    }
+}
+
+impl RiskMeasure for ParetoDistribution {
+    fn expected_shortfall(&self, alpha: f64) -> Result<f64, DigiFiError> {
+        self.validate_alpha(alpha)?;
+        Ok(self.scale * self.a * ((1.0 - alpha).powf(1.0 / self.a) * (self.a - 1.0)))
+    }
+}
+
+
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+/// Methods and properties of Log-normal distribution.
+/// 
+/// # Links
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Log-normal_distribution>
+/// - Original Source: N/A
+/// 
+/// # Examples
+/// 
+/// ```rust
+/// use ndarray::{Array1, arr1};
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::statistics::{ProbabilityDistribution, LogNormalDistribution};
+/// 
+/// // Sandard case (mu = 0, sigma = 1)
+/// let dist: LogNormalDistribution = LogNormalDistribution::build(0.0, 1.0).unwrap();
+/// let x: f64 = 0.6;
+/// 
+/// // PDF test
+/// let pdf_v: f64 = dist.pdf(x).unwrap();
+/// assert!((pdf_v - 0.583573822594504).abs() < TEST_ACCURACY);
+/// 
+/// // CDF test
+/// let cdf_v: f64 = dist.cdf(x).unwrap();
+/// assert!((cdf_v - 0.30473658251023167).abs() < TEST_ACCURACY);
+/// 
+/// // Inverse CDF test
+/// let icdf_v: f64 = dist.inverse_cdf(0.30473658251023167).unwrap();
+/// assert!((icdf_v - x).abs() < TEST_ACCURACY);
+/// 
+/// 
+/// // Non-standard case (mu = 0, sigma = 0.5)
+/// let dist: LogNormalDistribution = LogNormalDistribution::build(0.0, 0.5).unwrap();
+/// let x: f64 = 0.6;
+/// 
+/// // PDF test
+/// let pdf_v: f64 = dist.pdf(x).unwrap();
+/// assert!((pdf_v - 0.7891085687134382).abs() < TEST_ACCURACY);
+/// 
+/// // CDF test
+/// let cdf_v: f64 = dist.cdf(x).unwrap();
+/// assert!((cdf_v - 0.15347299656473).abs() < TEST_ACCURACY);
+/// 
+/// // Inverse CDF test
+/// let icdf_v: f64 = dist.inverse_cdf(0.15347299656473).unwrap();
+/// assert!((icdf_v - x).abs() < TEST_ACCURACY);
+/// ```
+pub struct LogNormalDistribution {
+    /// Logarithm of location
+    mu: f64,
+    /// Logarithm of scale
+    sigma: f64,
+}
+
+impl LogNormalDistribution {
+
+    /// Creates a new `ParetoDistribution` instance.
+    ///
+    /// # Input
+    /// - `scale`: Scale parameter (i.e., minimum possible value of the distribution)
+    /// - `a`: Shape parameter
+    /// 
+    /// # Errors
+    /// - Returns an error if `sigma` is not positive.
+    pub fn build(mu: f64, sigma: f64) -> Result<Self, DigiFiError> {
+        if sigma <= 0.0 {
+            return Err(DigiFiError::ParameterConstraint {
+                title: Self::error_title(),
+                constraint: "The argument `sigma` must be positive.".to_owned(),
+            });
+        }
+        Ok(LogNormalDistribution { mu, sigma, })
+    }
+}
+
+impl ErrorTitle for LogNormalDistribution {
+    fn error_title() -> String {
+        String::from("Log-Normal Distribution")
+    }
+}
+
+impl ProbabilityDistribution for LogNormalDistribution {
+    fn distribution_type() -> ProbabilityDistributionType {
+        ProbabilityDistributionType::Continuous
+    }
+    
+    fn mean(&self) -> f64 {
+        (self.mu + self.sigma.powi(2) / 2.0).exp()
+    }
+
+    fn median(&self) -> Vec<f64> {
+        vec![self.mu.exp()]
+    }
+
+    fn mode(&self) -> Vec<f64> {
+        vec![(self.mu - self.sigma.powi(2)).exp()]
+    }
+
+    fn variance(&self) -> f64 {
+        let sigma_sq: f64 = self.sigma.powi(2);
+        (sigma_sq.exp() - 1.0) * (2.0 * self.mu + sigma_sq).exp()
+    }
+
+    fn skewness(&self) -> f64 {
+        let exp_sigma_sq: f64 = self.sigma.powi(2).exp();
+        (exp_sigma_sq + 2.0) * (exp_sigma_sq - 1.0).sqrt()
+    }
+
+    fn excess_kurtosis(&self) -> f64 {
+        let sigma_sq: f64 = self.sigma.powi(2);
+        (4.0 * sigma_sq).exp() + 2.0 * (3.0 * sigma_sq).exp() + 3.0 * (2.0 * sigma_sq).exp() - 6.0
+    }
+
+    fn entropy(&self) -> Result<f64, DigiFiError> {
+        Ok((self.sigma * self.mu.exp() * (2.0 * std::f64::consts::E * std::f64::consts::PI).sqrt()).log2())
+    }
+
+    /// Calculates the Probability Density Function (PDF) for a log-normal distribution.
+    /// 
+    /// # Input
+    /// - `x`: Value at which to calculate the PDF
+    /// 
+    /// # Output
+    /// - PDF value at the given `x`
+    fn pdf(&self, x: f64) -> Result<f64, DigiFiError> {
+        Ok((- (x.ln() - self.mu).powi(2) / (2.0 * self.sigma.powi(2))).exp() / (x * self.sigma * (2.0 * std::f64::consts::PI).sqrt()))
+    }
+
+    /// Computes the Cumulative Distribution Function (CDF) for a log-normal distribution.
+    /// 
+    /// # Input
+    /// - `x`: Value at which to calculate the CDF
+    /// 
+    /// # Output
+    /// - CDF value at the given `x`
+    fn cdf(&self, x: f64) -> Result<f64, DigiFiError> {
+        Ok((1.0 + erf((x.ln() - self.mu) / (self.sigma * 2.0_f64.sqrt()), None)) / 2.0)
+    }
+
+    /// Computes the Inverse Cumulative Distribution Function (Inverse CDF) for a log-normal distribution.
+    /// 
+    /// # Input
+    /// - `p`: Probability value for which to calculate the inverse CDF
+    /// 
+    /// # Output
+    /// - Inverse CDF value for the given probabilities
+    fn inverse_cdf(&self, p: f64) -> Result<f64, DigiFiError> {
+        Ok((self.mu + (2.0 * self.sigma.powi(2)).sqrt() * erfinv(2.0 * p - 1.0, Some(30))).exp())
+    }
+
+    /// Calculates the Moment Generating Function (MGF) for a log-normal distribution.
+    /// Note: Since MGF is not defined this function will always return undefined values.
+    /// 
+    /// # Input
+    /// - `t`: Input value for the MGF
+    /// 
+    /// # Output
+    /// - MGF value at the given `t`
+    fn mgf(&self, _t: usize) -> f64 {
+        f64::NAN
+    }
+}
+
+impl RiskMeasure for LogNormalDistribution {
+    fn expected_shortfall(&self, alpha: f64) -> Result<f64, DigiFiError> {
+        self.validate_alpha(alpha)?;
+        let num: f64 = 1.0 + erf(self.sigma / 2.0_f64.sqrt() - erfinv(2.0 * alpha - 1.0, Some(30)), None);
+        Ok(0.5 * (self.mu + self.sigma.powi(2) / 2.0).exp() * num / (1.0 - alpha))
+    }
+}
 
 
 #[cfg(test)]
@@ -1133,5 +1531,65 @@ mod tests {
         // Inverse CDF test
         let icdf_v: Array1<f64> = dist.inverse_cdf_iter(tested_values.iter()).unwrap();
         assert!((icdf_v - x).fold(true, |test, i| if *i < 10_000_000.0 * TEST_ACCURACY && test { true } else { false } ));
+    }
+
+    #[test]
+    fn unit_test_pareto_distribution() -> () {
+        use crate::statistics::continuous_distributions::ParetoDistribution;
+        // Standard scale (scale = 1)
+        let dist: ParetoDistribution = ParetoDistribution::build(1.0, 3.0).unwrap();
+        let x: f64 = 1.5;
+        // PDF test
+        let pdf_v: f64 = dist.pdf(x).unwrap();
+        assert!((pdf_v - 0.5925925925925926).abs() < TEST_ACCURACY);
+        // CDF test
+        let cdf_v: f64 = dist.cdf(x).unwrap();
+        assert!((cdf_v - 0.7037037037037037).abs() < TEST_ACCURACY);
+        // Inverse CDF test
+        let icdf_v: f64 = dist.inverse_cdf(0.7037037037037037).unwrap();
+        assert!((icdf_v - x).abs() < TEST_ACCURACY);
+
+        // Non-standard scale (scale = 2)
+        let dist: ParetoDistribution = ParetoDistribution::build(2.0, 3.0).unwrap();
+        let x: f64 = 2.5;
+        // PDF test
+        let pdf_v: f64 = dist.pdf(x).unwrap();
+        assert!((pdf_v - 0.6144000000000001).abs() < TEST_ACCURACY);
+        // CDF test
+        let cdf_v: f64 = dist.cdf(x).unwrap();
+        assert!((cdf_v - 0.488).abs() < TEST_ACCURACY);
+        // Inverse CDF test
+        let icdf_v: f64 = dist.inverse_cdf(0.488).unwrap();
+        assert!((icdf_v - x).abs() < TEST_ACCURACY);
+    }
+
+    #[test]
+    fn unit_test_log_normal_distribution() -> () {
+        use crate::statistics::continuous_distributions::LogNormalDistribution;
+        // Sandard case (mu = 0, sigma = 1)
+        let dist: LogNormalDistribution = LogNormalDistribution::build(0.0, 1.0).unwrap();
+        let x: f64 = 0.6;
+        // PDF test
+        let pdf_v: f64 = dist.pdf(x).unwrap();
+        assert!((pdf_v - 0.583573822594504).abs() < TEST_ACCURACY);
+        // CDF test
+        let cdf_v: f64 = dist.cdf(x).unwrap();
+        assert!((cdf_v - 0.30473658251023167).abs() < TEST_ACCURACY);
+        // Inverse CDF test
+        let icdf_v: f64 = dist.inverse_cdf(0.30473658251023167).unwrap();
+        assert!((icdf_v - x).abs() < TEST_ACCURACY);
+
+        // Non-standard case (mu = 0, sigma = 0.5)
+        let dist: LogNormalDistribution = LogNormalDistribution::build(0.0, 0.5).unwrap();
+        let x: f64 = 0.6;
+        // PDF test
+        let pdf_v: f64 = dist.pdf(x).unwrap();
+        assert!((pdf_v - 0.7891085687134382).abs() < TEST_ACCURACY);
+        // CDF test
+        let cdf_v: f64 = dist.cdf(x).unwrap();
+        assert!((cdf_v - 0.15347299656473).abs() < TEST_ACCURACY);
+        // Inverse CDF test
+        let icdf_v: f64 = dist.inverse_cdf(0.15347299656473).unwrap();
+        assert!((icdf_v - x).abs() < TEST_ACCURACY);
     }
 }
