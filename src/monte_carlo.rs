@@ -50,7 +50,7 @@ use crate::stochastic_processes::StochasticProcess;
 ///
 /// assert!((predicted_value - theoretical_value).abs() < 10_000_000.0 * TEST_ACCURACY);
 /// ```
-pub fn monte_carlo_simulation(stochastic_process: &impl StochasticProcess, payoff_object: &impl Payoff, r: f64, exercise_time_steps: &Option<Vec<bool>>) -> Result<f64, DigiFiError> {
+pub fn monte_carlo_simulation(stochastic_process: &dyn StochasticProcess, payoff_object: &dyn Payoff, r: f64, exercise_time_steps: &Option<Vec<bool>>) -> Result<f64, DigiFiError> {
     // Data validation
     let n_steps: usize = stochastic_process.get_n_steps();
     let dt: f64 = stochastic_process.get_t_f() / (n_steps as f64);
