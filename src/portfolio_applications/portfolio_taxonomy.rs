@@ -27,7 +27,7 @@ impl PortfolioTaxonomy for Portfolio {
     /// use digifi::portfolio_applications::portfolio_taxonomy::PortfolioTaxonomy;
     ///
     /// #[cfg(feature = "sample_data")]
-    /// fn test_efficient_frontier() -> () {
+    /// fn test_portfolio_taxonomy() -> () {
     ///     use digifi::utilities::SampleData;
     ///
     ///     // Portfolio parameters

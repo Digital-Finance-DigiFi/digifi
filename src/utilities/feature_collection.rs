@@ -93,7 +93,7 @@ impl FeatureCollection {
         }
         if let Some(feature_size) =  self.feature_size {
             if feature.len() != feature_size {
-                return Err(DigiFiError::WrongLength { title: Self::error_title(), arg: "feature".to_owned(), len: feature_size, });
+                return Err(DigiFiError::WrongLength { title: Self::error_title(), arg: feature_name.to_owned(), len: feature_size, });
             }
         }
         Ok(())

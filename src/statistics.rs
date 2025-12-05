@@ -6,27 +6,39 @@
 
 // Re-Exports
 pub use self::gamma::{ln_gamma, gamma, lower_incomplete_gamma, upper_incomplete_gamma, digamma};
-pub use self::beta::{ln_beta, beta, incomplete_beta, regularized_incomplete_beta, multivariate_beta};
+pub use self::beta::{ln_beta, beta, incomplete_beta, regularized_incomplete_beta, inverse_regularized_incomplete_beta, multivariate_beta};
+pub use self::autocorrelation::{autocorrelation, Autocorrelation, autocorrelation_array, PartialAutocorrelation, partial_autocorrelation};
 pub use self::discrete_distributions::{BernoulliDistribution, BinomialDistribution, DiscreteUniformDistribution, PoissonDistribution};
 pub use self::continuous_distributions::{
     ContinuousUniformDistribution, NormalDistribution, ExponentialDistribution, LaplaceDistribution, GammaDistribution, StudentsTDistribution,
-    ParetoDistribution, LogNormalDistribution,
+    ParetoDistribution, LogNormalDistribution, FDistribution,
 };
-pub use self::stat_tests::{ConfidenceLevel, ADFType, ADFResult, adf, CointegrationResult, cointegration, TTestResult, TTestTwoSampleCase, t_test_two_sample, t_test_lr};
+pub use self::stat_tests::{
+    ConfidenceLevel, ADFType, ADFResult, adf, CointegrationResult, cointegration,
+    TTestResult, TTestTwoSampleCase, t_test_two_sample, t_test_lr,
+    nested_f_statistic, FTestResult, f_test_anova,
+    GrangerCausalityTestType, GrangerCausalityRejectReason, GrangerCausalityResult, GrangerCausalitySettings,
+    granger_causality_test, simple_granger_causality_test,
+};
 pub use self::linear_regression_analysis::{LinearRegressionFeatureResult, LinearRegressionResult, LinearRegressionSettings, LinearRegressionAnalysis};
 pub use self::mediation_analysis::{
     BKMediationAnalysisStep, BKMediationAnalysisFinalStep, BKMediationAnalysisResult, BaronKennyMeriationAnalysis, SobelTestResult, sobel_test,
     MJYAnalysisStep, MJYAnalysisFinalStep, MJYAnalysisResult, MullerJuddYzerbytAnalysis,
 };
+pub use self::arima::{
+    ARResult, AROrderMethod, ARSettings, AR,
+};
 
 
 mod gamma;
 mod beta;
+pub mod autocorrelation;
 pub mod continuous_distributions;
 pub mod discrete_distributions;
 pub mod stat_tests;
 mod linear_regression_analysis;
 pub mod mediation_analysis;
+pub mod arima;
 
 
 use std::borrow::Borrow;
@@ -587,8 +599,8 @@ pub fn adjusted_r_squared(real_values: &Array1<f64>, predicted_values: &Array1<f
 }
 
 
-/// Ratio (quotient) of the variance of a parameter estimate when fitting a full model that includes other parameters to the variance of the parameter estimate
-/// if the model is fit with only the parameter on its own.
+/// Ratio (quotient) of the variance of a parameter estimate when fitting a full model that includes other parameters to the variance
+/// of the parameter estimate if the model is fit with only the parameter on its own.
 /// 
 /// # Input
 /// - `xi`: Feature of the model whose VIF is being computed
@@ -613,6 +625,96 @@ pub fn variance_inflation_factor(xis: &mut FeatureCollection, xi: &Array1<f64>) 
         Some(r) if r != 1.0 => Ok(Some(1.0 / (1.0 - r))),
         _ => Ok(None),
     }
+}
+
+
+/// Akaike Information Criterion (AIC) is an estimator of prediction error and therefby relative quality of statistical models for a given set of data.
+/// AIC provides a means for model selection.
+/// 
+/// # Input
+/// - `l`: Maximized value of the likelihood function for the model
+/// - `k`: Number of estimated parameters in the model
+/// 
+/// # Ouput
+/// - Akaike information criterion
+/// 
+/// # LaTeX Formula
+/// - AIC = 2k - 2ln(L_{max})
+/// 
+/// # Links
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Akaike_information_criterion>
+/// - Original Source: <https://doi.org/10.1109/TAC.1974.1100705>
+pub fn akaike_information_criterion(l: f64, k: usize) -> f64 {
+    2.0 * (k as f64 - l.ln())
+}
+
+
+/// Akaike Information Criterion (AIC) is an estimator of prediction error and therefby relative quality of statistical models for a given set of data.
+/// AIC provides a means for model selection.
+/// 
+/// Note: This version of AIC takes in the maximized log-likelihood as an input.
+/// 
+/// # Input
+/// - `ll`: Maximized value of the log-likelihood function for the model
+/// - `k`: Number of estimated parameters in the model
+/// 
+/// # Ouput
+/// - Akaike information criterion
+/// 
+/// # LaTeX Formula
+/// - AIC = 2k - 2LL_{max}
+/// 
+/// # Links
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Akaike_information_criterion>
+/// - Original Source: <https://doi.org/10.1109/TAC.1974.1100705>
+pub fn akaike_information_criterion_log(ll:f64, k: usize) -> f64 {
+    2.0 * (k as f64 - ll)
+}
+
+
+/// Bayesian Information Criterion (BIC), or Schwarz Information Criterion, is a criterion for model selection among finite set of models;
+/// models with lower BIC are generally preferred.
+/// 
+/// # Input
+/// - `l`: Maximized value of the likelihood function for the model
+/// - `k`: Number of estimated parameters in the model
+/// - `n`: Number of data points, number of observations, or the sample size
+/// 
+/// # Output
+/// - Bayesian Information Criterion
+/// 
+/// # LaTeX Formula
+/// - BIC = ln(n)k - 2ln(L_{max})
+/// 
+/// # Links
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Bayesian_information_criterion>
+/// - Original Source: <https://doi.org/10.1214/aos/1176344136>
+pub fn bayesian_information_criterion(l: f64, k: usize, n: usize) -> f64 {
+    (k as f64) * (n as f64).ln() - 2.0 * l.ln()
+}
+
+
+/// Bayesian Information Criterion (BIC), or Schwarz Information Criterion, is a criterion for model selection among finite set of models;
+/// models with lower BIC are generally preferred.
+/// 
+/// Note: This version of BIC takes in the maximized log-likelihood as an input.
+/// 
+/// # Input
+/// - `ll`: Maximized value of the log-likelihood function for the model
+/// - `k`: Number of estimated parameters in the model
+/// - `n`: Number of data points, number of observations, or the sample size
+/// 
+/// # Output
+/// - Bayesian Information Criterion
+/// 
+/// # LaTeX Formula
+/// - BIC = ln(n)k - 2LL_{max}
+/// 
+/// # Links
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Bayesian_information_criterion>
+/// - Original Source: <https://doi.org/10.1214/aos/1176344136>
+pub fn bayesian_information_criterion_log(ll: f64, k: usize, n: usize) -> f64 {
+    (k as f64) * (n as f64).ln() - 2.0 * ll
 }
 
 

@@ -29,7 +29,7 @@ pub struct BKMediationAnalysisStep {
     /// 
     /// Note: Rejecting null hypothesis means that there is significant relationship
     pub reject_h0: bool,
-    /// t-score of the t-test
+    /// t-statistic of the t-test
     pub t_score: f64,
     /// p-value of the t-test
     pub p_value: f64,
@@ -47,7 +47,7 @@ impl Display for BKMediationAnalysisStep {
             + SMALL_TEXT_BREAK
             + &format!("\tDegrees of Freedom: {} (DDoF: {})\n", self.dof, self.ddof)
             + &format!("\tReject Null Hypothesis: {}\n", self.reject_h0)
-            + &format!("\tt-score: {}\n", self.t_score)
+            + &format!("\tt-statistic: {}\n", self.t_score)
             + &format!("\tp-value: {}\n", self.p_value)
             + &format!("\tConfidence Level: {}\n", self.p_cl);
 
@@ -76,13 +76,13 @@ pub struct BKMediationAnalysisFinalStep {
     pub dof: f64,
     /// Whether to reject the null hypothesis for the independent variable's slope
     pub indep_reject_h0: bool,
-    /// t-score of the t-test for the independent variable's slope
+    /// t-statistic of the t-test for the independent variable's slope
     pub indep_t_score: f64,
     /// p-value of the t-test for the independent variable's slope
     pub indep_p_value: f64,
     /// Whether to reject the null hypothesis for the mediator variable's slope
     pub me_reject_h0: bool,
-    /// t-score of the t-test for the mediator variable's slope
+    /// t-statistic of the t-test for the mediator variable's slope
     pub me_t_score: f64,
     /// p-value of the t-test for the mediator variable's slope
     pub me_p_value: f64,
@@ -103,11 +103,11 @@ impl Display for BKMediationAnalysisFinalStep {
             + &format!("\tDegrees of Freedom: {} (DDoF: {})\n", self.dof, self.ddof)
             + SMALL_TEXT_BREAK
             + &format!("\tReject Null Hypothesis (Independent Variable): {}\n", self.indep_reject_h0)
-            + &format!("\tt-score (Independent Variable): {}\n", self.indep_t_score)
+            + &format!("\tt-statistic (Independent Variable): {}\n", self.indep_t_score)
             + &format!("\tp-value (Independent Variable): {}\n", self.indep_p_value)
             + &format!("\tConfidence Level: {}\n", self.p_cl)
             + &format!("\tReject Null Hypothesis (Mediator Variable): {}\n", self.me_reject_h0)
-            + &format!("\tt-score (Mediator Variable): {}\n", self.me_t_score)
+            + &format!("\tt-statistic (Mediator Variable): {}\n", self.me_t_score)
             + &format!("\tp-value (Mediator Variable): {}\n", self.me_p_value)
             + &format!("\tConfidence Level: {}\n", self.p_cl);
         write!(f, "{}", result)
@@ -294,7 +294,7 @@ impl Display for SobelTestResult {
             + "Sobel Mediation Test\n"
             + LARGE_TEXT_BREAK
             + &format!("Reject Null Hypothesis: {}\n", self.reject_h0)
-            + &format!("t-score: {}\n", self.t_score)
+            + &format!("t-statistic: {}\n", self.t_score)
             + &format!("p-value: {}\n", self.p_value)
             + &format!("Confidence Level: {}\n", self.p_cl)
             + LARGE_TEXT_BREAK;

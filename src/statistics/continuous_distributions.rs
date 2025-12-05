@@ -1,10 +1,11 @@
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
 use crate::error::{DigiFiError, ErrorTitle};
+use crate::statistics::inverse_regularized_incomplete_beta;
 use crate::utilities::{maths_utils::{erf, erfinv, derivative}, numerical_engines::nelder_mead};
 use crate::statistics::{
     ProbabilityDistributionType, ProbabilityDistribution, RiskMeasure,
-    gamma::{gamma, lower_incomplete_gamma, digamma},
+    gamma::{ln_gamma, gamma, lower_incomplete_gamma, digamma},
     beta::{beta, regularized_incomplete_beta},
 };
 
@@ -298,7 +299,7 @@ impl ProbabilityDistribution for NormalDistribution {
     /// - Inverse CDF value for the given probabilities
     fn inverse_cdf(&self, p: f64) -> Result<f64, DigiFiError> {
         if (p < 0.0) || (1.0 < p) { return Ok(f64::NAN) }
-        Ok(self.mu + self.sigma * 2.0_f64.sqrt() * erfinv(2.0 * p - 1.0, Some(30)) )
+        Ok(self.mu + self.sigma * 2.0_f64.sqrt() * erfinv(2.0 * p - 1.0, None) )
 
     }
 
@@ -1271,11 +1272,11 @@ pub struct LogNormalDistribution {
 
 impl LogNormalDistribution {
 
-    /// Creates a new `ParetoDistribution` instance.
+    /// Creates a new `LogNormalDistribution` instance.
     ///
     /// # Input
-    /// - `scale`: Scale parameter (i.e., minimum possible value of the distribution)
-    /// - `a`: Shape parameter
+    /// - `mu`: Logarithm of location
+    /// - `sigma`: Logarithm of scale
     /// 
     /// # Errors
     /// - Returns an error if `sigma` is not positive.
@@ -1362,7 +1363,7 @@ impl ProbabilityDistribution for LogNormalDistribution {
     /// # Output
     /// - Inverse CDF value for the given probabilities
     fn inverse_cdf(&self, p: f64) -> Result<f64, DigiFiError> {
-        Ok((self.mu + (2.0 * self.sigma.powi(2)).sqrt() * erfinv(2.0 * p - 1.0, Some(30))).exp())
+        Ok((self.mu + (2.0 * self.sigma.powi(2)).sqrt() * erfinv(2.0 * p - 1.0, None)).exp())
     }
 
     /// Calculates the Moment Generating Function (MGF) for a log-normal distribution.
@@ -1381,8 +1382,197 @@ impl ProbabilityDistribution for LogNormalDistribution {
 impl RiskMeasure for LogNormalDistribution {
     fn expected_shortfall(&self, alpha: f64) -> Result<f64, DigiFiError> {
         self.validate_alpha(alpha)?;
-        let num: f64 = 1.0 + erf(self.sigma / 2.0_f64.sqrt() - erfinv(2.0 * alpha - 1.0, Some(30)), None);
+        let num: f64 = 1.0 + erf(self.sigma / 2.0_f64.sqrt() - erfinv(2.0 * alpha - 1.0, None), None);
         Ok(0.5 * (self.mu + self.sigma.powi(2) / 2.0).exp() * num / (1.0 - alpha))
+    }
+}
+
+
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+/// Methods and properties of F-distribution.
+/// 
+/// # LaTeX Formula
+/// - X = \\frac{U_{1}/d_{1}}{U_{2}/d_{2}}
+/// where `X` is a random variable with F-distribution, `U_{1}` and `U_{2}` are independent random variables with chi-squared distributions
+/// with respective degrees of freedom `d_{1}` and `d_{2}`.
+/// 
+/// # Links
+/// - Wikipedia: <https://en.wikipedia.org/wiki/F-distribution>
+/// - Original Source: N/A
+/// 
+/// # Examples
+/// 
+/// ```rust
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::statistics::{ProbabilityDistribution, FDistribution};
+/// 
+/// let dist: FDistribution = FDistribution::build(30, 20).unwrap();
+/// let x: f64 = 0.6;
+/// 
+/// // PDF test
+/// let pdf_v: f64 = dist.pdf(x).unwrap();
+/// assert!((pdf_v - 0.7230705152456879).abs() < TEST_ACCURACY);
+/// 
+/// // CDF test
+/// let cdf_v: f64 = dist.cdf(x).unwrap();
+/// assert!((cdf_v - 0.1001670547365643).abs() < TEST_ACCURACY);
+/// 
+/// // Inverse CDF test
+/// let icdf_v: f64 = dist.inverse_cdf(0.1001670547365643).unwrap();
+/// assert!((icdf_v - x).abs() < TEST_ACCURACY);
+/// ```
+pub struct FDistribution {
+    /// Degrees of freedom of random variable `U_{1}`
+    dof_1: usize,
+    /// Degrees of freedom of random variable `U_{2}`
+    dof_2: usize,
+}
+
+impl FDistribution {
+
+    /// Creates a new `FDistribution` instance.
+    ///
+    /// # Input
+    /// - `dof_1`: Degrees of freedom of random variable `U_{1}`
+    /// - `dof_2`: Degrees of freedom of random variable `U_{2}`
+    /// 
+    /// # Errors
+    /// - Returns an error if either `ddof_1` or `ddof_2` is not positive.
+    pub fn build(dof_1: usize, dof_2: usize) -> Result<Self, DigiFiError> {
+        if dof_1 < 1 || dof_2 < 1 {
+            return Err(DigiFiError::ParameterConstraint {
+                title: Self::error_title(),
+                constraint: "Both degrees of freedom `dof_1` and `dof_2` must be positive.".to_owned(),
+            });
+        }
+        Ok(FDistribution { dof_1, dof_2, })
+    }
+
+    /// Returns degrees of freedom converted to `f64` in order (i.e., `dof_1`, `dof_2`).
+    fn get_f64_dofs(&self) -> (f64, f64) {
+        (self.dof_1 as f64, self.dof_2 as f64)
+    }
+}
+
+impl ErrorTitle for FDistribution {
+    fn error_title() -> String {
+        String::from("F-distribution")
+    }
+}
+
+impl ProbabilityDistribution for FDistribution {
+    fn distribution_type() -> ProbabilityDistributionType {
+        ProbabilityDistributionType::Continuous
+    }
+    
+    fn mean(&self) -> f64 {
+        let (_, dof_2) = self.get_f64_dofs();
+        if 2 < self.dof_2 { dof_2 / (dof_2 - 2.0) } else { f64::NAN }
+    }
+
+    fn median(&self) -> Vec<f64> {
+        vec![f64::NAN]
+    }
+
+    fn mode(&self) -> Vec<f64> {
+        let (dof_1, dof_2) = self.get_f64_dofs();
+        vec![if 2 < self.dof_1 { (dof_1 - 2.0) * dof_2 / (dof_1 * (dof_2 + 2.0)) } else { f64::NAN }]
+    }
+
+    fn variance(&self) -> f64 {
+        let (dof_1, dof_2) = self.get_f64_dofs();
+        if 4 < self.dof_2 { 2.0 * dof_2.powi(2) * (dof_1 + dof_2 - 2.0) / (dof_1 * (dof_2 - 2.0).powi(2) * (dof_2 - 4.0)) } else { f64::NAN }
+    }
+
+    fn skewness(&self) -> f64 {
+        let (dof_1, dof_2) = self.get_f64_dofs();
+        if 6 < self.dof_2 {
+            (2.0 * dof_1 + dof_2 - 2.0) * (8.0 * (dof_2 - 4.0)).sqrt() / ((dof_2 - 6.0) * (dof_1 * (dof_1 + dof_2 - 2.0)).sqrt())
+        } else {
+            f64::NAN
+        }
+    }
+
+    fn excess_kurtosis(&self) -> f64 {
+        let (dof_1, dof_2) = self.get_f64_dofs();
+        if 8 < self.dof_2 {
+            let c: f64 = dof_1 + dof_2 - 2.0;
+            let numerator: f64 = dof_1 * (5.0 * dof_2 - 22.0) * c + (dof_2 - 4.0) * (dof_2 - 2.0).powi(2);
+            let denominator: f64 = dof_1 * (dof_2 - 6.0) * (dof_2 - 8.0) * c;
+            12.0 * numerator / denominator
+        } else {
+            f64::NAN
+        }
+    }
+
+    fn entropy(&self) -> Result<f64, DigiFiError> {
+        let (dof_1, dof_2) = self.get_f64_dofs();
+        let d_1_over_2: f64 = dof_1 / 2.0;
+        let d_2_over_2: f64 = dof_2 / 2.0;
+        let one_plus_d_2_over_2: f64 = 1.0 + d_2_over_2;
+        let d_1_plus_d_2_over_2: f64 = (dof_1 + dof_2) / 2.0;
+        let entropy: f64 = ln_gamma(d_1_over_2) + ln_gamma(d_2_over_2) - ln_gamma(d_1_plus_d_2_over_2)
+            + (1.0 - d_1_over_2) * digamma(1.0 + d_1_over_2)? - one_plus_d_2_over_2 * digamma(one_plus_d_2_over_2)?
+            + d_1_plus_d_2_over_2 * digamma(d_1_plus_d_2_over_2)? + (dof_2 / dof_1).ln();
+        Ok(entropy)
+    }
+
+    /// Calculates the Probability Density Function (PDF) for an F-distribution.
+    /// 
+    /// # Input
+    /// - `x`: Value at which to calculate the PDF
+    /// 
+    /// # Output
+    /// - PDF value at the given `x`
+    fn pdf(&self, x: f64) -> Result<f64, DigiFiError> {
+        if (self.dof_1 == 1 && x == 0.0) || x < 0.0 { return Ok(f64::NAN); }
+        let (dof_1, dof_2) = self.get_f64_dofs();
+        let (dof_1_i32, dof_2_i32) = (self.dof_1 as i32, self.dof_2 as i32);
+        let d_1_times_x: f64 = dof_1 * x;
+        let numerator: f64 = (d_1_times_x.powi(dof_1_i32) * dof_2.powi(dof_2_i32) / (d_1_times_x + dof_2).powi(dof_1_i32 + dof_2_i32)).sqrt();
+        let denominator: f64 = x * beta(dof_1 / 2.0, dof_2 / 2.0)?;
+        Ok(numerator / denominator)
+    }
+
+    /// Computes the Cumulative Distribution Function (CDF) for an F-distribution.
+    /// 
+    /// # Input
+    /// - `x`: Value at which to calculate the CDF
+    /// 
+    /// # Output
+    /// - CDF value at the given `x`
+    fn cdf(&self, x: f64) -> Result<f64, DigiFiError> {
+        if (self.dof_1 == 1 && x == 0.0) || x < 0.0 { return Ok(f64::NAN); }
+        let (dof_1, dof_2) = self.get_f64_dofs();
+        let d_1_times_x: f64 = dof_1 * x;
+        let x: f64 = d_1_times_x / (d_1_times_x + dof_2);
+        regularized_incomplete_beta(x, dof_1 / 2.0, dof_2 / 2.0)
+    }
+
+    /// Computes the Inverse Cumulative Distribution Function (Inverse CDF) for an F-distribution.
+    /// 
+    /// # Input
+    /// - `p`: Probability value for which to calculate the inverse CDF
+    /// 
+    /// # Output
+    /// - Inverse CDF value for the given probabilities
+    fn inverse_cdf(&self, p: f64) -> Result<f64, DigiFiError> {
+        let (dof_1, dof_2) = self.get_f64_dofs();
+        let proxy_x: f64 = inverse_regularized_incomplete_beta(p, dof_1 / 2.0, dof_2 / 2.0)?;
+        Ok(if proxy_x == 1.0 { f64::NAN } else { dof_2 * proxy_x / (dof_1 * (1.0 - proxy_x)) })
+    }
+
+    /// Calculates the Moment Generating Function (MGF) for an F-distribution.
+    /// Note: Since MGF is not defined this function will always return undefined values.
+    /// 
+    /// # Input
+    /// - `t`: Input value for the MGF
+    /// 
+    /// # Output
+    /// - MGF value at the given `t`
+    fn mgf(&self, _t: usize) -> f64 {
+        f64::NAN
     }
 }
 
@@ -1590,6 +1780,22 @@ mod tests {
         assert!((cdf_v - 0.15347299656473).abs() < TEST_ACCURACY);
         // Inverse CDF test
         let icdf_v: f64 = dist.inverse_cdf(0.15347299656473).unwrap();
+        assert!((icdf_v - x).abs() < TEST_ACCURACY);
+    }
+
+    #[test]
+    fn unit_test_f_distribution() -> () {
+        use crate::statistics::continuous_distributions::FDistribution;
+        let dist: FDistribution = FDistribution::build(30, 20).unwrap();
+        let x: f64 = 0.6;
+        // PDF test
+        let pdf_v: f64 = dist.pdf(x).unwrap();
+        assert!((pdf_v - 0.7230705152456879).abs() < TEST_ACCURACY);
+        // CDF test
+        let cdf_v: f64 = dist.cdf(x).unwrap();
+        assert!((cdf_v - 0.1001670547365643).abs() < TEST_ACCURACY);
+        // Inverse CDF test
+        let icdf_v: f64 = dist.inverse_cdf(0.1001670547365643).unwrap();
         assert!((icdf_v - x).abs() < TEST_ACCURACY);
     }
 }

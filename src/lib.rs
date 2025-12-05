@@ -48,7 +48,7 @@
 //! Nonetheless, `optimize` is a great package and we hope there will be a renewed support for it.
 //! 2. Inverse CDF of Poisson Distribution (<https://people.maths.ox.ac.uk/gilesm/codes/poissinv/paper.pdf>): This paper covers the implementation of the
 //! method for approximating the inverse CDF of the Poisson distribution.
-//! 3. Algorithms for ln Gamma, ln Beta and Regularized Incomplete Beta functions (<https://github.com/statrs-dev/statrs>): The implementation of these functions were taken from `statrs`.
+//! 3. Algorithms for ln Gamma, ln Beta, Regularized Incomplete Beta and Inverse Regularized Incomplete Beta functions (<https://github.com/statrs-dev/statrs>): The implementation of these functions were taken from `statrs`.
 //!
 //! # General information
 //! If you would like to add a commit or an issue, please do so using the GitHub link to the project:

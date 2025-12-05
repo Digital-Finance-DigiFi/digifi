@@ -197,6 +197,142 @@ pub fn regularized_incomplete_beta(x: f64, a: f64, b: f64) -> Result<f64, DigiFi
 }
 
 
+/// Inverse of the regularized incomplete Beta function.
+///
+/// # Input
+/// - `x`: Value of regularized incomplete Beta function
+/// - `a`: Real part of complex number
+/// - `b`: Real part of complex number
+///
+/// # Output
+/// - Inverse of the regularized incomplete Beta function
+///
+/// # Errors
+/// - Returns an error if the argument `a` is not positive.
+/// - Returns an error if the argument `b` is not positive.
+/// - Returns an error if the argument `x` is not in the range `[0, 1]`.
+/// 
+/// # Links
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Beta_function#Incomplete_beta_function>
+/// - Original Source: <http://www.jstor.org/stable/2346798>
+/// 
+/// # Examples
+/// 
+/// ```rust
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::statistics::inverse_regularized_incomplete_beta;
+/// 
+/// // I_{0}(a, b) = 0
+/// assert!(inverse_regularized_incomplete_beta(0.0, 0.2, 0.3).unwrap() < TEST_ACCURACY);
+/// 
+/// // I_{1}(a, b) = 1
+/// assert!((inverse_regularized_incomplete_beta(1.0, 0.2, 0.3).unwrap() - 1.0 ).abs() < TEST_ACCURACY);
+/// 
+/// // I_{x}(a, 1) = x^{a}
+/// assert!((inverse_regularized_incomplete_beta(0.5_f64.powi(2), 2.0, 1.0).unwrap() - 0.5).abs() < TEST_ACCURACY);
+/// 
+/// // I_{x}(1, b) = 1 - (1 - x)^{b}
+/// assert!((inverse_regularized_incomplete_beta(1.0 - 0.5_f64.powi(3), 1.0, 3.0).unwrap() - 0.5).abs() < TEST_ACCURACY);
+/// ```
+pub fn inverse_regularized_incomplete_beta(mut x: f64, mut a: f64, mut b: f64) -> Result<f64, DigiFiError> {
+    let error_title: String = String::from("Inverse Regularized Incomplete Beta function");
+    if a <= 0.0 {
+        return Err(DigiFiError::ParameterConstraint { title: error_title, constraint: "The argument `a` must be positive.".to_owned(), });
+    }
+    if b <= 0.0 {
+        return Err(DigiFiError::ParameterConstraint { title: error_title, constraint: "The argument `b` must be positive.".to_owned(), });
+    }
+    if !(0.0..=1.0).contains(&x) {
+        return Err(DigiFiError::ParameterConstraint { title: error_title, constraint: "The argument `x` must contain values in the range `[0, 1]`.".to_owned(), })
+    }
+    let ln_beta: f64 = ln_beta(a, b)?;
+    // Remark AS R83: http://www.jstor.org/stable/2347779
+    const SAE: i32 = -30;
+    const FPU: f64 = 1e-30; // 10^SAE
+    if x == 0.0 { return Ok(0.0); }
+    if x == 1.0 { return Ok(1.0); }
+    let mut p: f64;
+    let mut q: f64;
+    let flip: bool = 0.5 < x;
+    if flip {
+        p = a;
+        a = b;
+        b = p;
+        x = 1.0 - x;
+    }
+    p = (-(x * x).ln()).sqrt();
+    q = p - (2.30753 + 0.27061 * p) / (1.0 + (0.99229 + 0.04481 * p) * p);
+    if 1.0 < a && 1.0 < b {
+        // Remark AS R19 and Algorithm AS 109: http://www.jstor.org/stable/2346887
+        let r: f64 = (q * q - 3.0) / 6.0;
+        let s: f64 = 1.0 / (2.0 * a - 1.0);
+        let t: f64 = 1.0 / (2.0 * b - 1.0);
+        let h: f64 = 2.0 / (s + t);
+        let w: f64 = q * (h + r).sqrt() / h - (t - s) * (r + 5.0 / 6.0 - 2.0 / (3.0 * h));
+        p = a / (a + b * (2.0 * w).exp());
+    } else {
+        let mut t: f64 = 1.0 / (9.0 * b);
+        t = 2.0 * b * (1.0 - t + q * t.sqrt()).powf(3.0);
+        if t <= 0.0 {
+            p = 1.0 - ((((1.0 - x) * b).ln() + ln_beta) / b).exp();
+        } else {
+            t = 2.0 * (2.0 * a + b - 1.0) / t;
+            if t <= 1.0 {
+                p = (((x * a).ln() + ln_beta) / a).exp();
+            } else {
+                p = 1.0 - 2.0 / (t + 1.0);
+            }
+        }
+    }
+    p = p.clamp(0.0001, 0.9999);
+    // Remark AS R83: http://www.jstor.org/stable/2347779
+    let e: i32 = (-5.0 / a / a - 1.0 / x.powf(0.2) - 13.0) as i32;
+    let acu: f64 = if e > SAE { f64::powi(10.0, e) } else { FPU };
+    let mut pnext: f64;
+    let mut qprev: f64 = 0.0;
+    let mut sq: f64 = 1.0;
+    let mut prev: f64 = 1.0;
+    'outer: loop {
+        // Remark AS R19 and Algorithm AS 109: http://www.jstor.org/stable/2346887
+        q = regularized_incomplete_beta(p, a, b)?;
+        q = (q - x) * (ln_beta + (1.0 - a) * p.ln() + (1.0 - b) * (1.0 - p).ln()).exp();
+        // Remark AS R83: http://www.jstor.org/stable/2347779
+        if q * qprev <= 0.0 {
+            prev = if sq > FPU { sq } else { FPU };
+        }
+        // Remark AS R19 and Algorithm AS 109: http://www.jstor.org/stable/2346887
+        let mut g: f64 = 1.0;
+        loop {
+            loop {
+                let adj: f64 = g * q;
+                sq = adj * adj;
+                if sq < prev {
+                    pnext = p - adj;
+                    if (0.0..=1.0).contains(&pnext) {
+                        break;
+                    }
+                }
+                g /= 3.0;
+            }
+            if prev <= acu || q * q <= acu {
+                p = pnext;
+                break 'outer;
+            }
+            if pnext != 0.0 && pnext != 1.0 {
+                break;
+            }
+            g /= 3.0;
+        }
+        if pnext == p {
+            break;
+        }
+        p = pnext;
+        qprev = q;
+    }
+    if flip { Ok(1.0 - p) } else { Ok(p) }
+}
+
+
 /// Extension of the Beta function with more than two arguments.
 /// 
 /// # Input
@@ -254,5 +390,18 @@ mod tests {
         assert!((regularized_incomplete_beta(0.5, 2.0, 1.0).unwrap() - 0.5_f64.powi(2)).abs() < TEST_ACCURACY);
         // I_{x}(1, b) = 1 - (1 - x)^{b}
         assert!((regularized_incomplete_beta(0.5, 1.0, 3.0).unwrap() - (1.0 - 0.5_f64.powi(3))).abs() < TEST_ACCURACY);
+    }
+
+    #[test]
+    fn unit_test_incomplete_regularized_incomplete_beta() -> () {
+        use crate::statistics::beta::inverse_regularized_incomplete_beta;
+        // I_{0}(a, b) = 0
+        assert!(inverse_regularized_incomplete_beta(0.0, 0.2, 0.3).unwrap() < TEST_ACCURACY);
+        // I_{1}(a, b) = 1
+        assert!((inverse_regularized_incomplete_beta(1.0, 0.2, 0.3).unwrap() - 1.0 ).abs() < TEST_ACCURACY);
+        // I_{x}(a, 1) = x^{a}
+        assert!((inverse_regularized_incomplete_beta(0.5_f64.powi(2), 2.0, 1.0).unwrap() - 0.5).abs() < TEST_ACCURACY);
+        // I_{x}(1, b) = 1 - (1 - x)^{b}
+        assert!((inverse_regularized_incomplete_beta(1.0 - 0.5_f64.powi(3), 1.0, 3.0).unwrap() - 0.5).abs() < TEST_ACCURACY);
     }
 }

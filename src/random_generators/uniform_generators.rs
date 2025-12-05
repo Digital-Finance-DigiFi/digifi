@@ -200,7 +200,6 @@ mod tests {
         let lcg: LinearCongruentialGenerator = LinearCongruentialGenerator::new(12_345, 1_000_000, 244_944, 1_597, 51_749);
         let sample: Array1<f64> = lcg.generate().unwrap();
         assert_eq!(sample.len(), 1_000_000);
-        println!("{}", sample.mean().unwrap());
         assert!((sample.mean().unwrap() - 0.5).abs() < 1_000.0 * TEST_ACCURACY)
     }
 
@@ -216,7 +215,6 @@ mod tests {
         let fg: FibonacciGenerator = FibonacciGenerator::new_shuffle(1_000_000).unwrap();
         let sample: Array1<f64> = fg.generate().unwrap();
         assert_eq!(sample.len(), 1_000_000);
-        println!("{}", sample.mean().unwrap());
         assert!((sample.mean().unwrap() - 0.5).abs() < 100_000.0 * TEST_ACCURACY);
     }
 }

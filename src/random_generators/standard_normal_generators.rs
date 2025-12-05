@@ -85,8 +85,9 @@ impl RandomGenerator<StandardNormalAcceptReject> for StandardNormalAcceptReject 
         let laplace_dist: LaplaceDistribution = LaplaceDistribution::build(0.0, self.lap_b)?;
         let mut l: Array1<f64> = laplace_dist.inverse_cdf_iter(u.iter())?
             .map(|i| { if i.is_infinite() && i.is_sign_positive() { 1.0 } else if i.is_infinite() && i.is_sign_negative() { 0.0 } else { *i } });
+        let last_index: usize = u.len() - 1;
         l.remove_index(Axis(0), 0);
-        u.remove_index(Axis(0), u.len() - 1);
+        u.remove_index(Axis(0), last_index);
         // Accept-Reject algorithm
         let standard_normal_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
         accept_reject(&standard_normal_dist, &laplace_dist, &l, m, &u)
@@ -427,7 +428,6 @@ mod tests {
         use crate::random_generators::standard_normal_generators::StandardNormalZiggurat;
         let snz: StandardNormalZiggurat = StandardNormalZiggurat::new_shuffle(1_000).unwrap();
         let sample: Array1<f64> = snz.generate().unwrap();
-        println!("{}", sample.mean().unwrap());
         assert!((sample.mean().unwrap() - 0.0).abs() < 10_000_000.0 * TEST_ACCURACY);
     }
 }

@@ -8,6 +8,7 @@ pub use crate::financial_instruments::{plot_payoff, plot_profit};
 pub use crate::financial_instruments::derivatives::plot_present_value_surface;
 pub use crate::portfolio_applications::portfolio_composition::plot_efficient_frontier;
 pub use crate::random_generators::{plot_pdf, plot_2d_scatter_points, plot_3d_scatter_points};
+pub use crate::statistics::autocorrelation::plot_autocorrelation;
 pub use crate::stochastic_processes::plot_stochastic_paths;
 pub use crate::technical_indicators::{plot_moving_average, plot_macd, plot_bollinger_bands, plot_rsi, plot_adx, plot_obv};
 

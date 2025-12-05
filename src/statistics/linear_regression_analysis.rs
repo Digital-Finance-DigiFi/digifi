@@ -28,7 +28,7 @@ pub struct LinearRegressionFeatureResult {
     pub t_test_h0: Option<f64>,
     /// T-test result
     pub t_test_reject_h0: Option<bool>,
-    /// t score of the t-test
+    /// t-statistic of the t-test
     pub t_test_t_score: Option<f64>,
     /// Degrees of freedom used in the t-test
     pub t_test_dof: Option<f64>,
@@ -36,6 +36,28 @@ pub struct LinearRegressionFeatureResult {
     pub t_test_p_value: Option<f64>,
     /// Confidence level of the t-test
     pub t_test_cl: Option<f64>,
+    /// F-test result
+    pub f_test_reject_h0: Option<bool>,
+    /// F-statistic of the F-test
+    pub f_test_f_score: Option<f64>,
+    /// Number of groups
+    pub f_test_k: Option<f64>,
+    /// Total data size (Total number of data points in all groups)
+    pub f_test_n: Option<f64>,
+    /// Overall mean of the data
+    pub f_test_overall_mean: Option<f64>,
+    /// Explained variance (Between-group variability)
+    pub f_test_explained_variance: Option<f64>,
+    /// Unexplained variance (Within-group variability)
+    pub f_test_unexplained_variance: Option<f64>,
+    /// Numerator degrees of freedom used in the F-test (i.e., `k-1`)
+    pub f_test_dof_1: Option<f64>,
+    /// Denominator degrees of freedom used in the F-test (i.e., `n-k`)
+    pub f_test_dof_2: Option<f64>,
+    /// p-value of the F-test
+    pub f_test_p_value: Option<f64>,
+    /// Confidence level of the F-test
+    pub f_test_cl: Option<f64>,
     /// Cointegration test between the feature (i.e., `Xi`) anf the model's dependent variable (i.e., `Y`)
     pub cointegrated: Option<bool>,
     /// Confidence level of the cointegration test
@@ -53,12 +75,24 @@ impl Display for LinearRegressionFeatureResult {
             + &format!("\tPearson Correlation: {}\n", self.pearson_correlation.unwrap_or(f64::NAN))
             + &format!("\tVariance Inflation Factor: {}\n", self.vif.unwrap_or(f64::NAN))
             + SMALL_TEXT_BREAK
-            + &format!("\tt-Test Degrees of Freedom: {}", self.t_test_dof.unwrap_or(f64::NAN))
+            + &format!("\tt-Test Degrees of Freedom: {}\n", self.t_test_dof.unwrap_or(f64::NAN))
             + &format!("\tt-Test Null Hypothesis: {}\n", self.t_test_h0.unwrap_or(f64::NAN))
             + &format!("\tt-Test Reject Null Hypothesis: {}\n", match self.t_test_reject_h0 { Some(b) => b.to_string(), None => "".to_owned(), })
-            + &format!("\tt-score: {}\n", self.t_test_t_score.unwrap_or(f64::NAN))
+            + &format!("\tt-statistic: {}\n", self.t_test_t_score.unwrap_or(f64::NAN))
             + &format!("\tp-value: {}\n", self.t_test_p_value.unwrap_or(f64::NAN))
             + &format!("\tConfidence Level: {}\n", self.t_test_cl.unwrap_or(f64::NAN))
+            + SMALL_TEXT_BREAK
+            + &format!("\tF-Test Number of Groups: {}\n", self.f_test_k.unwrap_or(f64::NAN))
+            + &format!("\tF-Test Total Data Size: {}\n", self.f_test_n.unwrap_or(f64::NAN))
+            + &format!("\tF-Test Overall Mean: {}\n", self.f_test_overall_mean.unwrap_or(f64::NAN))
+            + &format!("\tF-Test Explained Variance: {}\n", self.f_test_explained_variance.unwrap_or(f64::NAN))
+            + &format!("\tF-Test Unexplained Variance: {}\n", self.f_test_unexplained_variance.unwrap_or(f64::NAN))
+            + &format!("\tF-Test Numerator Degrees of Freedom (d_1): {}\n", self.f_test_dof_1.unwrap_or(f64::NAN))
+            + &format!("\tF-Test Denominator Degrees of Freedom (d_2): {}\n", self.f_test_dof_2.unwrap_or(f64::NAN))
+            + &format!("\tF-Test Reject Null Hypothesis: {}\n", match self.f_test_reject_h0 { Some(b) => b.to_string(), None => "".to_owned(), })
+            + &format!("\tF-statistic: {}\n", self.f_test_f_score.unwrap_or(f64::NAN))
+            + &format!("\tp-value: {}\n", self.f_test_p_value.unwrap_or(f64::NAN))
+            + &format!("\tConfidence Level: {}\n", self.f_test_cl.unwrap_or(f64::NAN))
             + SMALL_TEXT_BREAK
             + &format!("\tCointegrated: {}\n", match self.cointegrated { Some(b) => b.to_string(), None => "".to_owned(), })
             + &format!("\tConfidence Level: {}\n", self.cointegration_cl.unwrap_or(f64::NAN));
@@ -85,6 +119,10 @@ pub struct LinearRegressionResult {
     pub r_squared: Option<f64>,
     /// Adjusted R-squared for the upward bias in the R-squared due to estimated values of the parameters used
     pub adjusted_r_squared: Option<f64>,
+    /// Maximized likelihood of the model
+    pub max_likelihood: Option<f64>,
+    /// Maximized log-likelihood of the model
+    pub max_log_likelihood: Option<f64>,
 }
 
 impl Display for LinearRegressionResult {
@@ -98,8 +136,10 @@ impl Display for LinearRegressionResult {
             + LARGE_TEXT_BREAK
             + &format!("Delta Degrees of Freedom: {}\n", self.ddof)
             + &format!("Sum of Squared Estimate of Errors: {}\n", self.sse.unwrap_or(f64::NAN))
-            + &format!("Coefficient of Determination: {}\n", self.r_squared.unwrap_or(f64::NAN))
-            + &format!("Adjusted Coefficient of Determination: {}\n", self.adjusted_r_squared.unwrap_or(f64::NAN))
+            + &format!("Coefficient of Determination (R-Squared): {}\n", self.r_squared.unwrap_or(f64::NAN))
+            + &format!("Adjusted Coefficient of Determination (Adjusted R-Squared): {}\n", self.adjusted_r_squared.unwrap_or(f64::NAN))
+            + &format!("Maximized Likelihood: {}\n", self.max_likelihood.unwrap_or(f64::NAN))
+            + &format!("Maximized Log Likelihood: {}\n", self.max_log_likelihood.unwrap_or(f64::NAN))
             + LARGE_TEXT_BREAK;
         write!(f, "{}", result)
     }
@@ -116,6 +156,8 @@ pub struct LinearRegressionSettings {
     pub enable_r_squared: bool,
     /// Whether to compute adjusted R-squared
     pub enable_adjusted_r_squared: bool,
+    /// Whether to compute maximized likelihood and log-likelihood of the model
+    pub enable_max_likelihood: bool,
     /// Whetehr to compute standard error for individual features
     pub enable_se: bool,
     /// Whether to compute covariance for individual features
@@ -128,6 +170,10 @@ pub struct LinearRegressionSettings {
     pub t_test_cl: Option<stat_tests::ConfidenceLevel>,
     /// Null hypotheses for the t-test
     pub t_test_h0s: Option<Vec<f64>>,
+    /// Whether to run oneway F-test for individual features
+    pub enable_f_test: bool,
+    /// Confidence level for the F-test
+    pub f_test_cl: Option<stat_tests::ConfidenceLevel>,
     /// Whether to run cointegration test for individual features
     pub enable_cointegration: bool,
     /// Confidence level for the cointegration test 
@@ -143,9 +189,10 @@ impl LinearRegressionSettings {
     /// Note: This is a short cut to construct the settings for the full linear regression analysis.
     pub fn enable_all() -> Self {
         LinearRegressionSettings {
-            enable_sse: true, enable_r_squared: true, enable_adjusted_r_squared: true, enable_se: true, enable_cov: true,
-            enable_pearson_corr: true,
+            enable_sse: true, enable_r_squared: true, enable_adjusted_r_squared: true, enable_max_likelihood: true, enable_se: true,
+            enable_cov: true, enable_pearson_corr: true,
             enable_t_test: true, t_test_cl: Some(stat_tests::ConfidenceLevel::default()), t_test_h0s: None,
+            enable_f_test: true, f_test_cl: Some(stat_tests::ConfidenceLevel::default()),
             enable_cointegration: true, cointegration_cl: Some(stat_tests::ConfidenceLevel::default()),
             enable_vif: true,
         }
@@ -156,10 +203,11 @@ impl LinearRegressionSettings {
     /// Note: This is a short cut to construct the settings for the minimalistic linear regression analysis.
     pub fn disable_all() -> Self {
         LinearRegressionSettings {
-            enable_sse: false, enable_r_squared: false, enable_adjusted_r_squared: false, enable_se: false, enable_cov: false,
-            enable_pearson_corr: false,
-            enable_t_test: false, t_test_cl: Some(stat_tests::ConfidenceLevel::default()), t_test_h0s: None,
-            enable_cointegration: false, cointegration_cl: Some(stat_tests::ConfidenceLevel::default()),
+            enable_sse: false, enable_r_squared: false, enable_adjusted_r_squared: false, enable_max_likelihood: false, enable_se: false,
+            enable_cov: false, enable_pearson_corr: false,
+            enable_t_test: false, t_test_cl: None, t_test_h0s: None,
+            enable_f_test: false, f_test_cl: None,
+            enable_cointegration: false, cointegration_cl: None,
             enable_vif: false,
         }
     }
@@ -172,7 +220,8 @@ impl Display for LinearRegressionSettings {
             + LARGE_TEXT_BREAK
             + &format!("Enable SSE: {}\n", self.enable_sse)
             + &format!("Enable Coefficient of Determination: {}\n", self.enable_r_squared)
-            + &format!("Enable Adjusted COefficient of Determination: {}\n", self.enable_adjusted_r_squared)
+            + &format!("Enable Adjusted Coefficient of Determination: {}\n", self.enable_adjusted_r_squared)
+            + &format!("Enable Maximum Likelihood: {}\n", self.enable_max_likelihood)
             + &format!("Enable SE: {}\n", self.enable_se)
             + &format!("Enable Covariance: {}\n", self.enable_cov)
             + &format!("Enable Pearson Correlation: {}\n", self.enable_pearson_corr)
@@ -184,6 +233,8 @@ impl Display for LinearRegressionSettings {
                 },
                 None => "".to_owned(),
             }) + "\n"
+            + &format!("Enable F-Test: {}\n", self.enable_f_test)
+            + &format!("F-Test Confidence Level: {}\n", self.f_test_cl.unwrap_or_default())
             + &format!("Enable Cointegration: {}\n", self.enable_cointegration)
             + &format!("Cointegration Confidence Level: {}\n", self.cointegration_cl.unwrap_or_default())
             + &format!("Enable Variance Inflation Factor: {}\n", self.enable_vif)
@@ -197,7 +248,7 @@ impl Display for LinearRegressionSettings {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Set of tools for constructing a linear regression model and performing a further analysis of it.
 /// 
-/// Note: This tool combines other functions and methods from a library underr one implementation that is easy ton set up.
+/// Note: This tool combines other functions and methods from a library under one implementation that is easy to set-up and work with.
 /// 
 /// # Examples
 /// 
@@ -320,6 +371,20 @@ impl LinearRegressionAnalysis {
                 coefficient.t_test_p_value = Some(t_test_result.p_value);
                 coefficient.t_test_cl = Some(t_test_result.p_cl);
             }
+            if self.settings.enable_f_test {
+                let f_test_result: stat_tests::FTestResult = stat_tests::f_test_anova(vec![y, x], self.settings.f_test_cl)?;
+                coefficient.f_test_reject_h0 = Some(f_test_result.reject_h0);
+                coefficient.f_test_f_score = Some(f_test_result.f_score);
+                coefficient.f_test_k = Some(f_test_result.k);
+                coefficient.f_test_n = Some(f_test_result.n);
+                coefficient.f_test_overall_mean = Some(f_test_result.overall_mean);
+                coefficient.f_test_explained_variance = Some(f_test_result.explained_variance);
+                coefficient.f_test_unexplained_variance = Some(f_test_result.unexplained_variance);
+                coefficient.f_test_dof_1 = Some(f_test_result.dof_1);
+                coefficient.f_test_dof_2 = Some(f_test_result.dof_2);
+                coefficient.f_test_p_value = Some(f_test_result.p_value);
+                coefficient.f_test_cl = Some(f_test_result.p_cl);
+            }
             if self.settings.enable_cointegration {
                 let result: stat_tests::CointegrationResult = stat_tests::cointegration(x, y, self.settings.cointegration_cl)?;
                 coefficient.cointegrated = Some(result.cointegrated);
@@ -343,10 +408,19 @@ impl LinearRegressionAnalysis {
         let sse: Option<f64> = if self.settings.enable_sse { Some(SSE.loss_iter(y.iter(), y_prediction.iter())?) } else { None };
         let r_squared: Option<f64> = if self.settings.enable_r_squared { Some(statistics::r_squared(y, &y_prediction)?) } else { None };
         let adjusted_r_squared: Option<f64> = if self.settings.enable_adjusted_r_squared { Some(statistics::adjusted_r_squared(y, &y_prediction, y_len, fc_len)?) } else { None };
+        let max_log_likelihood: Option<f64> = if self.settings.enable_max_likelihood {
+            let sse: f64 = match &sse { Some(sse) => *sse, None => SSE.loss_iter(y.iter(), y_prediction.iter())?, };
+            // Sigma is standard deviation of error terms (i.e., epsilon)
+            let two_sigma_square: f64 = 2.0 * (y - y_prediction).std(0.0).powi(2);
+            Some((y_len as f64) * (1.0 / (two_sigma_square * std::f64::consts::PI).sqrt()).ln() - sse / (two_sigma_square))
+        } else {
+            None
+        };
+        let max_likelihood: Option<f64> = match max_log_likelihood { Some(l) => Some(l.exp()), None => None, };
         Ok(LinearRegressionResult {
             all_coefficients,
             intercept, coefficients,
-            ddof, sse, r_squared, adjusted_r_squared,
+            ddof, sse, r_squared, adjusted_r_squared, max_likelihood, max_log_likelihood,
         })
     }
 }

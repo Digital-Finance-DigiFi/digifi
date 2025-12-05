@@ -82,7 +82,7 @@ pub fn erf(x: f64, n_terms: Option<usize>) -> f64 {
 /// 
 /// # Input
 /// - `z`: Input variable
-/// - `n_terms`: Number of terms to use in the approximation (Default is 20)
+/// - `n_terms`: Number of terms to use in the approximation (Default is 30)
 /// 
 /// # Links
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Error_function#Inverse_functions>
@@ -97,7 +97,7 @@ pub fn erf(x: f64, n_terms: Option<usize>) -> f64 {
 /// assert!((approximation - 1.0).abs() < TEST_ACCURACY);
 /// ```
 pub fn erfinv(z: f64, n_terms: Option<usize>) -> f64 {
-    let n_terms: usize = n_terms.unwrap_or(20);
+    let n_terms: usize = n_terms.unwrap_or(30);
     let pi_sqrt_half_z: f64 = f64::sqrt(std::f64::consts::PI) * z / 2.0;
     let mut c: Vec<f64> = Vec::with_capacity(n_terms);
     (0..n_terms).into_iter().fold(0.0, |total, k| {
