@@ -158,7 +158,7 @@ pub fn trinomial_model(payoff_object: &dyn Payoff, s_0: f64, u: f64, d: f64, p_u
                 let value: f64 = p_d * trinomial_tree[i+1][j-1] + p_s * trinomial_tree[i+1][j] + p_u * trinomial_tree[i+1][j+1];
                 match exercise_time_steps[i] {
                     true => {
-                        let exercise: f64 = payoff_object.payoff(trinomial_tree[i][layer.len()-1]);
+                        let exercise: f64 = payoff_object.payoff(trinomial_tree[i][j-1]);
                         layer.push(value.max(exercise));
                     },
                     false => layer.push(value),
@@ -174,6 +174,8 @@ pub fn trinomial_model(payoff_object: &dyn Payoff, s_0: f64, u: f64, d: f64, p_u
 /// Trinomial models that are scaled to emulate Brownian motion.
 ///
 /// # Examples
+/// 
+/// 1. Pricing European Long Call option:
 ///
 /// ```rust
 /// use ndarray::Array1;
@@ -187,6 +189,22 @@ pub fn trinomial_model(payoff_object: &dyn Payoff, s_0: f64, u: f64, d: f64, p_u
 ///
 /// // Test accuracy depends on the conversion between Brownian-scaled binomial model and Black-Scholes analytic solution
 /// assert!((predicted_value - 0.49438669572304805).abs() < 10_000.0*TEST_ACCURACY);
+/// ```
+/// 
+/// 2. Pricing American Long Call option:
+/// 
+/// ```rust
+/// use ndarray::Array1;
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::lattice_models::{LatticeModel, BrownianMotionTrinomialModel};
+/// use digifi::financial_instruments::LongCall;
+///
+/// let long_call: LongCall = LongCall { k: 11.0, cost: 0.0 };
+/// let bmtm: BrownianMotionTrinomialModel = BrownianMotionTrinomialModel::build(Box::new(long_call), 10.0, 1.5, 0.02, 0.2, 0.0, 1_000).unwrap();
+/// let predicted_value = bmtm.american().unwrap();
+///
+/// // The results were found using https://pricemyoption.com/
+/// assert!((predicted_value - 0.71).abs() < 1_000_000.0*TEST_ACCURACY);
 /// ```
 pub struct BrownianMotionTrinomialModel {
     /// Payoff function
@@ -319,7 +337,7 @@ mod tests {
     }
 
     #[test]
-    fn unit_test_brownian_motion_trinomial_model() -> () {
+    fn unit_test_brownian_motion_trinomial_model_1() -> () {
         use crate::lattice_models::trinomial_models::BrownianMotionTrinomialModel;
         use crate::lattice_models::LatticeModel;
         use crate::financial_instruments::LongCall;
@@ -328,5 +346,17 @@ mod tests {
         let predicted_value: f64 = bmtm.european().unwrap();
         // Test accuracy depends on the conversion between Brownian-scaled binomial model and Black-Scholes analytic solution
         assert!((predicted_value - 0.49438669572304805).abs() < 10_000.0*TEST_ACCURACY);
+    }
+
+    #[test]
+    fn unit_test_brownian_motion_trinomial_model_2() -> () {
+        use crate::lattice_models::trinomial_models::BrownianMotionTrinomialModel;
+        use crate::lattice_models::LatticeModel;
+        use crate::financial_instruments::LongCall;
+        let long_call: LongCall = LongCall { k: 11.0, cost: 0.0 };
+        let bmtm: BrownianMotionTrinomialModel = BrownianMotionTrinomialModel::build(Box::new(long_call), 10.0, 1.5, 0.02, 0.2, 0.0, 1_000).unwrap();
+        let predicted_value: f64 = bmtm.american().unwrap();
+        // The results were found using https://pricemyoption.com/
+        assert!((predicted_value - 0.71).abs() < 1_000_000.0*TEST_ACCURACY);
     }
 }

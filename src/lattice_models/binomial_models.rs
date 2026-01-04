@@ -65,7 +65,7 @@ pub fn binomial_tree_nodes(s_0: f64, u: f64, d: f64, n_steps: usize) -> Result<V
 /// - `d`: Downward movement factor, must be positive
 /// - `p_u`: Probability of an upward movement, must be in \[0,1\]
 /// - `n_steps`: Number of steps in the tree
-/// - `exercise_time_steps`: A vector indicating whether there's a payoff at each time step. Defaults to payoff at every step if None
+/// - `exercise_time_steps`: A vector indicating whether there's a payoff at each time step. Defaults to payoff at every step if `None`
 /// 
 /// # Output
 /// - The fair value calculated by the binomial model
@@ -134,7 +134,7 @@ pub fn binomial_model(payoff_object: &dyn Payoff, s_0: f64, u: f64, d: f64, p_u:
     // Binomial model
     let mut binomial_tree: Vec<Array1<f64>> = Vec::with_capacity(n_steps + 1);
     // Final layer (First payoff is computed)
-    let final_layer: Vec<f64> = (0..(n_steps as i32) + 1).into_iter()
+    let final_layer: Vec<f64> = (0..=(n_steps as i32)).into_iter()
         .fold(Vec::with_capacity(n_steps + 1), |mut fl, i| {
             fl.push(payoff_object.payoff(s_0 * u.powi(i) * d.powi(n_steps as i32 - i)));
             fl
@@ -176,6 +176,8 @@ pub fn binomial_model(payoff_object: &dyn Payoff, s_0: f64, u: f64, d: f64, p_u:
 ///
 /// # Examples
 ///
+/// 1. Pricing European Long Call option:
+/// 
 /// ```rust
 /// use ndarray::Array1;
 /// use digifi::utilities::TEST_ACCURACY;
@@ -189,13 +191,29 @@ pub fn binomial_model(payoff_object: &dyn Payoff, s_0: f64, u: f64, d: f64, p_u:
 /// // Test accuracy depends on the conversion between Brownian-scaled binomial model and Black-Scholes analytic solution
 /// assert!((predicted_value - 0.49438669572304805).abs() < 1_000_000.0*TEST_ACCURACY);
 /// ```
+/// 
+/// 2. Pricing American Long Call option:
+/// 
+/// ```rust
+/// use ndarray::Array1;
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::lattice_models::{LatticeModel, BrownianMotionBinomialModel};
+/// use digifi::financial_instruments::LongCall;
+///
+/// let long_call: LongCall = LongCall { k: 11.0, cost: 0.0 };
+/// let bmbm: BrownianMotionBinomialModel = BrownianMotionBinomialModel::build(Box::new(long_call), 10.0, 1.5, 0.02, 0.2, 0.0, 1_000).unwrap();
+/// let predicted_value: f64 = bmbm.american().unwrap();
+///
+/// // The results were found using https://pricemyoption.com/
+/// assert!((predicted_value - 0.71).abs() < 1_000_000.0*TEST_ACCURACY);
+/// ```
 pub struct BrownianMotionBinomialModel {
     /// Payoff function
     payoff_object: Box<dyn Payoff>,
     /// Initial underlying asset price
     s_0: f64,
     /// Time to maturity
-    time_to_maturity: f64,
+    _time_to_maturity: f64,
     /// Risk-free interest rate
     r: f64,
     /// Volatility of the underlying asset
@@ -227,7 +245,7 @@ impl BrownianMotionBinomialModel {
         payoff_object.validate_payoff(5)?;
         let dt: f64 = time_to_maturity / (n_steps as f64);
         Ok(BrownianMotionBinomialModel {
-            payoff_object, s_0, time_to_maturity, r, _sigma: sigma, q, n_steps, dt, u: (sigma*dt.sqrt()).exp(), d: (-sigma*dt.sqrt()).exp(),
+            payoff_object, s_0, _time_to_maturity: time_to_maturity, r, _sigma: sigma, q, n_steps, dt, u: (sigma * dt.sqrt()).exp(), d: (-sigma * dt.sqrt()).exp(),
         })
     }
 }
@@ -238,6 +256,7 @@ impl LatticeModel for BrownianMotionBinomialModel {
     /// # Output
     /// - The present value of an instrument with the European exercise style
     fn european(&self) -> Result<f64, DigiFiError> {
+        // Discounting is applied at this stage so no need for further discount at the end
         let p_u: f64 = ((-self.q*self.dt).exp() - (-self.r*self.dt).exp()*self.d) / (self.u - self.d);
         let p_d: f64 = (-self.r*self.dt).exp() - p_u;
         let mut binomial_tree: Vec<Array1<f64>> = Vec::with_capacity(self.n_steps + 1);
@@ -255,7 +274,7 @@ impl LatticeModel for BrownianMotionBinomialModel {
                 } );
             binomial_tree.push(Array1::from_vec(layer));
         }
-        Ok(binomial_tree[binomial_tree.len()-1][0] * (-self.r * self.time_to_maturity).exp())
+        Ok(binomial_tree[binomial_tree.len()-1][0])
     }
 
     /// Binomial model that computes the payoffs for each node in the binomial tree to determine the initial payoff value.
@@ -280,22 +299,23 @@ impl LatticeModel for BrownianMotionBinomialModel {
         if exercise_time_steps.len() != self.n_steps {
             return Err(DigiFiError::WrongLength { title: "Brownian Motion Binomial Model".to_owned(), arg: "exercise_time_steps".to_owned(), len: self.n_steps });
         }
+        // Discounting is applied at this stage so no need for further discount at the end
         let p_u: f64 = ((-self.q*self.dt).exp() - (-self.r*self.dt).exp()*self.d) / (self.u - self.d);
         let p_d: f64 = (-self.r*self.dt).exp() - p_u;
         let mut binomial_tree: Vec<Array1<f64>> = Vec::with_capacity(self.n_steps + 1);
-        let layer: Vec<f64> = (0..(self.n_steps as i32 + 1)).into_iter()
+        let layer: Vec<f64> = (0..=(self.n_steps as i32)).into_iter()
             .fold(Vec::with_capacity(self.n_steps + 1), |mut layer, i| {
                 layer.push(self.payoff_object.payoff(self.s_0 * self.u.powi(i) * self.d.powi(self.n_steps as i32 - i)));
                 layer
             } );
         binomial_tree.push(Array1::from_vec(layer));
         for j in (0..self.n_steps).rev() {
-            let layer: Vec<f64> = (0..(j + 1)).into_iter()
+            let layer: Vec<f64> = (0..=j).into_iter()
                 .fold(Vec::with_capacity(j + 1), |mut layer, i| {
                     let value: f64 = p_u*binomial_tree[binomial_tree.len()-1][i+1] + p_d*binomial_tree[binomial_tree.len()-1][i];
-                    match exercise_time_steps[self.n_steps - j] {
+                    match exercise_time_steps[j] {
                         true => {
-                           let exercise: f64 = self.payoff_object.payoff(self.s_0 * (self.u.powi(i as i32)) * (self.d.powi((j-i) as i32)));
+                            let exercise: f64 = self.payoff_object.payoff(self.s_0 * (self.u.powi(i as i32)) * (self.d.powi((j-i) as i32)));
                             layer.push(value.max(exercise)); 
                         },
                         false => layer.push(value),
@@ -304,7 +324,7 @@ impl LatticeModel for BrownianMotionBinomialModel {
                 } );
             binomial_tree.push(Array1::from_vec(layer));
         }
-        Ok(binomial_tree[binomial_tree.len()-1][0] * (-self.r * self.time_to_maturity).exp())
+        Ok(binomial_tree[binomial_tree.len()-1][0])
     }
 }
 
@@ -344,7 +364,7 @@ mod tests {
     }
 
     #[test]
-    fn unit_test_brownian_motion_binomial_model() -> () {
+    fn unit_test_brownian_motion_binomial_model_1() -> () {
         use crate::lattice_models::binomial_models::BrownianMotionBinomialModel;
         use crate::lattice_models::LatticeModel;
         use crate::financial_instruments::LongCall;
@@ -352,6 +372,18 @@ mod tests {
         let bmbm: BrownianMotionBinomialModel = BrownianMotionBinomialModel::build(Box::new(long_call), 10.0, 1.0, 0.02, 0.2, 0.0, 1_000).unwrap();
         let predicted_value: f64 = bmbm.european().unwrap();
         // Test accuracy depends on the conversion between Brownian-scaled binomial model and Black-Scholes analytic solution
-        assert!((predicted_value - 0.49438669572304805).abs() < 1_000_000.0*TEST_ACCURACY);
+        assert!((predicted_value - 0.49438669572304805).abs() < 100_000.0*TEST_ACCURACY);
+    }
+
+    #[test]
+    fn unit_test_brownian_motion_binomial_model_2() -> () {
+        use crate::lattice_models::binomial_models::BrownianMotionBinomialModel;
+        use crate::lattice_models::LatticeModel;
+        use crate::financial_instruments::LongCall;
+        let long_call: LongCall = LongCall { k: 11.0, cost: 0.0 };
+        let bmbm: BrownianMotionBinomialModel = BrownianMotionBinomialModel::build(Box::new(long_call), 10.0, 1.5, 0.02, 0.2, 0.0, 1_000).unwrap();
+        let predicted_value: f64 = bmbm.american().unwrap();
+        // The results were found using https://pricemyoption.com/
+        assert!((predicted_value - 0.71).abs() < 1_000_000.0*TEST_ACCURACY);
     }
 }
