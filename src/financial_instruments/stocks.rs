@@ -675,7 +675,123 @@ impl Stock {
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Debt-to-equity_ratio>
     /// - Original Source: N/A
     pub fn debt_to_equity(&self, debt: f64, equity: f64) -> f64 {
-        debt / equity
+        corporate_finance::debt_to_equity(debt, equity)
+    }
+
+    /// Interest coverage ratio (i.e., Times-Interest Earned) is a measure of company's ability to honour its debt payments.
+    /// 
+    /// Note: EBITDA can be used instead of EBIT.
+    /// 
+    /// Interest Coverage Ratio = EBIT / Interest Expense
+    /// 
+    /// # Input
+    /// - `EBIT`: Earnings before interest and taxes
+    /// - `interest_expense`: Cost of borrowing money from financial institutions incurred by the company
+    /// 
+    /// # Output
+    /// - Interest coverage ratio
+    /// 
+    /// # LaTeX Formula
+    /// - \\textit{Interest Coverage Ratio} = \\frac{EBIT}{\\textit{Interest Expense}}
+    /// 
+    /// # Links
+    /// - Wikipedia: <https://en.wikipedia.org/wiki/Times_interest_earned>
+    /// - Original Source: N/A
+    pub fn interest_coverage_ratio(&self, ebit: f64, interest_expense: f64) -> f64 {
+        corporate_finance::interest_coverage_ratio(ebit, interest_expense)
+    }
+
+
+    /// Debt service covergae ratio (i.e., Debt coverage Ratio) is a measure of company's ability to generate sufficient cash to cover its debt obligations,
+    /// including interest, principal, and lease payments.
+    /// 
+    /// DSCR = Operating Income / Current Debt Obligations
+    /// 
+    /// # Input
+    /// - `operating_income`: Profit a company makes from its core business operations after deducting all operating expenses
+    /// - `current_debt_obligations`: Current debt obligations, including any interest, principal, sinking funds, and lease payments
+    /// that are due over the next financial period (e.g., year)
+    /// 
+    /// # Output
+    /// - Debt service coverage ratio
+    /// 
+    /// # LaTeX Formula
+    /// - \\textit{DSCR} = \\frac{\\textit{Operating Income}}{\\textit{Current Debt Obligations}}
+    /// 
+    /// # Links
+    /// - Wikipedia: <https://en.wikipedia.org/wiki/Debt_service_coverage_ratio>
+    /// - Original Source: N/A
+    pub fn debt_service_coverage_ratio(&self, operating_income: f64, current_debt_obligations: f64) -> f64 {
+        corporate_finance::debt_service_coverage_ratio(operating_income, current_debt_obligations)
+    }
+
+
+    /// Asset coverage ratio is a measure of how well a company can repay its debts by sellingor liquidating its assets.
+    /// 
+    /// Asset Coverage Ratio = (Total Assets - Current Liabilities) / Total Debt
+    /// 
+    /// # Input
+    /// - `total_assets`: Total assets of the company
+    /// - `current_liabilities`: Liabilities of a business that are expected to be settled in cash within one fiscal year or
+    /// the firm's operating cycle, whichever is longer
+    /// - `total_debt`: Total debt of the company
+    /// 
+    /// # Output
+    /// - Asset coverage ratio
+    /// 
+    /// # LaTeX Formula
+    /// - \\textit{Asset Coverage Ratio} = \\frac{\\textit{Total Assets} - \\textit{Current Liabilities}}{\\textit{Total Debt}}
+    /// 
+    /// # Links
+    /// - Wikipedia: N/A
+    /// - Original Source: N/A
+    pub fn asset_coverage_ratio(&self, total_assets: f64, current_liabilities: f64, total_debt: f64) -> f64 {
+        corporate_finance::asset_coverage_ratio(total_assets, current_liabilities, total_debt)
+    }
+
+
+    /// Liquidity ratio is a measure a company's ability to repay short-term creditors out of its total cash.
+    /// 
+    /// Liquidity Ratio = Liquid Assets / Current Liabilities
+    /// 
+    /// # Input
+    /// - `Liquid_assets`: Cash of the company on the balance sheet
+    /// - `current_liabilities`: Liabilities of a business that are expected to be settled in cash within one fiscal year or
+    /// the firm's operating cycle, whichever is longer
+    /// 
+    /// # Output
+    /// - Liquidity ratio
+    /// 
+    /// # LaTeX Formula
+    /// - \\textit{Liquidity Ratio} = \\frac{\\textit{Liquid Assets}}{\\textit{Current Liabilities}}
+    /// 
+    /// # Links
+    /// - Wikipedia: <https://en.wikipedia.org/wiki/Liquidity_ratio>
+    /// - Original Source: N/A
+    pub fn liquidity_ratio(&self, liquid_assets: f64, current_liabilities: f64) -> f64 {
+        corporate_finance::liquidity_ratio(liquid_assets, current_liabilities)
+    }
+
+
+    /// Cash flow to debt ratio is a measure of how long it would take the company to repay all its debt using only cash flow from operations.
+    /// 
+    /// CF/D = Operating Cash Flow / Total Debt
+    /// 
+    /// # Input
+    /// - `operating_cash_flow`: Cash generated from core business activities
+    /// - `total_debt`: Total debt of the company
+    /// 
+    /// # Output
+    /// - Cash flow to debt ratio
+    /// 
+    /// # LaTeX Formula
+    /// - \\textit{CF/D} = \\frac{\\textit{Operating Cash Flow}}{\\textit{Total Debt}}
+    /// 
+    /// # Links
+    /// - Wikipedia: <https://en.wikipedia.org/wiki/Cash-flow-to-debt_ratio>
+    /// - Original Source: N/A
+    pub fn cash_flow_to_debt(&self, operating_cash_flow: f64, total_debt: f64) -> f64 {
+        corporate_finance::cash_flow_to_debt(operating_cash_flow, total_debt)
     }
 
     /// Dividend discount model evaluating the price of the stock.
