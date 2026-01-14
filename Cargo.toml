@@ -1,6 +1,6 @@
 [package]
 name = "digifi"
-version = "3.0.4"
+version = "3.0.5"
 edition = "2021"
 description = "General purpose financial library and framework for financial modelling, portfolio optimization, and asset pricing."
 license = "MIT OR Apache-2.0"
@@ -14,11 +14,11 @@ exclude = ["cargo_commands.md"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ndarray = { version = "0.17.1", features = ["serde"] } # MIT or Apache 2.0
+ndarray = { version = "0.17.2", features = ["serde"] } # MIT or Apache 2.0
 nalgebra = { version = "0.34.1" } # Apache 2.0
 # Optional dependencies
 serde = { version = "1.0.228", optional = true, features = ["derive"] } # MIT or Apache 2.0
-plotly = { version = "0.13.1", optional = true, features = ["plotly_ndarray"] } # MIT
+plotly = { version = "0.14.0", optional = true, features = ["plotly_ndarray"] } # MIT
 
 [features]
 # default = ["sample_data", "serde", "plotly"]

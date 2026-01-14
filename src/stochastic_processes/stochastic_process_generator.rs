@@ -169,6 +169,14 @@ impl StochasticProcess for SDE {
         self.t_f
     }
 
+    fn get_expectations(&self) -> Option<Array1<f64>> {
+        None
+    }
+
+    fn get_variances(&self) -> Option<Array1<f64>> {
+        None
+    }
+
     /// Generate paths for the constructed SDE.
     ///
     /// # Output
@@ -262,10 +270,7 @@ impl StochasticDrift {
     /// - `error`: Type of error function to be used in the construction of an error term
     pub fn build(t_f: f64, n_steps: usize, n_paths: usize, stochastic_drift_type: StochasticDriftType, error: StationaryError) -> Result<Self, DigiFiError> {
         // Input validation
-        match &stochastic_drift_type {
-            StochasticDriftType::TrendStationary { trend, .. } => { trend.validate(n_paths)?; },
-            _ => (),
-        }
+        if let StochasticDriftType::TrendStationary { trend, .. } = &stochastic_drift_type { trend.validate(n_paths)?; }
         error.validate(n_paths)?;
         // Definition of SDE parameters
         let dt: f64 = t_f / (n_steps as f64);
@@ -285,6 +290,14 @@ impl StochasticProcess for StochasticDrift {
 
     fn get_t_f(&self) -> f64 {
         self.t_f
+    }
+
+    fn get_expectations(&self) -> Option<Array1<f64>> {
+        None
+    }
+
+    fn get_variances(&self) -> Option<Array1<f64>> {
+        None
     }
 
     /// Generate paths for the constructed process.

@@ -456,10 +456,7 @@ impl Portfolio {
                 }
             }
             // Delete asset name
-            match index {
-                Some(i) => { self.assets_names.remove(i); }
-                None => (),
-            }
+            if let Some(i) = index { self.assets_names.remove(i); }
         }
         let weights: Vec<f64> = self.uniform_weights();
         self.change_weights(weights)?;

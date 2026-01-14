@@ -209,8 +209,8 @@ impl Contract {
             });
         }
         Ok(Contract {
-            _contract_type, current_contract_price, delivery_price, discount_rate, time_to_maturity, spot_price, compounding_type, financial_instrument_id,
-            asset_historical_data, stochastic_model,
+            _contract_type, current_contract_price, delivery_price, discount_rate, time_to_maturity, spot_price, compounding_type,
+            financial_instrument_id, asset_historical_data, stochastic_model,
         })
     }
 
@@ -379,7 +379,7 @@ pub struct OptionContract {
     yield_: f64,
     /// Time to maturity of the option
     time_to_maturity: f64,
-    /// Volatility of the option returns
+    /// Volatility of the underlying asset returns
     sigma: f64,
     /// Type of option payoff times (i.e., European, American, Bermudan)
     option_type: OptionType,
@@ -426,17 +426,14 @@ impl OptionContract {
         if time_to_maturity < 0.0 {
             return Err(DigiFiError::ParameterConstraint { title: Self::error_title(), constraint: "The argument `time_to_maturity` must be non-negative.".to_owned(), });
         }
-        match option_pricing_method {
-            OptionPricingMethod::BlackScholes { .. } => {
-                match option_type {
-                    OptionType::European => (),
-                    _ => return Err(DigiFiError::ValidationError {
-                        title: Self::error_title(),
-                        details: "`Black-Scholes` option pricing can only be used for `European` options.".to_owned(),
-                    }),
-                }
-            },
-            _ => (),
+        if let OptionPricingMethod::BlackScholes { .. } = option_pricing_method {
+            match option_type {
+                OptionType::European => (),
+                _ => return Err(DigiFiError::ValidationError {
+                    title: Self::error_title(),
+                    details: "`Black-Scholes` option pricing can only be used for `European` options.".to_owned(),
+                }),
+            }
         }
         payoff.validate_payoff(5)?;
         Ok(OptionContract {
@@ -454,10 +451,7 @@ impl OptionContract {
     /// Measure of sensitivity of the option price to the underlying asset price.
     ///
     /// # Input
-    /// - `option_value_1`: Option price with asset price `asset_price_1`
-    /// - `option_value_2`: Option price with asset price `asset_price_2`
-    /// - `asset_price_1`: Price of the underlying asset
-    /// - `asset_price_2`: Price of the underlying asset
+    /// - `increment`: Percent change in the asset price of the underlying
     ///
     /// # Output
     /// - Delta
@@ -468,17 +462,23 @@ impl OptionContract {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Greeks_(finance)#Delta>
     /// - Original Source: N/A
-    pub fn delta(option_value_1: f64, option_value_2: f64, asset_price_1: f64, asset_price_2: f64) -> f64 {
-        (option_value_2 - option_value_1) / (asset_price_2 / asset_price_1)
+    pub fn delta(&mut self, increment: f64) -> Result<f64, DigiFiError> {
+        if let OptionPricingMethod::BlackScholes { type_ } = &self.option_pricing_method {
+            return self.bs_delta(type_)
+        }
+        let original_value: f64 = self.asset_price;
+        let original_pv: f64 = self.present_value()?;
+        let new_value: f64 = original_value * (1.0 + increment);
+        self.asset_price = new_value;
+        let new_pv: f64 = self.present_value()?;
+        self.asset_price = original_value;
+        Ok((new_pv - original_pv) / (new_value - original_value))
     }
 
     /// Measure of sensitivity of the option price to the volatility of the underlying asset.
     ///
     /// # Input
-    /// - `option_value_1`: Option price with asset volatility `sigma_1`
-    /// - `option_value_2`: Option price with asset volatility `sigma_2`
-    /// - `sigma_1`: Volatility of the underlying asset
-    /// - `sigma_2`: Volatility of the underlying asset
+    /// - `increment`: Percent change in the volatility of the underlying
     ///
     /// # Output
     ///- Vega
@@ -489,17 +489,23 @@ impl OptionContract {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Greeks_(finance)#Vega>
     /// - Original Source: N/A
-    pub fn vega(option_value_1: f64, option_value_2: f64, sigma_1: f64, sigma_2: f64) -> f64 {
-        (option_value_2 - option_value_1) / (sigma_2 - sigma_1)
+    pub fn vega(&mut self, increment: f64) -> Result<f64, DigiFiError> {
+        if let OptionPricingMethod::BlackScholes { .. } = &self.option_pricing_method {
+            return self.bs_vega()
+        }
+        let original_value: f64 = self.sigma;
+        let original_pv: f64 = self.present_value()?;
+        let new_value: f64 = original_value * (1.0 + increment);
+        self.sigma = new_value;
+        let new_pv: f64 = self.present_value()?;
+        self.sigma = original_value;
+        Ok((new_pv - original_pv) / (new_value - original_value))
     }
 
     /// Measure of sensitivity of the option price to the time to maturity.
     ///
     /// # Input
-    /// - `option_value_1`: Option price with maturity `tau_1`
-    /// - `option_value_2`: Option price with maturity `tau_2`
-    /// - `tau_1`: Time to maturity of the option
-    /// - `tau_2`: Time to maturity of the option
+    /// - `increment`: Percent change in the time to maturity of the option
     ///
     /// # Output
     /// - Theta
@@ -509,17 +515,23 @@ impl OptionContract {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Greeks_(finance)#Theta>
     /// - Original Source: N/A
-    pub fn theta(option_value_1: f64, option_value_2: f64, tau_1: f64, tau_2: f64) -> f64 {
-        (option_value_2 - option_value_1) / (tau_2 - tau_1)
+    pub fn theta(&mut self, increment: f64) -> Result<f64, DigiFiError> {
+        if let OptionPricingMethod::BlackScholes { type_ } = &self.option_pricing_method {
+            return self.bs_theta(type_)
+        }
+        let original_value: f64 = self.time_to_maturity;
+        let original_pv: f64 = self.present_value()?;
+        let new_value: f64 = original_value * (1.0 + increment);
+        self.time_to_maturity = new_value;
+        let new_pv: f64 = self.present_value()?;
+        self.time_to_maturity = original_value;
+        Ok((new_pv - original_pv) / (new_value - original_value))
     }
 
     /// Measure of sensitivity of the option price to the interest rate.
     ///
     /// # Input
-    /// - `option_value_1`: Option price with interest rate `r_1`
-    /// - `option_value_2`: Option price with interest rate `r_2`
-    /// - `r_1`: Interest rate
-    /// - `r_2`: Interest rate
+    /// - `increment`: Percent change in the discount rate
     ///
     /// # Output
     /// - Rho
@@ -530,17 +542,23 @@ impl OptionContract {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Greeks_(finance)#Rho>
     /// - Original Source: N/A
-    pub fn rho(option_value_1: f64, option_value_2: f64, r_1: f64, r_2: f64) -> f64 {
-        (option_value_2 - option_value_1) / (r_2 - r_1)
+    pub fn rho(&mut self, increment: f64) -> Result<f64, DigiFiError> {
+        if let OptionPricingMethod::BlackScholes { type_ } = &self.option_pricing_method {
+            return self.bs_rho(type_)
+        }
+        let original_value: f64 = self.discount_rate;
+        let original_pv: f64 = self.present_value()?;
+        let new_value: f64 = original_value * (1.0 + increment);
+        self.discount_rate = new_value;
+        let new_pv: f64 = self.present_value()?;
+        self.discount_rate = original_value;
+        Ok((new_pv - original_pv) / (new_value - original_value))
     }
 
     /// Measure of sensitivity of the option price to the dividend of the underlying asset.
     ///
     /// # Input
-    /// - `option_value_1`: Option price with dividend `dividend_1`
-    /// - `option_value_2`: Option price with dividend `dividend_2`
-    /// - `dividend_1`: Dividend of the underlying asset
-    /// - `dividend_2`: Dividend of the underlying asset
+    /// - `increment`: Percent change in the yield of the underlying
     ///
     /// # Output
     /// - Epsilon
@@ -551,19 +569,23 @@ impl OptionContract {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Greeks_(finance)#Epsilon>
     /// - Original Source: N/A
-    pub fn epsilon(option_value_1: f64, option_value_2: f64, dividend_1: f64, dividend_2: f64) -> f64 {
-        (option_value_2 - option_value_1) / (dividend_2 - dividend_1)
+    pub fn epsilon(&mut self, increment: f64) -> Result<f64, DigiFiError> {
+        if let OptionPricingMethod::BlackScholes { type_ } = &self.option_pricing_method {
+            return self.bs_epsilon(type_)
+        }
+        let original_value: f64 = self.yield_;
+        let original_pv: f64 = self.present_value()?;
+        let new_value: f64 = original_value * (1.0 + increment);
+        self.yield_ = new_value;
+        let new_pv: f64 = self.present_value()?;
+        self.yield_ = original_value;
+        Ok((new_pv - original_pv) / (new_value - original_value))
     }
 
     /// Measure of sensitivity of the option price to change in the underlying asset price.
     ///
     /// # Input
-    /// - `option_value_1`: Option price with asset price `asset_price_1`
-    /// - `option_value_2`: Option price with asset price `asset_price_2`
-    /// - `option_value_3`: Option price with asset price `asset_price_3`
-    /// - `asset_price_1`: Price of the underlying asset
-    /// - `asset_price_2`: Price of the underlying asset
-    /// - `asset_price_3`: Price of the underlying asset
+    /// - `increment`: Percent change in the asset price of the underlying
     ///
     /// # Output
     /// - Gamma
@@ -574,10 +596,22 @@ impl OptionContract {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Greeks_(finance)#Gamma>
     /// - Original Source: N/A
-    pub fn gamma(option_value_1: f64, option_value_2: f64, option_value_3: f64, asset_price_1: f64, asset_price_2: f64, asset_price_3: f64) -> f64 {
-        let delta_1: f64 = (option_value_2 - option_value_1) / (asset_price_2 - asset_price_1);
-        let delta_2: f64 = (option_value_3 - option_value_2) / (asset_price_3 - asset_price_2);
-        (delta_2 - delta_1) / (asset_price_3 - asset_price_1)
+    pub fn gamma(&mut self, increment: f64) -> Result<f64, DigiFiError> {
+        if let OptionPricingMethod::BlackScholes { .. } = &self.option_pricing_method {
+            return self.bs_gamma()
+        }
+        let original_value: f64 = self.asset_price;
+        let original_pv: f64 = self.present_value()?;
+        let up_value: f64 = original_value * (1.0 + increment);
+        self.asset_price = up_value;
+        let up_pv: f64 = self.present_value()?;
+        let down_value: f64 = original_value * (1.0 - increment);
+        self.asset_price = down_value;
+        let down_pv: f64 = self.present_value()?;
+        self.asset_price = original_value;
+        let delta_1: f64 = (original_pv - down_pv) / (original_value - down_value);
+        let delta_2: f64 = (up_pv - original_pv) / (up_value - original_value);
+        Ok((delta_2 - delta_1) / (up_value - down_value))
     }
 
     /// Defines Black-Scholes parameters d_1 and d_2 for the European option.
@@ -614,7 +648,7 @@ impl OptionContract {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Greeks_(finance)#Formulae_for_European_option_Greeks>
     /// - Original Source: N/A
-    pub fn european_option_delta(&self, black_scholes_type: &BlackScholesType) -> Result<f64, DigiFiError> {
+    pub fn bs_delta(&self, black_scholes_type: &BlackScholesType) -> Result<f64, DigiFiError> {
         let (d_1, _) = self.european_option_black_scholes_params()?;
         let normal_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
         match black_scholes_type {
@@ -629,7 +663,7 @@ impl OptionContract {
 
     /// Vega of the European option.
     ///
-    ///Measure of sensitivity of the option price to the volatility of the underlying asset.
+    /// Measure of sensitivity of the option price to the volatility of the underlying asset.
     ///
     /// # Output
     ///- Vega
@@ -637,7 +671,7 @@ impl OptionContract {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Greeks_(finance)#Formulae_for_European_option_Greeks>
     /// - Original Source: N/A
-    pub fn european_option_vega(&self) -> Result<f64, DigiFiError> {
+    pub fn bs_vega(&self) -> Result<f64, DigiFiError> {
         let (d_1, _) = self.european_option_black_scholes_params()?;
         let normal_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
         Ok(self.asset_price * (-self.yield_ * self.time_to_maturity).exp() * normal_dist.cdf(d_1)? * self.time_to_maturity.sqrt())
@@ -653,7 +687,7 @@ impl OptionContract {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Greeks_(finance)#Formulae_for_European_option_Greeks>
     /// - Original Source: N/A
-    pub fn european_option_theta(&self, black_scholes_type: &BlackScholesType) -> Result<f64, DigiFiError> {
+    pub fn bs_theta(&self, black_scholes_type: &BlackScholesType) -> Result<f64, DigiFiError> {
         let (d_1, d_2) = self.european_option_black_scholes_params()?;
         let normal_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
         match black_scholes_type {
@@ -682,7 +716,7 @@ impl OptionContract {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Greeks_(finance)#Formulae_for_European_option_Greeks>
     /// - Original Source: N/A
-    pub fn european_option_rho(&self, black_scholes_type: &BlackScholesType) -> Result<f64, DigiFiError> {
+    pub fn bs_rho(&self, black_scholes_type: &BlackScholesType) -> Result<f64, DigiFiError> {
         let (_, d_2) = self.european_option_black_scholes_params()?;
         let normal_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
         match black_scholes_type {
@@ -705,7 +739,7 @@ impl OptionContract {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Greeks_(finance)#Formulae_for_European_option_Greeks>
     /// - Original Source: N/A
-    pub fn european_option_epsilon(&self, black_scholes_type: &BlackScholesType) -> Result<f64, DigiFiError> {
+    pub fn bs_epsilon(&self, black_scholes_type: &BlackScholesType) -> Result<f64, DigiFiError> {
         let (d_1, _) = self.european_option_black_scholes_params()?;
         let normal_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
         match black_scholes_type {
@@ -727,7 +761,7 @@ impl OptionContract {
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Greeks_(finance)#Formulae_for_European_option_Greeks>
     /// - Original Source: N/A
-    pub fn european_option_gamma(&self) -> Result<f64, DigiFiError> {
+    pub fn bs_gamma(&self) -> Result<f64, DigiFiError> {
         let (d_1, _) = self.european_option_black_scholes_params()?;
         let normal_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
         Ok((-self.yield_ * self.time_to_maturity).exp() * normal_dist.cdf(d_1)? / (self.asset_price * self.sigma * self.time_to_maturity.sqrt()))
@@ -790,22 +824,22 @@ impl FinancialInstrument for OptionContract {
     fn present_value(&self) -> Result<f64, DigiFiError> {
         match &self.option_pricing_method {
             OptionPricingMethod::BlackScholes { type_ } => {
-                Ok(self.european_option_black_scholes(type_)?)
+                self.european_option_black_scholes(type_)
             },
             OptionPricingMethod::Binomial { n_steps } => {
                 let lattice_model: BrownianMotionBinomialModel = BrownianMotionBinomialModel::build(self.payoff.clone_box(), self.asset_price, self.time_to_maturity, self.discount_rate, self.sigma, self.yield_, *n_steps)?;
                 match &self.option_type {
-                    OptionType::European => Ok(lattice_model.european()?),
-                    OptionType::American => Ok(lattice_model.american()?),
-                    OptionType::Bermudan { exercise_time_steps } => Ok(lattice_model.bermudan(exercise_time_steps)?),
+                    OptionType::European => lattice_model.european(),
+                    OptionType::American => lattice_model.american(),
+                    OptionType::Bermudan { exercise_time_steps } => lattice_model.bermudan(exercise_time_steps),
                 }
             },
             OptionPricingMethod::Trinomial { n_steps } => {
                 let lattice_model: BrownianMotionTrinomialModel = BrownianMotionTrinomialModel::build(self.payoff.clone_box(), self.asset_price, self.time_to_maturity, self.discount_rate, self.sigma, self.yield_, *n_steps)?;
                 match &self.option_type {
-                    OptionType::European => Ok(lattice_model.european()?),
-                    OptionType::American => Ok(lattice_model.american()?),
-                    OptionType::Bermudan { exercise_time_steps } => Ok(lattice_model.bermudan(exercise_time_steps)?),
+                    OptionType::European => lattice_model.european(),
+                    OptionType::American => lattice_model.american(),
+                    OptionType::Bermudan { exercise_time_steps } => lattice_model.bermudan(exercise_time_steps),
                 }
             },
         }

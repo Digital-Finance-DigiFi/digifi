@@ -232,10 +232,7 @@ impl Noise {
     /// # Errors
     /// - Returns an error if the custom function does not return an array of the same length as there are number of paths.
     pub fn validate(&self, n_paths: usize) -> Result<(), DigiFiError> {
-        match &self {
-            Noise::Custom { f } => { f.validate(n_paths)?; },
-            _ => (),
-        }
+        if let Noise::Custom { f } = &self { f.validate(n_paths)?; }
         Ok(())
     }
 

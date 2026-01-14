@@ -87,10 +87,7 @@ pub trait FinancialInstrument {
     /// # Input
     /// - `n_paths`: New number of paths to use
     fn update_n_stochastic_paths(&mut self, n_paths: usize) -> () {
-        match self.stochastic_model() {
-            Some(sm) => sm.update_n_paths(n_paths),
-            None => (),
-        }
+        if let Some(sm) = self.stochastic_model() { sm.update_n_paths(n_paths); }
     }
 
     /// Simulates the paths of price action for the financial instrument.

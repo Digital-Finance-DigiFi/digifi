@@ -18,15 +18,40 @@ pub mod stochastic_process_generator;
 
 
 use ndarray::Array1;
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
 #[cfg(feature = "plotly")]
 use plotly::{Plot, Trace, Layout, Scatter, layout::Axis};
 use crate::error::DigiFiError;
+use crate::statistics::{skewness, kurtosis};
 #[cfg(feature = "plotly")]
 use crate::utilities::compare_len;
 
 
-pub trait StochasticProcess {
+#[derive(Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+/// Result of the stochastic process simulation.
+pub struct StochasticProcessResult {
+    /// Simulated paths of the stochastic process
+    pub paths: Vec<Array1<f64>>,
+    /// Path of expected values for each time step in the simulation (If available)
+    pub expectations_path: Option<Array1<f64>>,
+    /// Variances at each time step in the simulation (If available)
+    pub variances_path: Option<Array1<f64>>,
+    /// Mean of paths' values at the final time step
+    pub mean: f64,
+    /// Standard deviation of paths' values at the final time step
+    pub std: f64,
+    /// Variance of paths' values at the final time step
+    pub variance: f64,
+    /// Skewness of paths' values at the final time step
+    pub skewness: f64,
+    /// Kurtosis of paths' values at the final time step
+    pub kurtosis: f64,
+}
 
+
+pub trait StochasticProcess {
     /// Updates the number of paths that the stochastic process will generate.
     /// 
     /// # Input
@@ -39,8 +64,37 @@ pub trait StochasticProcess {
     /// Returns the final time step.
     fn get_t_f(&self) -> f64;
 
+    fn get_expectations(&self) -> Option<Array1<f64>>;
+
+    fn get_variances(&self) -> Option<Array1<f64>>;
+
     /// Paths, S, of the stochastic process.
     fn get_paths(&self) -> Result<Vec<Array1<f64>>, DigiFiError>;
+
+    /// Runs stochastic process simulation:
+    /// - Gets simulated paths
+    /// - Gets expected path and variances at each time stemp (if available)
+    /// - Computes distibution statistics (i.e., mean, standard deviation, variance, skewness, kurtosis) for the values
+    /// at the final time step (i.e., final distribution) 
+    fn simulate(&self) -> Result<StochasticProcessResult, DigiFiError> {
+        let paths: Vec<Array1<f64>> = self.get_paths()?;
+        let final_steps: Vec<f64> = paths.iter().fold(Vec::with_capacity(paths.len()), |mut fs, path| {
+            fs.push(path[self.get_n_steps()]);
+            fs
+        } );
+        let final_steps: Array1<f64> = Array1::from_vec(final_steps);
+        let std: f64 = final_steps.std(0.0);
+        Ok(StochasticProcessResult {
+            paths,
+            expectations_path: self.get_expectations(),
+            variances_path: self.get_variances(),
+            mean: final_steps.mean().ok_or(DigiFiError::MeanCalculation { title: "Stochastic Process Simulation".to_owned(), series: "final_steps".to_owned() })?,
+            std,
+            variance: std.powi(2),
+            skewness: skewness(&final_steps)?,
+            kurtosis: kurtosis(&final_steps)?,
+        })
+    }
 }
 
 
@@ -156,21 +210,15 @@ pub trait StochasticProcess {
 pub fn plot_stochastic_paths(paths: &Vec<Array1<f64>>, expected_path: Option<&Array1<f64>>) -> Result<Plot, DigiFiError> {
     let t: Array1<f64> = Array1::range(0.0, paths[0].len() as f64, 1.0);
     let mut traces: Vec<Box<dyn Trace>> = Vec::<Box<dyn Trace>>::new();
-    match expected_path {
-        Some(p) => {
-            compare_len(&t.iter(), &p.iter(), "path", "expected_path")?;
-            traces.push(Scatter::new(t.to_vec(), p.to_vec()).name("Expected Path"));
-        },
-        None => (),
+    if let Some(p) = expected_path {
+        compare_len(&t.iter(), &p.iter(), "path", "expected_path")?;
+        traces.push(Scatter::new(t.to_vec(), p.to_vec()).name("Expected Path"));
     }
     for path in paths {
         traces.push(Scatter::new(t.to_vec(), path.to_vec()));
     }
     // Push expected path to be the last trace plotted
-    match expected_path {
-        Some(_) => traces.rotate_left(1),
-        None => (),
-    }
+    if let Some(_) = expected_path { traces.rotate_left(1); }
     let mut plot: Plot = Plot::new();
     plot.add_traces(traces);
     let x_axis: Axis = Axis::new().title("Time Step");

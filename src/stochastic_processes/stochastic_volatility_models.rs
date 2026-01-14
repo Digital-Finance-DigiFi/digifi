@@ -24,23 +24,18 @@ use crate::statistics::continuous_distributions::GammaDistribution;
 /// ```rust
 /// use ndarray::Array1;
 /// use digifi::utilities::TEST_ACCURACY;
-/// use digifi::stochastic_processes::{StochasticProcess, ConstantElasticityOfVariance};
+/// use digifi::stochastic_processes::{StochasticProcessResult, StochasticProcess, ConstantElasticityOfVariance};
 ///
 /// let n_paths: usize = 1_000;
 /// let n_steps: usize = 200;
 ///
 /// let cev: ConstantElasticityOfVariance = ConstantElasticityOfVariance::build(1.0, 0.4, 0.5, n_paths, n_steps, 1.0, 100.0).unwrap();
-/// let paths: Vec<Array1<f64>> = cev.get_paths().unwrap();
-///
-/// assert_eq!(paths.len(), n_paths);
-/// assert_eq!(paths[0].len(), n_steps + 1);
-/// let mut final_steps: Vec<f64> = Vec::with_capacity(n_paths);
-/// for i in 0..n_paths {
-///     final_steps.push(paths[i][n_steps]);
-/// }
-/// let final_steps: Array1<f64> = Array1::from_vec(final_steps);
-/// let expected_path: Array1<f64> = cev.get_expectations();
-/// assert!((final_steps.mean().unwrap() - expected_path.last().unwrap()).abs() < 200_000_000.0 * TEST_ACCURACY);
+/// let sp_result: StochasticProcessResult = cev.simulate().unwrap();
+/// 
+/// assert_eq!(sp_result.paths.len(), n_paths);
+/// assert_eq!(sp_result.paths[0].len(), n_steps + 1);
+/// assert_eq!(sp_result.expectations_path.clone().unwrap().len(), n_steps + 1);
+/// assert!((sp_result.mean - sp_result.expectations_path.unwrap()[n_steps]).abs() < 200_000_000.0 * TEST_ACCURACY);
 /// ```
 pub struct ConstantElasticityOfVariance {
     /// Mean of the process
@@ -85,17 +80,6 @@ impl ConstantElasticityOfVariance {
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
         Ok(ConstantElasticityOfVariance { mu, sigma, gamma, n_paths, n_steps, t_f, s_0, dt, t })
     }
-
-    /// Calculates the expected path of the CEV process.
-    ///
-    /// # Output
-    /// - An array of expected values of the stock price at each time step
-    ///
-    /// # LaTeX Formula
-    /// - E[S_{t}] = S_{0} e^{\\mu t}
-    pub fn get_expectations(&self) -> Array1<f64> {
-        self.t.map(|t| { self.s_0 * (self.mu * t).exp() } )
-    }
 }
 
 impl ErrorTitle for ConstantElasticityOfVariance {
@@ -115,6 +99,21 @@ impl StochasticProcess for ConstantElasticityOfVariance {
 
     fn get_t_f(&self) -> f64 {
         self.t_f
+    }
+
+    /// Calculates the expected path of the CEV process.
+    ///
+    /// # Output
+    /// - An array of expected values of the stock price at each time step
+    ///
+    /// # LaTeX Formula
+    /// - E[S_{t}] = S_{0} e^{\\mu t}
+    fn get_expectations(&self) -> Option<Array1<f64>> {
+        Some(self.t.map(|t| { self.s_0 * (self.mu * t).exp() } ))
+    }
+
+    fn get_variances(&self) -> Option<Array1<f64>> {
+        None
     }
 
     /// Generates simulation paths for the Constant Elasticity of Variance (CEV) process.
@@ -160,23 +159,18 @@ impl StochasticProcess for ConstantElasticityOfVariance {
 /// ```rust
 /// use ndarray::Array1;
 /// use digifi::utilities::TEST_ACCURACY;
-/// use digifi::stochastic_processes::{StochasticProcess, HestonStochasticVolatility};
+/// use digifi::stochastic_processes::{StochasticProcessResult, StochasticProcess, HestonStochasticVolatility};
 ///
 /// let n_paths: usize = 1_000;
 /// let n_steps: usize = 200;
 ///
 /// let hsv: HestonStochasticVolatility = HestonStochasticVolatility::new(0.1, 5.0, 0.07, 0.2, 0.0, n_paths, n_steps, 1.0, 100.0, 0.03);
-/// let paths: Vec<Array1<f64>> = hsv.get_paths().unwrap();
+/// let sp_result: StochasticProcessResult = hsv.simulate().unwrap();
 /// 
-/// assert_eq!(paths.len(), n_paths);
-/// assert_eq!(paths[0].len(), n_steps + 1);
-/// let mut final_steps: Vec<f64> = Vec::with_capacity(n_paths);
-/// for i in 0..n_paths {
-///     final_steps.push(paths[i][n_steps]);
-/// }
-/// let final_steps: Array1<f64> = Array1::from_vec(final_steps);
-/// let expected_path: Array1<f64> = hsv.get_expectations();
-/// assert!((final_steps.mean().unwrap() - expected_path.last().unwrap()).abs() < 1_000_000.0 * TEST_ACCURACY);
+/// assert_eq!(sp_result.paths.len(), n_paths);
+/// assert_eq!(sp_result.paths[0].len(), n_steps + 1);
+/// assert_eq!(sp_result.expectations_path.clone().unwrap().len(), n_steps + 1);
+/// assert!((sp_result.mean - sp_result.expectations_path.unwrap()[n_steps]).abs() < 1_000_000.0 * TEST_ACCURACY);
 /// ```
 pub struct HestonStochasticVolatility {
     /// Mean of the process
@@ -224,20 +218,6 @@ impl HestonStochasticVolatility {
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
         HestonStochasticVolatility { mu, k, theta, epsilon, rho, n_paths, n_steps, t_f, s_0, v_0, dt, t }
     }
-
-    /// Calculates the expected path of the Heston Stochastic Volatility process.
-    ///
-    /// # Output
-    /// - An array of expected values of the stock price at each time step
-    ///
-    /// # LaTeX Formula
-    /// - E[S_{t}] = S_{0} + (\\mu - \\frac{1}{2}\\theta) t + \\frac{\\theta - v_{0}}{2k} (1 - e^{-kt})
-    pub fn get_expectations(&self) -> Array1<f64> {
-        let drift_coef: f64 = self.mu - 0.5 * self.theta;
-        let c: f64 = self.theta - self.v_0;
-        let two_k: f64 = 2.0 * self.k;
-        self.t.map(|t| { self.s_0 + drift_coef * t + c * (1.0 - (-self.k * t).exp()) / two_k } )
-    }
 }
 
 impl StochasticProcess for HestonStochasticVolatility {
@@ -251,6 +231,24 @@ impl StochasticProcess for HestonStochasticVolatility {
 
     fn get_t_f(&self) -> f64 {
         self.t_f
+    }
+
+    /// Calculates the expected path of the Heston Stochastic Volatility process.
+    ///
+    /// # Output
+    /// - An array of expected values of the stock price at each time step
+    ///
+    /// # LaTeX Formula
+    /// - E[S_{t}] = S_{0} + (\\mu - \\frac{1}{2}\\theta) t + \\frac{\\theta - v_{0}}{2k} (1 - e^{-kt})
+    fn get_expectations(&self) -> Option<Array1<f64>> {
+        let drift_coef: f64 = self.mu - 0.5 * self.theta;
+        let c: f64 = self.theta - self.v_0;
+        let two_k: f64 = 2.0 * self.k;
+        Some(self.t.map(|t| { self.s_0 + drift_coef * t + c * (1.0 - (-self.k * t).exp()) / two_k } ))
+    }
+
+    fn get_variances(&self) -> Option<Array1<f64>> {
+        None
     }
 
     /// Generates simulation paths for the Heston Stochastic Volatility process.
@@ -304,16 +302,18 @@ impl StochasticProcess for HestonStochasticVolatility {
 /// ```rust
 /// use ndarray::Array1;
 /// use digifi::utilities::TEST_ACCURACY;
-/// use digifi::stochastic_processes::{StochasticProcess, VarianceGammaProcess};
+/// use digifi::stochastic_processes::{StochasticProcessResult, StochasticProcess, VarianceGammaProcess};
 ///
 /// let n_paths: usize = 2;
 /// let n_steps: usize = 200;
 ///
 /// let vg: VarianceGammaProcess = VarianceGammaProcess::new(0.2, 0.3, 20.0, n_paths, n_steps, 1.0, 0.03);
-/// let paths: Vec<Array1<f64>> = vg.get_paths().unwrap();
-///
-/// assert_eq!(paths.len(), n_paths);
-/// assert_eq!(paths[0].len(), n_steps+1);
+/// let sp_result: StochasticProcessResult = vg.simulate().unwrap();
+/// 
+/// assert_eq!(sp_result.paths.len(), n_paths);
+/// assert_eq!(sp_result.paths[0].len(), n_steps + 1);
+/// assert_eq!(sp_result.expectations_path.unwrap().len(), n_steps + 1);
+/// assert_eq!(sp_result.variances_path.unwrap().len(), n_steps + 1);
 /// ```
 pub struct VarianceGammaProcess {
     /// Mean of the process
@@ -351,28 +351,6 @@ impl VarianceGammaProcess {
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
         VarianceGammaProcess { mu, sigma, kappa, n_paths, n_steps, t_f, s_0, dt, t }
     }
-
-    /// Calculates the expected path of the Variance Gamma process.
-    ///
-    /// # Output
-    /// - An array of expected values of the stock price at each time step
-    ///
-    /// # LaTeX Formula
-    /// - E[S_{t}] = S_{0} + \\mu t
-    pub fn get_expectations(&self) -> Array1<f64> {
-        self.s_0 + self.mu * &self.t
-    }
-
-    /// Calculates the variance of the Variance Gamma process.
-    ///
-    /// # Output
-    /// - An array of variances of the stock price at each time step
-    ///
-    /// # LaTeX Formula
-    /// - Var[S_{t}] = (\\sigma^{2} + \\frac{\\mu^{2}}{\\textit{rate}}) t
-    pub fn get_variance(&self) -> Array1<f64> {
-        (self.sigma.powi(2) + self.mu.powi(2) / self.kappa) * &self.t
-    }
 }
 
 impl StochasticProcess for VarianceGammaProcess {
@@ -386,6 +364,28 @@ impl StochasticProcess for VarianceGammaProcess {
 
     fn get_t_f(&self) -> f64 {
         self.t_f
+    }
+
+    /// Calculates the expected path of the Variance Gamma process.
+    ///
+    /// # Output
+    /// - An array of expected values of the stock price at each time step
+    ///
+    /// # LaTeX Formula
+    /// - E[S_{t}] = S_{0} + \\mu t
+    fn get_expectations(&self) -> Option<Array1<f64>> {
+        Some(self.s_0 + self.mu * &self.t)
+    }
+
+    /// Calculates the variance of the Variance Gamma process.
+    ///
+    /// # Output
+    /// - An array of variances of the stock price at each time step
+    ///
+    /// # LaTeX Formula
+    /// - Var[S_{t}] = (\\sigma^{2} + \\frac{\\mu^{2}}{\\textit{rate}}) t
+    fn get_variances(&self) -> Option<Array1<f64>> {
+        Some((self.sigma.powi(2) + self.mu.powi(2) / self.kappa) * &self.t)
     }
 
     /// Generates simulation paths for the Variance Gamma process.
@@ -416,9 +416,8 @@ impl StochasticProcess for VarianceGammaProcess {
 
 #[cfg(test)]
 mod tests {
-    use ndarray::Array1;
     use crate::utilities::TEST_ACCURACY;
-    use crate::stochastic_processes::StochasticProcess;
+    use crate::stochastic_processes::{StochasticProcessResult, StochasticProcess};
 
     #[test]
     fn unit_test_constant_elasticity_of_variance() -> () {
@@ -428,16 +427,11 @@ mod tests {
         let cev: ConstantElasticityOfVariance = ConstantElasticityOfVariance::build(
             1.0, 0.4, 0.5, n_paths, n_steps, 1.0, 100.0
         ).unwrap();
-        let paths: Vec<Array1<f64>> = cev.get_paths().unwrap();
-        assert_eq!(paths.len(), n_paths);
-        assert_eq!(paths[0].len(), n_steps + 1);
-        let mut final_steps: Vec<f64> = Vec::with_capacity(n_paths);
-        for i in 0..n_paths {
-            final_steps.push(paths[i][n_steps]);
-        }
-        let final_steps: Array1<f64> = Array1::from_vec(final_steps);
-        let expected_path: Array1<f64> = cev.get_expectations();
-        assert!((final_steps.mean().unwrap() - expected_path.last().unwrap()).abs() < 200_000_000.0 * TEST_ACCURACY);
+        let sp_result: StochasticProcessResult = cev.simulate().unwrap();
+        assert_eq!(sp_result.paths.len(), n_paths);
+        assert_eq!(sp_result.paths[0].len(), n_steps + 1);
+        assert_eq!(sp_result.expectations_path.clone().unwrap().len(), n_steps + 1);
+        assert!((sp_result.mean - sp_result.expectations_path.unwrap()[n_steps]).abs() < 200_000_000.0 * TEST_ACCURACY);
     }
 
     #[test]
@@ -448,16 +442,11 @@ mod tests {
         let hsv: HestonStochasticVolatility = HestonStochasticVolatility::new(
             0.1, 5.0, 0.07, 0.2, 0.0, n_paths, n_steps, 1.0, 100.0, 0.03
         );
-        let paths: Vec<Array1<f64>> = hsv.get_paths().unwrap();
-        assert_eq!(paths.len(), n_paths);
-        assert_eq!(paths[0].len(), n_steps + 1);
-        let mut final_steps: Vec<f64> = Vec::with_capacity(n_paths);
-        for i in 0..n_paths {
-            final_steps.push(paths[i][n_steps]);
-        }
-        let final_steps: Array1<f64> = Array1::from_vec(final_steps);
-        let expected_path: Array1<f64> = hsv.get_expectations();
-        assert!((final_steps.mean().unwrap() - expected_path.last().unwrap()).abs() < 1_000_000.0 * TEST_ACCURACY);
+        let sp_result: StochasticProcessResult = hsv.simulate().unwrap();
+        assert_eq!(sp_result.paths.len(), n_paths);
+        assert_eq!(sp_result.paths[0].len(), n_steps + 1);
+        assert_eq!(sp_result.expectations_path.clone().unwrap().len(), n_steps + 1);
+        assert!((sp_result.mean - sp_result.expectations_path.unwrap()[n_steps]).abs() < 1_000_000.0 * TEST_ACCURACY);
     }
 
     #[test]
@@ -466,8 +455,10 @@ mod tests {
         let n_paths: usize = 2;
         let n_steps: usize = 200;
         let vg: VarianceGammaProcess = VarianceGammaProcess::new(0.2, 0.3, 20.0, n_paths, n_steps, 1.0, 0.03);
-        let paths: Vec<Array1<f64>> = vg.get_paths().unwrap();
-        assert_eq!(paths.len(), n_paths);
-        assert_eq!(paths[0].len(), n_steps + 1);
+        let sp_result: StochasticProcessResult = vg.simulate().unwrap();
+        assert_eq!(sp_result.paths.len(), n_paths);
+        assert_eq!(sp_result.paths[0].len(), n_steps + 1);
+        assert_eq!(sp_result.expectations_path.unwrap().len(), n_steps + 1);
+        assert_eq!(sp_result.variances_path.unwrap().len(), n_steps + 1);
     }
 }

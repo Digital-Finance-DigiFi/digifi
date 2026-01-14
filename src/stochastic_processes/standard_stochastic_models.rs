@@ -32,23 +32,19 @@ pub enum FSRSimulationMethod {
 /// ```rust
 /// use ndarray::Array1;
 /// use digifi::utilities::TEST_ACCURACY;
-/// use digifi::stochastic_processes::{StochasticProcess, ArithmeticBrownianMotion};
+/// use digifi::stochastic_processes::{StochasticProcessResult, StochasticProcess, ArithmeticBrownianMotion};
 ///
 /// let n_paths: usize = 1_000;
 /// let n_steps: usize = 200;
 ///
 /// let abm: ArithmeticBrownianMotion = ArithmeticBrownianMotion::new(1.0, 0.4, n_paths, n_steps, 1.0, 100.0);
-/// let paths: Vec<Array1<f64>> = abm.get_paths().unwrap();
-///
-/// assert_eq!(paths.len(), n_paths);
-/// assert_eq!(paths[0].len(), n_steps + 1);
-/// let mut final_steps: Vec<f64> = Vec::with_capacity(n_paths);
-/// for i in 0..n_paths {
-///     final_steps.push(paths[i][n_steps]);
-/// }
-/// let final_steps: Array1<f64> = Array1::from_vec(final_steps);
-/// let expected_path: Array1<f64> = abm.get_expectations();
-/// assert!((final_steps.mean().unwrap() - expected_path.last().unwrap()).abs() < 10_000_000.0 * TEST_ACCURACY);
+/// let sp_result: StochasticProcessResult = abm.simulate().unwrap();
+/// 
+/// assert_eq!(sp_result.paths.len(), n_paths);
+/// assert_eq!(sp_result.paths[0].len(), n_steps + 1);
+/// assert_eq!(sp_result.expectations_path.clone().unwrap().len(), n_steps + 1);
+/// assert_eq!(sp_result.variances_path.unwrap().len(), n_steps + 1);
+/// assert!((sp_result.mean - sp_result.expectations_path.unwrap()[n_steps]).abs() < 10_000_000.0 * TEST_ACCURACY);
 /// ```
 pub struct ArithmeticBrownianMotion {
     /// Drift constant of the process
@@ -83,28 +79,6 @@ impl ArithmeticBrownianMotion {
         let dt: f64 = t_f / (n_steps as f64);
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
         ArithmeticBrownianMotion { mu, sigma, n_paths, n_steps, t_f, s_0, dt, t }
-    }
-
-    /// Calculates the expected path of the Arithmetic Brownian Motion.
-    /// 
-    /// # Output
-    /// - An array of expected values of the stock price at each time step
-    /// 
-    /// # LaTeX Formula
-    /// - E\[S_t\] = \\mu t + S_{0}
-    pub fn get_expectations(&self) -> Array1<f64> {
-        self.mu * &self.t + self.s_0
-    }
-
-    /// Calculates the variance of the Arithmetic Brownian Motion at each time step.
-    /// 
-    /// # Output
-    /// - An array of variances of the process at each time step
-    /// 
-    /// # LaTeX Formula
-    /// - Var[S_{t}] = \\sigma^{2} t
-    pub fn get_variance(&self) -> Array1<f64> {
-        &self.t * self.sigma.powi(2)
     }
 
     /// Calculates the auto-covariance of the Arithmetic Brownian Motion between two time points.
@@ -152,6 +126,28 @@ impl StochasticProcess for ArithmeticBrownianMotion {
         self.t_f
     }
 
+    /// Calculates the expected path of the Arithmetic Brownian Motion.
+    /// 
+    /// # Output
+    /// - An array of expected values of the stock price at each time step
+    /// 
+    /// # LaTeX Formula
+    /// - E\[S_t\] = \\mu t + S_{0}
+    fn get_expectations(&self) -> Option<Array1<f64>> {
+        Some(self.mu * &self.t + self.s_0)
+    }
+
+    /// Calculates the variance of the Arithmetic Brownian Motion at each time step.
+    /// 
+    /// # Output
+    /// - An array of variances of the process at each time step
+    /// 
+    /// # LaTeX Formula
+    /// - Var[S_{t}] = \\sigma^{2} t
+    fn get_variances(&self) -> Option<Array1<f64>> {
+        Some(&self.t * self.sigma.powi(2))
+    }
+
     /// Generates simulation paths for the Arithmetic Brownian Motion using the Euler-Maruyama method.
     /// 
     /// # Output
@@ -193,22 +189,18 @@ impl StochasticProcess for ArithmeticBrownianMotion {
 /// ```rust
 /// use ndarray::Array1;
 /// use digifi::utilities::TEST_ACCURACY;
-/// use digifi::stochastic_processes::{StochasticProcess, GeometricBrownianMotion};
+/// use digifi::stochastic_processes::{StochasticProcessResult, StochasticProcess, GeometricBrownianMotion};
 ///
 /// let n_paths: usize = 1_000;
 /// let n_steps: usize = 200;
 /// let gbm: GeometricBrownianMotion = GeometricBrownianMotion::new(0.0, 0.2, n_paths, n_steps, 1.0, 100.0);
-/// let paths: Vec<Array1<f64>> = gbm.get_paths().unwrap();
-///
-/// assert_eq!(paths.len(), n_paths);
-/// assert_eq!(paths[0].len(), n_steps + 1);
-/// let mut final_steps: Vec<f64> = Vec::with_capacity(n_paths);
-/// for i in 0..n_paths {
-///     final_steps.push(paths[i][n_steps]);
-/// }
-/// let final_steps: Array1<f64> = Array1::from_vec(final_steps);
-/// let expected_path: Array1<f64> = gbm.get_expectations();
-/// assert!((final_steps.mean().unwrap() - expected_path.last().unwrap()).abs() < 100_000_000.0 * TEST_ACCURACY);
+/// let sp_result: StochasticProcessResult = gbm.simulate().unwrap();
+/// 
+/// assert_eq!(sp_result.paths.len(), n_paths);
+/// assert_eq!(sp_result.paths[0].len(), n_steps + 1);
+/// assert_eq!(sp_result.expectations_path.clone().unwrap().len(), n_steps + 1);
+/// assert_eq!(sp_result.variances_path.unwrap().len(), n_steps + 1);
+/// assert!((sp_result.mean - sp_result.expectations_path.unwrap()[n_steps]).abs() < 100_000_000.0 * TEST_ACCURACY);
 /// ```
 pub struct GeometricBrownianMotion {
     /// Drift constant of the process
@@ -244,33 +236,6 @@ impl GeometricBrownianMotion {
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
         GeometricBrownianMotion { mu, sigma, n_paths, n_steps, t_f, s_0, dt, t }
     }
-
-    /// Calculates the expected path of the Geometric Brownian Motion. This represents the mean trajectory of the stock price over time.
-    /// 
-    /// # Output
-    /// - An array of expected values of the stock price at each time step, representing the mean trajectory
-    /// 
-    /// # LaTeX Formula:
-    /// - E\[S_t\] = S_{0} e^{\\mu t}
-    pub fn get_expectations(&self) -> Array1<f64> {
-        self.t.map(|t| { self.s_0 * (self.mu * t).exp() } )
-    }
-
-    /// Computes the variance of the stock price at each time step under the Geometric Brownian Motion model.
-    /// This provides an indication of the variability or risk associated with the stock price.
-    /// 
-    /// 
-    /// # Output
-    /// - An array of variances of the stock price at each time step
-    /// 
-    /// # LaTeX Formula
-    /// - \\textit{Var}[S_{t}] = (S^{2}_{0}) e^{2\\mu t} (e^{\\sigma^{2} t} - 1)
-    pub fn get_variance(&self) -> Array1<f64> {
-        let s_0_sq: f64 = self.s_0.powi(2);
-        let two_mu: f64 = 2.0 * self.mu;
-        let sigma_sq: f64 = self.sigma.powi(2);
-        self.t.map(|t| { s_0_sq * (two_mu * t).exp() * ((t * sigma_sq).exp() - 1.0) } )
-    }
 }
 
 impl StochasticProcess for GeometricBrownianMotion {
@@ -284,6 +249,33 @@ impl StochasticProcess for GeometricBrownianMotion {
 
     fn get_t_f(&self) -> f64 {
         self.t_f
+    }
+
+    /// Calculates the expected path of the Geometric Brownian Motion. This represents the mean trajectory of the stock price over time.
+    /// 
+    /// # Output
+    /// - An array of expected values of the stock price at each time step, representing the mean trajectory
+    /// 
+    /// # LaTeX Formula:
+    /// - E\[S_t\] = S_{0} e^{\\mu t}
+    fn get_expectations(&self) -> Option<Array1<f64>> {
+        Some(self.t.map(|t| { self.s_0 * (self.mu * t).exp() } ))
+    }
+
+    /// Computes the variance of the stock price at each time step under the Geometric Brownian Motion model.
+    /// This provides an indication of the variability or risk associated with the stock price.
+    /// 
+    /// 
+    /// # Output
+    /// - An array of variances of the stock price at each time step
+    /// 
+    /// # LaTeX Formula
+    /// - \\textit{Var}[S_{t}] = (S^{2}_{0}) e^{2\\mu t} (e^{\\sigma^{2} t} - 1)
+    fn get_variances(&self) -> Option<Array1<f64>> {
+        let s_0_sq: f64 = self.s_0.powi(2);
+        let two_mu: f64 = 2.0 * self.mu;
+        let sigma_sq: f64 = self.sigma.powi(2);
+        Some(self.t.map(|t| { s_0_sq * (two_mu * t).exp() * ((t * sigma_sq).exp() - 1.0) } ))
     }
 
     /// Simulates paths of the Geometric Brownian Motion using the Euler-Maruyama method.
@@ -328,23 +320,19 @@ impl StochasticProcess for GeometricBrownianMotion {
 /// ```rust
 /// use ndarray::Array1;
 /// use digifi::utilities::TEST_ACCURACY;
-/// use digifi::stochastic_processes::{StochasticProcess, OrnsteinUhlenbeckProcess};
+/// use digifi::stochastic_processes::{StochasticProcessResult, StochasticProcess, OrnsteinUhlenbeckProcess};
 ///
 /// let n_paths: usize = 1_000;
 /// let n_steps: usize = 200;
 ///
 /// let oup: OrnsteinUhlenbeckProcess = OrnsteinUhlenbeckProcess::new(0.07, 0.1, 10.0, n_paths, n_steps, 1.0, 0.05, true);
-/// let paths: Vec<Array1<f64>> = oup.get_paths().unwrap();
+/// let sp_result: StochasticProcessResult = oup.simulate().unwrap();
 /// 
-/// assert_eq!(paths.len(), n_paths);
-/// assert_eq!(paths[0].len(), n_steps + 1);
-/// let mut final_steps: Vec<f64> = Vec::with_capacity(n_paths);
-/// for i in 0..n_paths {
-///     final_steps.push(paths[i][n_steps]);
-/// }
-/// let final_steps: Array1<f64> = Array1::from_vec(final_steps);
-/// let expected_path: Array1<f64> = oup.get_expectations();
-/// assert!((final_steps.mean().unwrap() - expected_path.last().unwrap()).abs() < 1_000_000.0 * TEST_ACCURACY);
+/// assert_eq!(sp_result.paths.len(), n_paths);
+/// assert_eq!(sp_result.paths[0].len(), n_steps + 1);
+/// assert_eq!(sp_result.expectations_path.clone().unwrap().len(), n_steps + 1);
+/// assert_eq!(sp_result.variances_path.unwrap().len(), n_steps + 1);
+/// assert!((sp_result.mean - sp_result.expectations_path.unwrap()[n_steps]).abs() < 1_000_000.0 * TEST_ACCURACY);
 /// ```
 pub struct OrnsteinUhlenbeckProcess {
     /// Drift constant of the process
@@ -386,31 +374,6 @@ impl OrnsteinUhlenbeckProcess {
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
         OrnsteinUhlenbeckProcess { mu, sigma, alpha, n_paths, n_steps, t_f, s_0, dt, t, analytic_em }
     }
-
-    /// Calculates the expected path of the Ornstein-Uhlenbeck Process, showing the mean-reverting nature of the process over time.
-    /// 
-    /// # Output
-    /// - An array (np.ndarray) of expected values of the process at each time step
-    /// 
-    /// # LaTeX Formula
-    /// - E\[S_t\] = \\mu + (S_{0} - \\mu) e^{-\\alpha t}
-    pub fn get_expectations(&self) -> Array1<f64> {
-        let drift_coef: f64 = self.s_0 - self.mu;
-        self.t.map(|t| { self.mu + drift_coef * (-self.alpha * t).exp() } )
-    }
-
-    /// Computes the variance of the Ornstein-Uhlenbeck Process at each time step, providing insights into the variability around the mean.
-    /// 
-    /// # Output
-    /// - An array of variances of the process at each time step
-    /// 
-    /// # LaTeX Formula
-    /// - \\textit{Var}[S_{t}] = \\frac{\\sigma^{2}}{2\\alpha} (1 - e^{-2\\alpha t})
-    pub fn get_variance(&self) -> Array1<f64> {
-        let two_alpha: f64 = 2.0 * self.alpha;
-        let sigma_sq: f64 = self.sigma.powi(2);
-        self.t.map(|t| { (1.0 - (-two_alpha * t).exp()) * sigma_sq / two_alpha } )
-    }
 }
 
 impl StochasticProcess for OrnsteinUhlenbeckProcess {
@@ -424,6 +387,31 @@ impl StochasticProcess for OrnsteinUhlenbeckProcess {
 
     fn get_t_f(&self) -> f64 {
         self.t_f
+    }
+
+    /// Calculates the expected path of the Ornstein-Uhlenbeck Process, showing the mean-reverting nature of the process over time.
+    /// 
+    /// # Output
+    /// - An array (np.ndarray) of expected values of the process at each time step
+    /// 
+    /// # LaTeX Formula
+    /// - E\[S_t\] = \\mu + (S_{0} - \\mu) e^{-\\alpha t}
+    fn get_expectations(&self) -> Option<Array1<f64>> {
+        let drift_coef: f64 = self.s_0 - self.mu;
+        Some(self.t.map(|t| { self.mu + drift_coef * (-self.alpha * t).exp() } ))
+    }
+
+    /// Computes the variance of the Ornstein-Uhlenbeck Process at each time step, providing insights into the variability around the mean.
+    /// 
+    /// # Output
+    /// - An array of variances of the process at each time step
+    /// 
+    /// # LaTeX Formula
+    /// - \\textit{Var}[S_{t}] = \\frac{\\sigma^{2}}{2\\alpha} (1 - e^{-2\\alpha t})
+    fn get_variances(&self) -> Option<Array1<f64>> {
+        let two_alpha: f64 = 2.0 * self.alpha;
+        let sigma_sq: f64 = self.sigma.powi(2);
+        Some(self.t.map(|t| { (1.0 - (-two_alpha * t).exp()) * sigma_sq / two_alpha } ))
     }
 
     /// Simulates paths of the Ornstein-Uhlenbeck Process using the Euler-Maruyama method.
@@ -485,22 +473,18 @@ impl StochasticProcess for OrnsteinUhlenbeckProcess {
 /// ```rust
 /// use ndarray::Array1;
 /// use digifi::utilities::TEST_ACCURACY;
-/// use digifi::stochastic_processes::{StochasticProcess, BrownianBridge};
+/// use digifi::stochastic_processes::{StochasticProcessResult, StochasticProcess, BrownianBridge};
 ///
 /// let n_paths: usize = 1_000;
 /// let n_steps: usize = 200;
 /// let bb: BrownianBridge = BrownianBridge::new(1.0, 2.0, 0.5, n_paths, n_steps, 1.0);
-/// let paths: Vec<Array1<f64>> = bb.get_paths().unwrap();
-///
-/// assert_eq!(paths.len(), n_paths);
-/// assert_eq!(paths[0].len(), n_steps + 1);
-/// let mut final_steps: Vec<f64> = Vec::with_capacity(n_paths);
-/// for i in 0..n_paths {
-///    final_steps.push(paths[i][n_steps-1]);
-/// }
-/// let final_steps: Array1<f64> = Array1::from_vec(final_steps);
-/// let expected_path: Array1<f64> = bb.get_expectations();
-/// assert!((final_steps.mean().unwrap() - expected_path[expected_path.len()-2]).abs() < 1_000_000.0 * TEST_ACCURACY);
+/// let sp_result: StochasticProcessResult = bb.simulate().unwrap();
+/// 
+/// assert_eq!(sp_result.paths.len(), n_paths);
+/// assert_eq!(sp_result.paths[0].len(), n_steps + 1);
+/// assert_eq!(sp_result.expectations_path.clone().unwrap().len(), n_steps + 1);
+/// assert_eq!(sp_result.variances_path.unwrap().len(), n_steps + 1);
+/// assert!((sp_result.mean - sp_result.expectations_path.unwrap()[n_steps]).abs() < 1_000_000.0 * TEST_ACCURACY);
 /// ```
 pub struct BrownianBridge {
     /// Initial value of the process
@@ -536,31 +520,6 @@ impl BrownianBridge {
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
         BrownianBridge { alpha, beta, sigma, n_paths, n_steps, t_f, dt, t }
     }
-
-    /// Calculates the expected path of the Brownian Bridge. It represents the expected value of the process at each time step,
-    /// starting at 'alpha' and trending towards 'beta'.
-    /// 
-    /// # Output
-    /// - An array of expected values of the process at each time step
-    /// 
-    /// # LaTeX Formula
-    /// - E[S_{t}] = \\alpha + (\\beta - \\alpha) \\frac{t}{T}
-    pub fn get_expectations(&self) -> Array1<f64> {
-        let c: f64 = (self.beta - self.alpha) / self.t_f;
-        self.t.map(|t| self.alpha + c * t )
-    }
-
-    /// Computes the variance of the Brownian Bridge at each time step.
-    /// This illustrates how the variability of the process decreases as it approaches the endpoint 'beta' at time T.
-    /// 
-    /// # Output
-    /// - An array of variances of the process at each time step
-    /// 
-    /// # LaTeX Formula
-    /// - \\text{Var}[S_{t}] = \\frac{t(T-t)}{T} \\sigma^{2}
-    pub fn get_variance(&self) -> Array1<f64> {
-        &self.t * (self.t_f - &self.t) / self.t_f
-    }
 }
 
 impl StochasticProcess for BrownianBridge {
@@ -574,6 +533,31 @@ impl StochasticProcess for BrownianBridge {
 
     fn get_t_f(&self) -> f64 {
         self.t_f
+    }
+
+    /// Calculates the expected path of the Brownian Bridge. It represents the expected value of the process at each time step,
+    /// starting at 'alpha' and trending towards 'beta'.
+    /// 
+    /// # Output
+    /// - An array of expected values of the process at each time step
+    /// 
+    /// # LaTeX Formula
+    /// - E[S_{t}] = \\alpha + (\\beta - \\alpha) \\frac{t}{T}
+    fn get_expectations(&self) -> Option<Array1<f64>> {
+        let c: f64 = (self.beta - self.alpha) / self.t_f;
+        Some(self.t.map(|t| self.alpha + c * t ))
+    }
+
+    /// Computes the variance of the Brownian Bridge at each time step.
+    /// This illustrates how the variability of the process decreases as it approaches the endpoint 'beta' at time T.
+    /// 
+    /// # Output
+    /// - An array of variances of the process at each time step
+    /// 
+    /// # LaTeX Formula
+    /// - \\text{Var}[S_{t}] = \\frac{t(T-t)}{T} \\sigma^{2}
+    fn get_variances(&self) -> Option<Array1<f64>> {
+        Some(&self.t * (self.t_f - &self.t) / self.t_f)
     }
 
     /// Generates simulation paths for the Brownian Bridge using the Euler-Maruyama method.
@@ -619,23 +603,19 @@ impl StochasticProcess for BrownianBridge {
 /// ```rust
 /// use ndarray::Array1;
 /// use digifi::utilities::TEST_ACCURACY;
-/// use digifi::stochastic_processes::{StochasticProcess, FellerSquareRootProcess, FSRSimulationMethod};
+/// use digifi::stochastic_processes::{StochasticProcessResult, StochasticProcess, FellerSquareRootProcess, FSRSimulationMethod};
 ///
 /// let n_paths: usize = 1_000;
 /// let n_steps: usize = 200;
 ///
 /// let fsrp: FellerSquareRootProcess = FellerSquareRootProcess::new(0.05, 0.265, 5.0, n_paths, n_steps, 1.0, 0.03, FSRSimulationMethod::EulerMaruyama);
-/// let paths: Vec<Array1<f64>> = fsrp.get_paths().unwrap();
-///
-/// assert_eq!(paths.len(), n_paths);
-/// assert_eq!(paths[0].len(), n_steps + 1);
-/// let mut final_steps: Vec<f64> = Vec::with_capacity(n_paths);
-/// for i in 0..n_paths {
-///    final_steps.push(paths[i][n_steps]);
-/// }
-/// let final_steps: Array1<f64> = Array1::from_vec(final_steps);
-/// let expected_path: Array1<f64> = fsrp.get_expectations();
-/// assert!((final_steps.mean().unwrap() - expected_path.last().unwrap()).abs() < 1_000_000.0 * TEST_ACCURACY);
+/// let sp_result: StochasticProcessResult = fsrp.simulate().unwrap();
+/// 
+/// assert_eq!(sp_result.paths.len(), n_paths);
+/// assert_eq!(sp_result.paths[0].len(), n_steps + 1);
+/// assert_eq!(sp_result.expectations_path.clone().unwrap().len(), n_steps + 1);
+/// assert_eq!(sp_result.variances_path.unwrap().len(), n_steps + 1);
+/// assert!((sp_result.mean - sp_result.expectations_path.unwrap()[n_steps]).abs() < 1_000_000.0 * TEST_ACCURACY);
 /// ```
 pub struct FellerSquareRootProcess {
     /// Drift constant of the process
@@ -677,34 +657,6 @@ impl FellerSquareRootProcess {
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
         FellerSquareRootProcess { mu, sigma, alpha, n_paths, n_steps, t_f, s_0, dt, t, method }
     }
-
-    /// Calculates the expected path of the Feller Square-Root Process, showing the mean-reverting nature over time towards the long-term mean \\mu.
-    /// 
-    /// # Output
-    /// - An array of expected values of the process at each time step
-    /// 
-    /// # LaTeX Formula
-    /// - E[S_{t}] = \\mu + (S_{0} - \\mu) e^{-\\alpha t}
-    pub fn get_expectations(&self) -> Array1<f64> {
-        let drift_delta: f64 = self.s_0 - self.mu;
-        self.t.map(|t| { self.mu + drift_delta * (-self.alpha * t).exp() } )
-    }
-
-    /// Computes the variance of the Feller Square-Root Process at each time step, providing insights into the variability around the mean.
-    /// 
-    /// # Output
-    /// - An array of variances of the process at each time step
-    pub fn get_variance(&self) -> Array1<f64> {
-        let neg_two_alpha: f64 = -2.0 * self.alpha;
-        let mult_1: f64 = self.s_0 / self.alpha;
-        let mult_2: f64 = self.mu / (2.0 * self.alpha);
-        let sigma_sq: f64 = self.sigma.powi(2);
-        self.t.map(|t| {
-            let v_1: f64 = ((-self.alpha * t).exp() - (neg_two_alpha * t).exp()) * mult_1;
-            let v_2: f64 = (neg_two_alpha * t).exp() * ((self.alpha * t).exp() - 1.0).powi(2) * mult_2;
-            sigma_sq * (v_1 + v_2)
-        } )
-    }
 }
 
 impl StochasticProcess for FellerSquareRootProcess {
@@ -718,6 +670,34 @@ impl StochasticProcess for FellerSquareRootProcess {
 
     fn get_t_f(&self) -> f64 {
         self.t_f
+    }
+
+    /// Calculates the expected path of the Feller Square-Root Process, showing the mean-reverting nature over time towards the long-term mean \\mu.
+    /// 
+    /// # Output
+    /// - An array of expected values of the process at each time step
+    /// 
+    /// # LaTeX Formula
+    /// - E[S_{t}] = \\mu + (S_{0} - \\mu) e^{-\\alpha t}
+    fn get_expectations(&self) -> Option<Array1<f64>> {
+        let drift_delta: f64 = self.s_0 - self.mu;
+        Some(self.t.map(|t| { self.mu + drift_delta * (-self.alpha * t).exp() } ))
+    }
+
+    /// Computes the variance of the Feller Square-Root Process at each time step, providing insights into the variability around the mean.
+    /// 
+    /// # Output
+    /// - An array of variances of the process at each time step
+    fn get_variances(&self) -> Option<Array1<f64>> {
+        let neg_two_alpha: f64 = -2.0 * self.alpha;
+        let mult_1: f64 = self.s_0 / self.alpha;
+        let mult_2: f64 = self.mu / (2.0 * self.alpha);
+        let sigma_sq: f64 = self.sigma.powi(2);
+        Some(self.t.map(|t| {
+            let v_1: f64 = ((-self.alpha * t).exp() - (neg_two_alpha * t).exp()) * mult_1;
+            let v_2: f64 = (neg_two_alpha * t).exp() * ((self.alpha * t).exp() - 1.0).powi(2) * mult_2;
+            sigma_sq * (v_1 + v_2)
+        } ))
     }
 
     /// Simulates paths of the Feller Square-Root Process using different methods: Euler-Maruyama, Analytic Euler-Maruyama,
@@ -768,8 +748,7 @@ impl StochasticProcess for FellerSquareRootProcess {
 
 #[cfg(test)]
 mod tests {
-    use ndarray::Array1;
-    use crate::stochastic_processes::StochasticProcess;
+    use crate::stochastic_processes::{StochasticProcessResult, StochasticProcess};
     use crate::utilities::TEST_ACCURACY;
 
     #[test]
@@ -778,16 +757,12 @@ mod tests {
         let n_paths: usize = 1_000;
         let n_steps: usize = 200;
         let abm: ArithmeticBrownianMotion = ArithmeticBrownianMotion::new(1.0, 0.4, n_paths, n_steps, 1.0, 100.0);
-        let paths: Vec<Array1<f64>> = abm.get_paths().unwrap();
-        assert_eq!(paths.len(), n_paths);
-        assert_eq!(paths[0].len(), n_steps + 1);
-        let mut final_steps: Vec<f64> = Vec::with_capacity(n_paths);
-        for i in 0..n_paths {
-            final_steps.push(paths[i][n_steps]);
-        }
-        let final_steps: Array1<f64> = Array1::from_vec(final_steps);
-        let expected_path: Array1<f64> = abm.get_expectations();
-        assert!((final_steps.mean().unwrap() - expected_path.last().unwrap()).abs() < 10_000_000.0 * TEST_ACCURACY);
+        let sp_result: StochasticProcessResult = abm.simulate().unwrap();
+        assert_eq!(sp_result.paths.len(), n_paths);
+        assert_eq!(sp_result.paths[0].len(), n_steps + 1);
+        assert_eq!(sp_result.expectations_path.clone().unwrap().len(), n_steps + 1);
+        assert_eq!(sp_result.variances_path.unwrap().len(), n_steps + 1);
+        assert!((sp_result.mean - sp_result.expectations_path.unwrap()[n_steps]).abs() < 10_000_000.0 * TEST_ACCURACY);
     }
 
     #[test]
@@ -796,16 +771,12 @@ mod tests {
         let n_paths: usize = 1_000;
         let n_steps: usize = 200;
         let gbm: GeometricBrownianMotion = GeometricBrownianMotion::new(0.0, 0.2, n_paths, n_steps, 1.0, 100.0);
-        let paths: Vec<Array1<f64>> = gbm.get_paths().unwrap();
-        assert_eq!(paths.len(), n_paths);
-        assert_eq!(paths[0].len(), n_steps + 1);
-        let mut final_steps: Vec<f64> = Vec::with_capacity(n_paths);
-        for i in 0..n_paths {
-            final_steps.push(paths[i][n_steps]);
-        }
-        let final_steps: Array1<f64> = Array1::from_vec(final_steps);
-        let expected_path: Array1<f64> = gbm.get_expectations();
-        assert!((final_steps.mean().unwrap() - expected_path.last().unwrap()).abs() < 100_000_000.0 * TEST_ACCURACY);
+        let sp_result: StochasticProcessResult = gbm.simulate().unwrap();
+        assert_eq!(sp_result.paths.len(), n_paths);
+        assert_eq!(sp_result.paths[0].len(), n_steps + 1);
+        assert_eq!(sp_result.expectations_path.clone().unwrap().len(), n_steps + 1);
+        assert_eq!(sp_result.variances_path.unwrap().len(), n_steps + 1);
+        assert!((sp_result.mean - sp_result.expectations_path.unwrap()[n_steps]).abs() < 100_000_000.0 * TEST_ACCURACY);
     }
 
     #[test]
@@ -816,16 +787,12 @@ mod tests {
         let oup: OrnsteinUhlenbeckProcess = OrnsteinUhlenbeckProcess::new(
             0.07, 0.1, 10.0, n_paths, n_steps, 1.0, 0.05, true
         );
-        let paths: Vec<Array1<f64>> = oup.get_paths().unwrap();
-        assert_eq!(paths.len(), n_paths);
-        assert_eq!(paths[0].len(), n_steps + 1);
-        let mut final_steps: Vec<f64> = Vec::with_capacity(n_paths);
-        for i in 0..n_paths {
-            final_steps.push(paths[i][n_steps]);
-        }
-        let final_steps: Array1<f64> = Array1::from_vec(final_steps);
-        let expected_path: Array1<f64> = oup.get_expectations();
-        assert!((final_steps.mean().unwrap() - expected_path.last().unwrap()).abs() < 1_000_000.0 * TEST_ACCURACY);
+        let sp_result: StochasticProcessResult = oup.simulate().unwrap();
+        assert_eq!(sp_result.paths.len(), n_paths);
+        assert_eq!(sp_result.paths[0].len(), n_steps + 1);
+        assert_eq!(sp_result.expectations_path.clone().unwrap().len(), n_steps + 1);
+        assert_eq!(sp_result.variances_path.unwrap().len(), n_steps + 1);
+        assert!((sp_result.mean - sp_result.expectations_path.unwrap()[n_steps]).abs() < 1_000_000.0 * TEST_ACCURACY);
     }
 
     #[test]
@@ -834,16 +801,12 @@ mod tests {
         let n_paths: usize = 1_000;
         let n_steps: usize = 200;
         let bb: BrownianBridge = BrownianBridge::new(1.0, 2.0, 0.5, n_paths, n_steps, 1.0);
-        let paths: Vec<Array1<f64>> = bb.get_paths().unwrap();
-        assert_eq!(paths.len(), n_paths);
-        assert_eq!(paths[0].len(), n_steps + 1);
-        let mut final_steps: Vec<f64> =Vec::with_capacity(n_paths);
-        for i in 0..n_paths {
-           final_steps.push(paths[i][n_steps-1]);
-        }
-        let final_steps: Array1<f64> = Array1::from_vec(final_steps);
-        let expected_path: Array1<f64> = bb.get_expectations();
-        assert!((final_steps.mean().unwrap() - expected_path[expected_path.len()-2]).abs() < 1_000_000.0 * TEST_ACCURACY);
+        let sp_result: StochasticProcessResult = bb.simulate().unwrap();
+        assert_eq!(sp_result.paths.len(), n_paths);
+        assert_eq!(sp_result.paths[0].len(), n_steps + 1);
+        assert_eq!(sp_result.expectations_path.clone().unwrap().len(), n_steps + 1);
+        assert_eq!(sp_result.variances_path.unwrap().len(), n_steps + 1);
+        assert!((sp_result.mean - sp_result.expectations_path.unwrap()[n_steps]).abs() < 1_000_000.0 * TEST_ACCURACY);
     }
 
     #[test]
@@ -851,17 +814,14 @@ mod tests {
         use crate::stochastic_processes::standard_stochastic_models::{FellerSquareRootProcess, FSRSimulationMethod};
         let n_paths: usize = 1_000;
         let n_steps: usize = 200;
-        let fsrp: FellerSquareRootProcess = FellerSquareRootProcess::new(0.05, 0.265, 5.0, n_paths, n_steps,
-                                                                         1.0, 0.03, FSRSimulationMethod::EulerMaruyama);
-        let paths: Vec<Array1<f64>> = fsrp.get_paths().unwrap();
-        assert_eq!(paths.len(), n_paths);
-        assert_eq!(paths[0].len(), n_steps + 1);
-        let mut final_steps: Vec<f64> = Vec::with_capacity(n_paths);
-        for i in 0..n_paths {
-           final_steps.push(paths[i][n_steps]);
-        }
-        let final_steps: Array1<f64> = Array1::from_vec(final_steps);
-        let expected_path: Array1<f64> = fsrp.get_expectations();
-        assert!((final_steps.mean().unwrap() - expected_path.last().unwrap()).abs() < 1_000_000.0 * TEST_ACCURACY);
+        let fsrp: FellerSquareRootProcess = FellerSquareRootProcess::new(
+            0.05, 0.265, 5.0, n_paths, n_steps,1.0, 0.03, FSRSimulationMethod::EulerMaruyama,
+        );
+        let sp_result: StochasticProcessResult = fsrp.simulate().unwrap();
+        assert_eq!(sp_result.paths.len(), n_paths);
+        assert_eq!(sp_result.paths[0].len(), n_steps + 1);
+        assert_eq!(sp_result.expectations_path.clone().unwrap().len(), n_steps + 1);
+        assert_eq!(sp_result.variances_path.unwrap().len(), n_steps + 1);
+        assert!((sp_result.mean - sp_result.expectations_path.unwrap()[n_steps]).abs() < 1_000_000.0 * TEST_ACCURACY);
     }
 }

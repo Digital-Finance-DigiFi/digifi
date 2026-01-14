@@ -325,10 +325,8 @@ impl LinearRegressionAnalysis {
         }
         if self.settings.enable_t_test {
             match &self.settings.t_test_h0s {
-                Some(v) => if v.len() != fc_len {
-                    return Err(DigiFiError::UnmatchingLength { array_1: "feature collection".to_owned(), array_2: "t_test_h0s".to_owned(), });
-                },
-                None => (),
+                Some(v) if v.len() != fc_len => return Err(DigiFiError::UnmatchingLength { array_1: "feature collection".to_owned(), array_2: "t_test_h0s".to_owned(), }),
+                _ => (),
             }
         }
         Ok(())

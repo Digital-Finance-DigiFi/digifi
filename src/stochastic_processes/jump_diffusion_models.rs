@@ -25,23 +25,19 @@ use crate::random_generators::generator_algorithms::inverse_transform;
 /// ```rust
 /// use ndarray::Array1;
 /// use digifi::utilities::TEST_ACCURACY;
-/// use digifi::stochastic_processes::{StochasticProcess, MertonJumpDiffusionProcess};
+/// use digifi::stochastic_processes::{StochasticProcessResult, StochasticProcess, MertonJumpDiffusionProcess};
 ///
 /// let n_paths: usize = 1_000;
 /// let n_steps: usize = 200;
 ///
 /// let mjd: MertonJumpDiffusionProcess = MertonJumpDiffusionProcess::new(0.03, 0.2, -0.03, 0.1, 1.5, n_paths, n_steps, 1.0, 100.0);
-/// let paths: Vec<Array1<f64>> = mjd.get_paths().unwrap();
+/// let sp_result: StochasticProcessResult = mjd.simulate().unwrap();
 ///
-/// assert_eq!(paths.len(), n_paths);
-/// assert_eq!(paths[0].len(), n_steps + 1);
-/// let mut final_steps: Vec<f64> = Vec::with_capacity(n_paths);
-/// for i in 0..n_paths {
-///    final_steps.push(paths[i][n_steps]);
-/// }
-/// let final_steps: Array1<f64> = Array1::from_vec(final_steps);
-/// let expected_path: Array1<f64> = mjd.get_expectations();
-/// assert!((final_steps.mean().unwrap() - expected_path.last().unwrap()).abs() < 10_000_000.0 * TEST_ACCURACY);
+/// assert_eq!(sp_result.paths.len(), n_paths);
+/// assert_eq!(sp_result.paths[0].len(), n_steps + 1);
+/// assert_eq!(sp_result.expectations_path.clone().unwrap().len(), n_steps + 1);
+/// assert_eq!(sp_result.variances_path.unwrap().len(), n_steps + 1);
+/// assert!((sp_result.mean - sp_result.expectations_path.unwrap()[n_steps]).abs() < 10_000_000.0 * TEST_ACCURACY);
 /// ```
 pub struct MertonJumpDiffusionProcess {
     /// Mean of the base stochastic process (i.e., process without jumps)
@@ -86,28 +82,6 @@ impl MertonJumpDiffusionProcess {
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
         MertonJumpDiffusionProcess { mu_s, sigma_s, mu_j, sigma_j, lambda_j, n_paths, n_steps, t_f, s_0, dt, t }
     }
-
-    /// Calculates the expected path of the Merton Jump-Diffusion process.
-    /// 
-    /// # Output
-    /// - An array of expected values of the stock price at each time step
-    /// 
-    /// # LaTeX Formula
-    /// - E\[S_t\] = S_{0} + t(\\mu_{s} + \\lambda_{j}\\mu_{j})
-    pub fn get_expectations(&self) -> Array1<f64> {
-        self.s_0 + &self.t*(self.mu_s + self.lambda_j * self.mu_j)
-    }
-
-    /// Calculates the variance of the Merton Jump-Diffusion process at each time step.
-    /// 
-    /// # Output
-    /// - An array of variances of the process at each time step
-    /// 
-    /// # LaTeX Formula
-    /// - Var[S_{t}] = t(\\mu^{2}_{s} + \\lambda_{j}(\\mu^{2}_{j} + \\sigma^{2}_{j}))
-    pub fn get_variance(&self) -> Array1<f64> {
-        &self.t * (self.mu_s.powi(2) + self.lambda_j*(self.mu_j.powi(2) + self.sigma_j.powi(2)))
-    }
 }
 
 impl StochasticProcess for MertonJumpDiffusionProcess {
@@ -121,6 +95,28 @@ impl StochasticProcess for MertonJumpDiffusionProcess {
 
     fn get_t_f(&self) -> f64 {
         self.t_f
+    }
+
+    /// Calculates the expected path of the Merton Jump-Diffusion process.
+    /// 
+    /// # Output
+    /// - An array of expected values of the stock price at each time step
+    /// 
+    /// # LaTeX Formula
+    /// - E\[S_t\] = S_{0} + t(\\mu_{s} + \\lambda_{j}\\mu_{j})
+    fn get_expectations(&self) -> Option<Array1<f64>> {
+        Some(self.s_0 + &self.t*(self.mu_s + self.lambda_j * self.mu_j))
+    }
+
+    /// Calculates the variance of the Merton Jump-Diffusion process at each time step.
+    /// 
+    /// # Output
+    /// - An array of variances of the process at each time step
+    /// 
+    /// # LaTeX Formula
+    /// - Var[S_{t}] = t(\\mu^{2}_{s} + \\lambda_{j}(\\mu^{2}_{j} + \\sigma^{2}_{j}))
+    fn get_variances(&self) -> Option<Array1<f64>> {
+        Some(&self.t * (self.mu_s.powi(2) + self.lambda_j*(self.mu_j.powi(2) + self.sigma_j.powi(2))))
     }
 
     /// Generates simulation paths for the Merton Jump-Diffusion process.
@@ -172,23 +168,19 @@ impl StochasticProcess for MertonJumpDiffusionProcess {
 /// ```rust
 /// use ndarray::Array1;
 /// use digifi::utilities::TEST_ACCURACY;
-/// use digifi::stochastic_processes::{StochasticProcess, KouJumpDiffusionProcess};
+/// use digifi::stochastic_processes::{StochasticProcessResult, StochasticProcess, KouJumpDiffusionProcess};
 ///
 /// let n_paths: usize = 1_000;
 /// let n_steps: usize = 200;
 ///
 /// let kjd: KouJumpDiffusionProcess = KouJumpDiffusionProcess::build(0.2, 0.3, 0.5, 9.0, 5.0, 0.5, n_paths, n_steps, 1.0, 100.0).unwrap();
-/// let paths: Vec<Array1<f64>> = kjd.get_paths().unwrap();
+/// let sp_result: StochasticProcessResult = kjd.simulate().unwrap();
 ///
-/// assert_eq!(paths.len(), n_paths);
-/// assert_eq!(paths[0].len(), n_steps + 1);
-/// let mut final_steps: Vec<f64> = Vec::with_capacity(n_paths);
-/// for i in 0..n_paths {
-///    final_steps.push(paths[i][n_steps]);
-/// }
-/// let final_steps: Array1<f64> = Array1::from_vec(final_steps);
-/// let expected_path: Array1<f64> = kjd.get_expectations();
-/// assert!((final_steps.mean().unwrap() - expected_path.last().unwrap()).abs() < 20_000_000.0 * TEST_ACCURACY);
+/// assert_eq!(sp_result.paths.len(), n_paths);
+/// assert_eq!(sp_result.paths[0].len(), n_steps + 1);
+/// assert_eq!(sp_result.expectations_path.clone().unwrap().len(), n_steps + 1);
+/// assert_eq!(sp_result.variances_path.unwrap().len(), n_steps + 1);
+/// assert!((sp_result.mean - sp_result.expectations_path.unwrap()[n_steps]).abs() < 20_000_000.0 * TEST_ACCURACY);
 /// ```
 pub struct KouJumpDiffusionProcess {
     /// Mean of the base stochastic process (i.e., process without jumps)
@@ -245,28 +237,6 @@ impl KouJumpDiffusionProcess {
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
         Ok(KouJumpDiffusionProcess { mu, sigma, lambda_n, eta_1, eta_2, p, n_paths, n_steps, t_f, s_0, dt, t })
     }
-
-    /// Calculates the expected path of the Kou Jump-Diffusion process
-    /// 
-    /// # Output
-    /// - An array of expected values of the stock price at each time step
-    /// 
-    /// # LaTeX Formula
-    /// - E\[S_t\] = S_{0} + t(\\mu + \\lambda_{n}(\\frac{p}{\\eta_{1}} - \\frac{1-p}{\\eta_{2}}))
-    pub fn get_expectations(&self) -> Array1<f64> {
-        self.s_0 + &self.t * (self.mu + self.lambda_n * (self.p / self.eta_1 - (1.0 - self.p) / self.eta_2))
-    }
-
-    /// Calculates the variance of the Kou Jump-Diffusion process.
-    /// 
-    /// # Output
-    /// - An array of variances of the process at each time step
-    /// 
-    /// # LaTeX Formula
-    /// - Var[S_{t}] = t(\\sigma^{2} + 2\\lambda_{n}(\\frac{p}{\\eta^{2}_{1}} + \\frac{1-p}{\\eta^{2}_{2}}))
-    pub fn get_variance(&self) -> Array1<f64> {
-        &self.t * (self.sigma.powi(2) + 2.0 * self.lambda_n * (self.p / self.eta_1.powi(2) + (1.0 - self.p) / self.eta_2.powi(2)))
-    }
 }
 
 impl ErrorTitle for KouJumpDiffusionProcess {
@@ -286,6 +256,28 @@ impl StochasticProcess for KouJumpDiffusionProcess {
 
     fn get_t_f(&self) -> f64 {
         self.t_f
+    }
+
+    /// Calculates the expected path of the Kou Jump-Diffusion process
+    /// 
+    /// # Output
+    /// - An array of expected values of the stock price at each time step
+    /// 
+    /// # LaTeX Formula
+    /// - E\[S_t\] = S_{0} + t(\\mu + \\lambda_{n}(\\frac{p}{\\eta_{1}} - \\frac{1-p}{\\eta_{2}}))
+    fn get_expectations(&self) -> Option<Array1<f64>> {
+        Some(self.s_0 + &self.t * (self.mu + self.lambda_n * (self.p / self.eta_1 - (1.0 - self.p) / self.eta_2)))
+    }
+
+    /// Calculates the variance of the Kou Jump-Diffusion process.
+    /// 
+    /// # Output
+    /// - An array of variances of the process at each time step
+    /// 
+    /// # LaTeX Formula
+    /// - Var[S_{t}] = t(\\sigma^{2} + 2\\lambda_{n}(\\frac{p}{\\eta^{2}_{1}} + \\frac{1-p}{\\eta^{2}_{2}}))
+    fn get_variances(&self) -> Option<Array1<f64>> {
+        Some(&self.t * (self.sigma.powi(2) + 2.0 * self.lambda_n * (self.p / self.eta_1.powi(2) + (1.0 - self.p) / self.eta_2.powi(2))))
     }
 
     /// Generates simulation paths for the Kou Jump-Diffusion process.
@@ -331,9 +323,8 @@ impl StochasticProcess for KouJumpDiffusionProcess {
 
 #[cfg(test)]
 mod tests {
-    use ndarray::Array1;
     use crate::utilities::TEST_ACCURACY;
-    use crate::stochastic_processes::StochasticProcess;
+    use crate::stochastic_processes::{StochasticProcessResult, StochasticProcess};
 
     #[test]
     fn unit_test_merton_jump_diffusion() -> () {
@@ -343,16 +334,12 @@ mod tests {
         let mjd: MertonJumpDiffusionProcess = MertonJumpDiffusionProcess::new(
             0.03, 0.2, -0.03, 0.1, 1.5, n_paths, n_steps, 1.0, 100.0
         );
-        let paths: Vec<Array1<f64>> = mjd.get_paths().unwrap();
-        assert_eq!(paths.len(), n_paths);
-        assert_eq!(paths[0].len(), n_steps + 1);
-        let mut final_steps: Vec<f64> = Vec::with_capacity(n_paths);
-        for i in 0..n_paths {
-           final_steps.push(paths[i][n_steps]);
-        }
-        let final_steps: Array1<f64> = Array1::from_vec(final_steps);
-        let expected_path: Array1<f64> = mjd.get_expectations();
-        assert!((final_steps.mean().unwrap() - expected_path.last().unwrap()).abs() < 10_000_000.0 * TEST_ACCURACY);
+        let sp_result: StochasticProcessResult = mjd.simulate().unwrap();
+        assert_eq!(sp_result.paths.len(), n_paths);
+        assert_eq!(sp_result.paths[0].len(), n_steps + 1);
+        assert_eq!(sp_result.expectations_path.clone().unwrap().len(), n_steps + 1);
+        assert_eq!(sp_result.variances_path.unwrap().len(), n_steps + 1);
+        assert!((sp_result.mean - sp_result.expectations_path.unwrap()[n_steps]).abs() < 10_000_000.0 * TEST_ACCURACY);
     }
 
     #[test]
@@ -363,15 +350,11 @@ mod tests {
         let kjd: KouJumpDiffusionProcess = KouJumpDiffusionProcess::build(
             0.2, 0.3, 0.5, 9.0, 5.0, 0.5, n_paths, n_steps, 1.0, 100.0
         ).unwrap();
-        let paths: Vec<Array1<f64>> = kjd.get_paths().unwrap();
-        assert_eq!(paths.len(), n_paths);
-        assert_eq!(paths[0].len(), n_steps + 1);
-        let mut final_steps: Vec<f64> = Vec::with_capacity(n_paths);
-        for i in 0..n_paths {
-           final_steps.push(paths[i][n_steps]);
-        }
-        let final_steps: Array1<f64> = Array1::from_vec(final_steps);
-        let expected_path: Array1<f64> = kjd.get_expectations();
-        assert!((final_steps.mean().unwrap() - expected_path.last().unwrap()).abs() < 20_000_000.0 * TEST_ACCURACY);
+        let sp_result: StochasticProcessResult = kjd.simulate().unwrap();
+        assert_eq!(sp_result.paths.len(), n_paths);
+        assert_eq!(sp_result.paths[0].len(), n_steps + 1);
+        assert_eq!(sp_result.expectations_path.clone().unwrap().len(), n_steps + 1);
+        assert_eq!(sp_result.variances_path.unwrap().len(), n_steps + 1);
+        assert!((sp_result.mean - sp_result.expectations_path.unwrap()[n_steps]).abs() < 20_000_000.0 * TEST_ACCURACY);
     }
 }
