@@ -59,7 +59,6 @@ pub enum ParameterType {
 }
 
 impl ParameterType {
-
     /// Converts `ParameterType` to `Array1`.
     /// 
     /// # Input
@@ -69,8 +68,8 @@ impl ParameterType {
     /// - Returns an error if `values` inside `ParameterType::TimeSeries` variant is not of length `len`.
     pub fn into_array(self, len: usize) -> Result<Array1<f64>, DigiFiError> {
         match self {
-            ParameterType::Value { value } => Ok(Array1::from_vec(vec![value; len])),
-            ParameterType::TimeSeries { values } => {
+            Self::Value { value } => Ok(Array1::from_vec(vec![value; len])),
+            Self::TimeSeries { values } => {
                 if values.len() != len {
                     return Err(DigiFiError::WrongLength { title: Self::error_title(), arg: "values".to_owned(), len, });
                 }
@@ -104,13 +103,12 @@ impl ErrorTitle for ParameterType {
 pub struct Time(Array1<f64>);
 
 impl Time {
-
     /// Creates a new instance of `Time`.
     /// 
     /// # Input
     /// - `time_array`: Array of time steps
     pub fn new(time_array: Array1<f64>) -> Self {
-        Time(time_array)
+        Self(time_array)
     }
 
     /// Creates a range of time steps given the provided range definition.
@@ -120,7 +118,7 @@ impl Time {
     /// - `final_time`: Final time step (inclusive)
     /// - `dt`: Difference between consequtive time steps.
     pub fn new_from_range(initial_time: f64, final_time: f64, dt: f64) -> Self {
-        Time(Array1::range(initial_time, final_time + dt, dt))
+        Self(Array1::range(initial_time, final_time + dt, dt))
     }
 
     /// Returns the length of the time array.
@@ -178,7 +176,6 @@ pub fn compare_len<U: ExactSizeIterator, V: ExactSizeIterator>(iter_1: &U, iter_
 pub struct MatrixConversion;
 
 impl MatrixConversion {
-
     /// Converts ndarray matrix to nalgebra matrix
     /// 
     /// # Input

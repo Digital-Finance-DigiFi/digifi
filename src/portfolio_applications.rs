@@ -51,7 +51,7 @@ impl AssetHistData {
     pub fn build(price_array: Array1<f64>, predictable_income: Array1<f64>, time: Time) -> Result<Self, DigiFiError> {
         compare_len(&price_array.iter(), &predictable_income.iter(), "price_array", "predictable_income")?;
         compare_len(&price_array.iter(), &time.time_array().iter(), "price_array", "time_array")?;
-        Ok(AssetHistData { price_array, predictable_income, time })
+        Ok(Self { price_array, predictable_income, time })
     }
 
     /// Validation method for an index.

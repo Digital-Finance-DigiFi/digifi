@@ -41,10 +41,10 @@ pub enum ConfidenceLevel {
 impl ConfidenceLevel {
     pub fn get_p(&self) -> f64 {
         match self {
-            ConfidenceLevel::Ten => 0.1,
-            ConfidenceLevel::Five => 0.05,
-            ConfidenceLevel::TwoHalf => 0.25,
-            ConfidenceLevel::One => 0.01,
+            Self::Ten => 0.1,
+            Self::Five => 0.05,
+            Self::TwoHalf => 0.25,
+            Self::One => 0.01,
         }
     }
 }
@@ -77,7 +77,7 @@ impl ADFType {
     /// - `interval`: Confidence interval
     pub fn get_critical_value(&self, n: usize, confidence_level: &ConfidenceLevel) -> f64 {
         match self {
-            ADFType::Simple => {
+            Self::Simple => {
                 if n <= 25 {
                     match confidence_level {
                         ConfidenceLevel::Ten => -1.609,
@@ -122,7 +122,7 @@ impl ADFType {
                     }
                 }
             },
-            ADFType::Constant => {
+            Self::Constant => {
                 if n <= 25 {
                     match confidence_level {
                         ConfidenceLevel::Ten => -2.633,
@@ -167,7 +167,7 @@ impl ADFType {
                     }
                 }
             },
-            ADFType::ConstantAndTrend => {
+            Self::ConstantAndTrend => {
                 if n <= 25 {
                     match confidence_level {
                         ConfidenceLevel::Ten => -3.238,
@@ -220,9 +220,9 @@ impl ADFType {
 impl Display for ADFType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ADFType::Simple => write!(f, "Simple (No constant or trend terms)"),
-            ADFType::Constant => write!(f, "Constant (Constant term in the ADF test regression)"),
-            ADFType::ConstantAndTrend => write!(f, "Constant and Trend (Constant and trend terms in the ADF test regression)"),
+            Self::Simple => write!(f, "Simple (No constant or trend terms)"),
+            Self::Constant => write!(f, "Constant (Constant term in the ADF test regression)"),
+            Self::ConstantAndTrend => write!(f, "Constant and Trend (Constant and trend terms in the ADF test regression)"),
         }
     }
 }
@@ -253,7 +253,6 @@ pub struct ADFResult {
 }
 
 impl ADFResult {
-
     /// Constructs `ADFResult` from parameters of the linear regression.
     pub fn build(params: &Array1<f64>, unit_root_exists: bool, df_statistic: Option<f64>, critical_value: Option<f64>, se_gamma: Option<f64>, adf_type: &ADFType) -> Result<Self, DigiFiError> {
         match adf_type {
@@ -263,7 +262,7 @@ impl ADFResult {
                     title: Self::error_title(),
                     details: "Parameters of the linear regression were empty.".to_owned(),
                 })?;
-                Ok(ADFResult { unit_root_exists, df_statistic, critical_value, se_gamma, gamma, deltas, beta: None, alpha: None, adf_type: adf_type.clone(), })
+                Ok(Self { unit_root_exists, df_statistic, critical_value, se_gamma, gamma, deltas, beta: None, alpha: None, adf_type: adf_type.clone(), })
             },
             ADFType::Constant => {
                 let mut deltas: Vec<f64> = params.to_vec();
@@ -272,7 +271,7 @@ impl ADFResult {
                     details: "Parameters of the linear regression were empty.".to_owned(),
                 })?;
                 let alpha: Option<f64> = deltas.pop();
-                Ok(ADFResult { unit_root_exists, df_statistic, critical_value, se_gamma, gamma, deltas, beta: None, alpha, adf_type: adf_type.clone(), })
+                Ok(Self { unit_root_exists, df_statistic, critical_value, se_gamma, gamma, deltas, beta: None, alpha, adf_type: adf_type.clone(), })
             },
             ADFType::ConstantAndTrend => {
                 let mut deltas: Vec<f64> = params.to_vec();
@@ -282,7 +281,7 @@ impl ADFResult {
                 })?;
                 let alpha: Option<f64> = deltas.pop();
                 let beta: Option<f64> = deltas.pop();
-                Ok(ADFResult { unit_root_exists, df_statistic, critical_value, se_gamma, gamma, deltas, beta, alpha, adf_type: adf_type.clone(), })
+                Ok(Self { unit_root_exists, df_statistic, critical_value, se_gamma, gamma, deltas, beta, alpha, adf_type: adf_type.clone(), })
             },
         }
     }

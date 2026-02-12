@@ -32,7 +32,6 @@ pub enum MSTDistance {
 }
 
 impl MSTDistance {
-
     fn mantegna_distance(v_1: &Array1<f64>, v_2: &Array1<f64>) -> Result<f64, DigiFiError>  {
         let returns_1: Array1<f64> = log_return_transformation(v_1);
         let returns_2: Array1<f64> = log_return_transformation(v_2);
@@ -49,8 +48,8 @@ impl MSTDistance {
     /// - Distance between the provided nodes
     pub fn distance(&self, v_1: &Array1<f64>, v_2: &Array1<f64>) -> Result<f64, DigiFiError> {
         match self {
-            MSTDistance::EuclideanDistance => euclidean_distance(v_1.iter(), v_2.iter()),
-            MSTDistance::MantegnaDistance => MSTDistance::mantegna_distance(v_1, v_2),
+            Self::EuclideanDistance => euclidean_distance(v_1.iter(), v_2.iter()),
+            Self::MantegnaDistance => Self::mantegna_distance(v_1, v_2),
         }
     }
 }
@@ -140,14 +139,13 @@ pub struct MST<'a, 'b, 'x> {
 }
 
 impl<'a, 'b, 'x> MST<'a, 'b, 'x> {
-
     /// Creates a new instance of MST struct.
     /// 
     /// # Input
     /// - `n_nodes`: Number of nodes in the graph
     /// - `edges`: Original edges of the graph that will be used to comute the MST
     pub fn new(n_nodes: usize, edges: Vec<MSTEdge<'a, 'b, 'x>>) -> Self {
-        MST { n_nodes, graph: edges, result: Vec::<MSTEdge>::new(), }
+        Self { n_nodes, graph: edges, result: Vec::<MSTEdge>::new(), }
     }
 
     /// Adds an edge to the existing graph.

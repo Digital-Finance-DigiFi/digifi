@@ -67,11 +67,12 @@ impl ForwardRateAgreement {
     /// - `financial_instrument_id`: Parameters for defining regulatory categorization of an instrument
     /// - `asset_historical_data`: Time series asset data
     /// - `stochastic_model`: Stochastic model to use for price paths generation
-    pub fn new(agreed_fixed_rate: f64, current_forward_rate: f64, time_to_maturity: f64, principal: f64, initial_price: f64,
+    pub fn new(
+        agreed_fixed_rate: f64, current_forward_rate: f64, time_to_maturity: f64, principal: f64, initial_price: f64,
         compounding_type: CompoundingType, financial_instrument_id: FinancialInstrumentId, asset_historical_data: AssetHistData,
         stochastic_model: Option<Box<dyn StochasticProcess>>
     ) -> Self {
-        ForwardRateAgreement {
+        Self {
             agreed_fixed_rate, current_forward_rate, time_to_maturity, principal, initial_price, compounding_type, financial_instrument_id,
             asset_historical_data, stochastic_model: stochastic_model,
         }

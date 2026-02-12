@@ -13,7 +13,6 @@ pub enum SampleData {
 }
 
 impl SampleData {
-
     fn load_capm_data(&self) -> (Vec<&str>, HashMap<String, Array1<f64>>) {
         let returns: Array1<f64> = arr1(&[0.0551540121632261, 0.0447766675372913, 0.0970256901094277, 0.0564358892670344, -0.1242128506500266,
             0.1305190299310406, 0.0763942621157174, -0.0164609809886134, 0.072961750485206, 0.1106843772082988, 0.0775539512483334, 0.0987840461332014,
@@ -320,9 +319,9 @@ impl SampleData {
     /// Loads samples of data.
     pub fn load_sample_data(&self) -> (Vec<&str>, HashMap<String, Array1<f64>>) {
         match self {
-            SampleData::CAPM => { self.load_capm_data() },
-            SampleData::Portfolio => { self.load_portfolio_data() },
-            SampleData::Stock => { self.load_stock_data() },
+            Self::CAPM => { self.load_capm_data() },
+            Self::Portfolio => { self.load_portfolio_data() },
+            Self::Stock => { self.load_stock_data() },
         }
     }
 }

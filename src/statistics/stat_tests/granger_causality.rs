@@ -27,8 +27,8 @@ pub enum GrangerCausalityTestType {
 impl Display for GrangerCausalityTestType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            GrangerCausalityTestType::Simple => write!(f, "Simple Test"),
-            GrangerCausalityTestType::Full => write!(f, "Full Test"),
+            Self::Simple => write!(f, "Simple Test"),
+            Self::Full => write!(f, "Full Test"),
         }
     }
 }
@@ -37,17 +37,20 @@ impl Display for GrangerCausalityTestType {
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum GrangerCausalityRejectReason {
+    /// Could not select a model with autoregressive terms of `X` as all models have infinite Akaike information criterion.
     InfiniteAIC,
+    /// All autoregressive terms of `X` have been filtered out as insignificant according to the t-test.
     TTestFilteredX,
+    /// Autoregressive terms of `X` do not add explanatory power according to the F-test.
     FTestRejected,
 }
 
 impl Display for GrangerCausalityRejectReason {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            GrangerCausalityRejectReason::InfiniteAIC => write!(f, "Could not select a model with autoregressive terms of X as tall models have infinite Akaike information criterion."),
-            GrangerCausalityRejectReason::TTestFilteredX => write!(f, "All autoregressive terms of X have been filtered out as insignificant according to the t-test."),
-            GrangerCausalityRejectReason::FTestRejected => write!(f, "Autoregressive terms of X do not add explanatory power according to the F-test."),
+            Self::InfiniteAIC => write!(f, "Could not select a model with autoregressive terms of X as all models have infinite Akaike information criterion."),
+            Self::TTestFilteredX => write!(f, "All autoregressive terms of X have been filtered out as insignificant according to the t-test."),
+            Self::FTestRejected => write!(f, "Autoregressive terms of X do not add explanatory power according to the F-test."),
         }
     }
 }
@@ -87,8 +90,11 @@ pub struct GrangerCausalityResult {
     /// 
     /// Note: This may not correspond to the order of `X` in the final Granger causality dependency as some autoregressive terms of `X`
     /// may be filtered out by the t-test.
-    /// Applicable only for Full Granger causality test.
     pub x_max_lag: Option<usize>,
+    /// All lags of `Y` that remain in the parent model
+    pub parent_y_lags: Vec<usize>,
+    /// All lags of `X` that remain in the parent model
+    pub parent_x_lags: Vec<usize>,
     /// Residual sum of squares (RSS) of plain autoregressive model of `Y` (i.e., model independent of `X`)
     pub f_test_nested_rss: Option<f64>,
     /// Number of parameters in the plain autoregressive model of `Y` (i.e., model independent of `X`)
@@ -131,6 +137,8 @@ impl Display for GrangerCausalityResult {
                     + &format!("Maximum Lag of X (i.e., upper limit for the order of X): {}\n", match &self.x_max_lag { Some(v) => v.to_string(), None => "".to_owned(), })
             },
         };
+        let parent_y_lags: String = format!("[{}]", self.parent_y_lags.iter().map(|i| i.to_string() ).collect::<Vec<String>>().join(", "));
+        let parent_x_lags: String = format!("[{}]", self.parent_x_lags.iter().map(|i| i.to_string() ).collect::<Vec<String>>().join(", "));
         let result: String = LARGE_TEXT_BREAK.to_owned()
             + "Granger Causality Test Result\n"
             + LARGE_TEXT_BREAK
@@ -138,6 +146,8 @@ impl Display for GrangerCausalityResult {
             + LARGE_TEXT_BREAK
             + &test_based_parameters
             + LARGE_TEXT_BREAK
+            + &format!("Parent Y Lags (i.e., Orders of lags of Y in full Granger linear regression model): {parent_y_lags}\n")
+            + &format!("Parent X Lags (i.e., Orders of lags of X in full Granger linear regression model): {parent_x_lags}\n")
             + &format!("Nested RSS (i.e., RSS of AR model of Y): {}\n", self.f_test_nested_rss.unwrap_or(f64::NAN))
             + &format!("Nested D (i.e., number of parameters in AR model of Y): {}\n", match &self.f_test_nested_d { Some(v) => v.to_string(), None => "".to_owned(), })
             + &format!("Parent RSS (i.e., RSS of full Granger linear regression model): {}\n", self.f_test_parent_rss.unwrap_or(f64::NAN))
@@ -210,13 +220,12 @@ struct GrangerCausalityTest {
 }
 
 impl GrangerCausalityTest {
-
     /// Constructs a new instance of `GrangerCausalityTest`.
     /// 
     /// # Input
     /// - `settings`: Settings of the Granger causality test
     fn new(settings: GrangerCausalitySettings) -> Self {
-        GrangerCausalityTest { settings, }
+        Self { settings, }
     }
 
     fn validate(&self, y: &Array1<f64>, x: &Array1<f64>) -> Result<(), DigiFiError> {
@@ -277,7 +286,7 @@ impl GrangerCausalityTest {
     }
 
     /// Creates a feature collection of autoregressive terms of `Y`, where each feature is trunkated by the order of `max(y_order, x_max_lag)`.
-    fn create_feature_collection(&self, y: &Array1<f64>, y_order: usize) -> Result<FeatureCollection, DigiFiError> {
+    fn create_feature_collection(&self, y: &Array1<f64>, y_order: usize) -> Result<(FeatureCollection, Vec<usize>), DigiFiError> {
         let y_len: usize = y.len();
         let mut fc: FeatureCollection = FeatureCollection::new();
         fc.add_constant = true;
@@ -285,10 +294,12 @@ impl GrangerCausalityTest {
             Some(v) => v.max(y_order),
             None => y_order,
         };
+        let mut parent_y_lags: Vec<usize> = Vec::new();
         for lag in (1..=y_order).into_iter() {
             fc.add_feature(y.slice(s![(fc_order - lag)..(y_len - lag)]).into_iter(), &Self::y_name(lag))?;
+            parent_y_lags.push(lag);
         }
-        Ok(fc)
+        Ok((fc, parent_y_lags))
     }
 
     /// Trains the linear regression model for the provided feature collection and `Y`.
@@ -336,7 +347,8 @@ impl GrangerCausalityTest {
         result.pac_crit = ar_result.pac_crit;
         result.y_order = Some(y_order);
         // Create a feature collection of autoregressive terms of `Y`, where each feature is shrunk by the order of `max(y_order, x_max_lag)`
-        let mut fc: FeatureCollection = self.create_feature_collection(&y, y_order)?;
+        let (mut fc, parent_y_lags) = self.create_feature_collection(&y, y_order)?;
+        result.parent_y_lags = parent_y_lags;
         // Determine the maximum number of autoregressive terms for `X` (Akaike information criterion)
         let x_max_lag: usize = self.settings.x_max_lag.unwrap_or(y_order);
         let fc_order: usize = y_order.max(x_max_lag);
@@ -361,10 +373,12 @@ impl GrangerCausalityTest {
         let mut contains_x: bool = false;
         let mut parent_lra_result: LinearRegressionResult = LinearRegressionResult::default();
         let y_slice: Array1<f64> = Self::adjusted_y(y, fc_order);
+        let mut parent_x_lags: Vec<usize> = Vec::new();
         // Run LRA iteratively while removing lagged `X` features that fall outside of the t-test confidence level
         while !filtered {
             filtered = true;
             contains_x = false;
+            parent_x_lags = Vec::new();
             parent_lra_result = self.lr(&fc, &y_slice, true)?;
             for c in parent_lra_result.coefficients.iter() {
                 let coefficient_name: String = c.coefficient_name.clone().ok_or(DigiFiError::Other {
@@ -374,7 +388,9 @@ impl GrangerCausalityTest {
                 // Check if the coefficient is the autoregressive term of `X`
                 if coefficient_name.contains("X(t-") {
                     contains_x = true;
-                    let reject_h0: bool = c.t_test_reject_h0.unwrap_or_default();
+                    let lag: usize = coefficient_name.trim_start_matches("X(t-").trim_end_matches(")").parse::<usize>()?;
+                    if !parent_x_lags.contains(&lag) { parent_x_lags.push(lag); }
+                    let reject_h0: bool = c.t_test_reject_h0.unwrap_or(false);
                     if !reject_h0 {
                        fc.remove_feature(&coefficient_name)?;
                     }
@@ -392,6 +408,7 @@ impl GrangerCausalityTest {
             if self.settings.return_nested_result { result.nested_model_result = Some(ar_result); }
             return Ok(result);
         }
+        result.parent_x_lags = parent_x_lags;
         // Perform F-test over the remaining lagged auteregressive terms left from `X` and compare to plain `Y` autoregressive model
         let n_data_points: usize = fc.feature_size().unwrap_or_default();
         let (nested_rss, nested_d, parent_rss, parent_d, f_statistic, dof_1, dof_2, p_value, p_cl, f_test_reject_h0) = self.conjoined_f_test(&ar_result.model_result, &parent_lra_result, n_data_points)?;
@@ -581,8 +598,10 @@ pub fn simple_granger_causality_test(x: &Array1<f64>, y: &Array1<f64>, max_lag: 
     let (nested_model_result, fc) = ar.run(y)?;
     let mut fc: FeatureCollection = fc.ok_or(DigiFiError::NotFound { title: error_title, data: "Feature collection is not found.".to_owned(), })?;
     // Populate feature collection with autoregressive terms of `X`
+    let mut parent_lags: Vec<usize> = Vec::with_capacity(max_lag);
     for lag in (1..=max_lag).into_iter() {
         fc.add_feature(x.slice(s![(max_lag - lag)..(y_len - lag)]).into_iter(), &format!("X(t-{})", lag))?;
+        parent_lags.push(lag);
     }
     // Linear regression with autoregressive terms of `Y` and `X`
     let y_slice: Array1<f64> = Array1::from_iter(y.slice(s![max_lag..]).into_iter().map(|v| *v ));
@@ -602,6 +621,8 @@ pub fn simple_granger_causality_test(x: &Array1<f64>, y: &Array1<f64>, max_lag: 
     let f_test_reject_h0: bool = if p_value < p_cl { true } else { false };
     if !f_test_reject_h0 { result.failed_reject_h0_reason = Some(GrangerCausalityRejectReason::FTestRejected); }
     // Result
+    result.parent_y_lags = parent_lags.clone(); // Same lagged terms for `X` and `Y`
+    result.parent_x_lags = parent_lags; // Same lagged terms for `X` and `Y`
     result.reject_h0 = f_test_reject_h0;
     result.f_test_nested_rss = Some(nested_rss);
     result.f_test_nested_d = Some(nested_d);
@@ -657,6 +678,8 @@ mod tests {
         // Parent model tests (i.e., tests of the complete Granger linear model)
         assert_eq!(gcr.reject_h0, false);
         assert!(match gcr.failed_reject_h0_reason.unwrap() { GrangerCausalityRejectReason::TTestFilteredX => true, _ => false,});
+        assert_eq!(gcr.parent_y_lags.len(), coefs.len());
+        assert_eq!(gcr.parent_x_lags.len(), 0);
     }
 
     #[test]
@@ -669,7 +692,7 @@ mod tests {
         let risk_premium: Array1<f64> = sample_data.remove("Stock Returns").unwrap();
         // Simple Granger causality test
         let gcr: GrangerCausalityResult = simple_granger_causality_test(&market_premium, &risk_premium, 16, None).unwrap();
-        // The results were found using grangercausalitytests from statsmodels.tsa.stattools
+        // The results were found using `grangercausalitytests` from `statsmodels.tsa.stattools`
         // Nested model tests (i.e., tests of AR model of `Y`)
         assert!((gcr.nested_model_result.as_ref().unwrap().model_result.intercept.unwrap() - 0.01754408).abs() < TEST_ACCURACY);
         let nested_coefs: Vec<f64> = vec![
@@ -681,13 +704,13 @@ mod tests {
         } );
         // Parent model tests (i.e., tests of the complete Granger linear model)
         assert!((gcr.parent_model_result.as_ref().unwrap().intercept.unwrap() - 1.14274372e-02).abs() < TEST_ACCURACY);
-        let nested_coefs: Vec<f64> = vec![
+        let parent_coefs: Vec<f64> = vec![
             4.19223242e-01, -2.34404524e-01,  2.72340900e-01,  1.03013448e+00, -1.81718789e-01, -4.27993121e-01,  8.40314944e-01,  6.19071691e-01,
             -6.60135239e-01, -2.97185005e-01, -2.48296270e-03, -3.07798660e-01, 3.65214587e-01,  6.54557206e-01,  6.82388733e-01,  2.57055272e-01,
             -1.16703714e+00,  3.84263021e-01, -6.80947028e-01, -1.98267527e+00, -8.58625697e-02,  1.61253913e-01, -9.51342081e-01,  2.87793511e-01,
             5.41451441e-01,  3.76870986e-01,  5.03655333e-01,  4.78529632e-01, -1.41274516e-01, -7.91401835e-01, -2.74771397e+00, -8.14687698e-01,
         ];
-        let _ = gcr.parent_model_result.as_ref().unwrap().coefficients.iter().zip(nested_coefs.iter()).map(|(ar_c, c)|  {
+        let _ = gcr.parent_model_result.as_ref().unwrap().coefficients.iter().zip(parent_coefs.iter()).map(|(ar_c, c)|  {
             assert!((ar_c.coefficient - c).abs() < TEST_ACCURACY);
         } );
         // F-test tests
@@ -697,5 +720,7 @@ mod tests {
         assert!((gcr.f_test_p_value.unwrap() - 0.9111).abs() < 10_000.0 * TEST_ACCURACY);
         assert_eq!(gcr.reject_h0, false);
         assert!(match gcr.failed_reject_h0_reason.unwrap() { GrangerCausalityRejectReason::FTestRejected => true, _ => false,});
+        assert_eq!(gcr.parent_y_lags.len(), nested_coef.len());
+        assert_eq!(gcr.parent_y_lags.len() + gcr.parent_x_lags.len(), parent_coefs.len());
     }
 }

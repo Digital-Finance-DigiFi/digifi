@@ -11,7 +11,6 @@ pub enum StochasticDriftType {
 
 
 pub trait CustomTrendStationary {
-
     /// Custom trend-stationary trend function.
     ///
     /// # Input
@@ -55,7 +54,6 @@ pub enum TrendStationary {
 }
 
 impl TrendStationary {
-
     /// Validates the parameters of the trend stationary type.
     ///
     /// # Input
@@ -66,8 +64,8 @@ impl TrendStationary {
     /// - Returns an error if the custom function does not return an array of the same length as there are number of paths.
     pub fn validate(&self, n_paths: usize) -> Result<(), DigiFiError> {
         match &self {
-            TrendStationary::Linear { .. } => Ok(()),
-            TrendStationary::Quadratic { a, .. } => {
+            Self::Linear { .. } => Ok(()),
+            Self::Quadratic { a, .. } => {
                 if *a == 0.0 {
                     return Err(DigiFiError::ParameterConstraint {
                         title: Self::error_title(),
@@ -76,8 +74,8 @@ impl TrendStationary {
                 }
                 Ok(())
             },
-            TrendStationary::Exponential { .. } => Ok(()),
-            TrendStationary::Custom { f } => { f.validate(n_paths) },
+            Self::Exponential { .. } => Ok(()),
+            Self::Custom { f } => { f.validate(n_paths) },
         }
     }
 
@@ -93,10 +91,10 @@ impl TrendStationary {
     pub fn get_stationary_trend(&self, n_paths: usize, t: f64) -> Result<Array1<f64>, DigiFiError> {
         let base_shape: Array1<f64> = Array1::from_vec(vec![1.0; n_paths]);
         match &self {
-            TrendStationary::Linear { a, b } => { Ok((a*t + b) * base_shape) },
-            TrendStationary::Quadratic { a, b, c } => { Ok((a * t.powi(2) + b * t + c) * base_shape) },
-            TrendStationary::Exponential { a, b } => { Ok((b * (a * t).exp()) * base_shape) },
-            TrendStationary::Custom { f } => { f.trend_func(n_paths, t) },
+            Self::Linear { a, b } => { Ok((a*t + b) * base_shape) },
+            Self::Quadratic { a, b, c } => { Ok((a * t.powi(2) + b * t + c) * base_shape) },
+            Self::Exponential { a, b } => { Ok((b * (a * t).exp()) * base_shape) },
+            Self::Custom { f } => { f.trend_func(n_paths, t) },
         }
     }
 }
@@ -109,7 +107,6 @@ impl ErrorTitle for TrendStationary {
 
 
 pub trait CustomStationaryError {
-
     /// Custom error of the diffusion component.
     ///
     /// # Input
@@ -150,7 +147,6 @@ pub enum StationaryError {
 }
 
 impl StationaryError {
-
     /// Validates the parameters of the stationary error.
     ///
     /// # Input
@@ -160,7 +156,7 @@ impl StationaryError {
     /// - Returns an error if the custom function does not return an array of the same length as there are number of paths.
     pub fn validate(&self, n_paths: usize) -> Result<(), DigiFiError> {
         match &self {
-            StationaryError::Custom { f } => { f.validate(n_paths) },
+            Self::Custom { f } => { f.validate(n_paths) },
             _ => Ok(())
         }
     }
@@ -175,11 +171,11 @@ impl StationaryError {
     /// - An array representing the error values for each path
     pub fn get_error(&self, n_paths: usize, dt: f64) -> Result<Array1<f64>, DigiFiError> {
         match &self {
-            StationaryError::Weiner { sigma } => {
+            Self::Weiner { sigma } => {
                 let n: Array1<f64> = StandardNormalBoxMuller::new_shuffle(n_paths)?.generate()?;
                 Ok(sigma.powi(2) * dt * n)
             },
-            StationaryError::Custom { f } => f.error_func(n_paths, dt)
+            Self::Custom { f } => f.error_func(n_paths, dt)
         }
     }
 }
@@ -202,7 +198,6 @@ pub struct DifferenceStationary {
 }
 
 impl DifferenceStationary {
-
     /// Creates a new `DifferenceStationary` instance.
     ///
     /// # Input
@@ -213,8 +208,8 @@ impl DifferenceStationary {
     /// - Returns an error if the length of `staring_values` does not match the number of paths.
     /// - Returns an error if an array in `strating_values` has different length to parameters of autoregression.
     pub fn build(n_paths: usize, autoregression_params: Array1<f64>, starting_values: Vec<Array1<f64>>) -> Result<Self, DigiFiError> {
-        DifferenceStationary::validate_values(n_paths, &starting_values)?;
-        Ok(DifferenceStationary { n_paths, autoregression_params, starting_values })
+        Self::validate_values(n_paths, &starting_values)?;
+        Ok(Self { n_paths, autoregression_params, starting_values })
     }
 
     /// Validates the array of values.
@@ -261,7 +256,7 @@ impl DifferenceStationary {
     /// - Returns an error if the length of `previous_values` does not match the number of paths.
     /// - Returns an error if an array in `previous_values` has different length to parameters of autoregression.
     pub fn get_autoregression(&self, previous_values: &Vec<Array1<f64>>) -> Result<Vec<f64>, DigiFiError> {
-        DifferenceStationary::validate_values(self.n_paths, previous_values)?;
+        Self::validate_values(self.n_paths, previous_values)?;
         // Autoregression
         let mut result: Vec<f64> = Vec::with_capacity(previous_values.len());
         for process in previous_values {

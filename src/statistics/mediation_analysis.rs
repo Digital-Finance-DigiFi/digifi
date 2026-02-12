@@ -186,13 +186,12 @@ pub struct BaronKennyMeriationAnalysis {
 }
 
 impl BaronKennyMeriationAnalysis {
-
     /// Creates a new instance of `BaronKennyMeriationAnalysis`.
     /// 
     /// # Input
     /// - `cl`: Confidence level for significance testing
     pub fn new(cl: Option<ConfidenceLevel>) -> Self {
-        BaronKennyMeriationAnalysis { t_test_confidence_level: cl, }
+        Self { t_test_confidence_level: cl, }
     }
 
     fn validate(&self, y: &Array1<f64>, x: &Array1<f64>, me: &Array1<f64>) -> Result<(), DigiFiError> {

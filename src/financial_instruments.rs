@@ -446,7 +446,7 @@ impl BullCollar {
                 constraint: "The argument `k_p` must be smaller or equal to `k_c`.".to_owned(),
             });
         }
-        Ok(BullCollar { k_p, k_c, cost, cost_s })
+        Ok(Self { k_p, k_c, cost, cost_s })
     }
 }
 
@@ -539,7 +539,7 @@ impl BearCollar {
                 constraint: "The argument `k_p` must be smaller or equal to `k_c`.".to_owned(),
             });
         }
-        Ok(BearCollar { k_p, k_c, cost, cost_s })
+        Ok(Self { k_p, k_c, cost, cost_s })
     }
 }
 
@@ -629,7 +629,7 @@ impl BullSpread {
                 constraint: "The argument `k_l` must be smaller or equal to `k_s`.".to_owned(),
             });
         }
-        Ok(BullSpread { k_l, k_s, cost })
+        Ok(Self { k_l, k_s, cost })
     }
 }
 
@@ -719,7 +719,7 @@ impl BearSpread {
                 constraint: "The argument `k_s` must be smaller or equal to `k_l`.".to_owned(),
             });
         }
-        Ok(BearSpread { k_l, k_s, cost })
+        Ok(Self { k_l, k_s, cost })
     }
 }
 
@@ -819,7 +819,7 @@ impl LongButterfly {
                 constraint: "The argument `k1_c` must be smaller or equal to `k_p`.".to_owned(),
             });
         }
-        Ok(LongButterfly { k1_c, k2_c, k_p, cost })
+        Ok(Self { k1_c, k2_c, k_p, cost })
     }
 }
 
@@ -909,7 +909,7 @@ impl BoxSpread {
                 constraint: "The argument `k_1` must be smaller or equal to `k_2`.".to_owned(),
             });
         }
-        Ok(BoxSpread { k_1, k_2, cost })
+        Ok(Self { k_1, k_2, cost })
     }
 }
 
@@ -1060,7 +1060,7 @@ impl Strangle {
                 constraint: "The argument `k_p` must be smaller than `k_c`.".to_owned(),
             });
         }
-        Ok(Strangle { k_c, k_p, cost })
+        Ok(Self { k_c, k_p, cost })
     }
 }
 

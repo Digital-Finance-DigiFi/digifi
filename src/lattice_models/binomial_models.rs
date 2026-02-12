@@ -244,7 +244,7 @@ impl BrownianMotionBinomialModel {
     pub fn build(payoff_object: Box<dyn Payoff>, s_0: f64, time_to_maturity: f64, r: f64, sigma: f64, q: f64, n_steps: usize) -> Result<Self, DigiFiError> {
         payoff_object.validate_payoff(5)?;
         let dt: f64 = time_to_maturity / (n_steps as f64);
-        Ok(BrownianMotionBinomialModel {
+        Ok(Self {
             payoff_object, s_0, _time_to_maturity: time_to_maturity, r, _sigma: sigma, q, n_steps, dt, u: (sigma * dt.sqrt()).exp(), d: (-sigma * dt.sqrt()).exp(),
         })
     }

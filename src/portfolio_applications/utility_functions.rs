@@ -34,5 +34,5 @@ pub fn cara(consumption: f64, absolute_risk_aversion: f64) -> f64 {
 /// - Wikipedia: <https://en.wikipedia.org/wiki/Risk_aversion#Relative_risk_aversion>
 /// - Original Source: N/A
 pub fn crra(consumption: f64, relative_risk_aversion: f64) -> f64 {
-    (consumption.powf(1.0-relative_risk_aversion) - 1.0) / (1.0 - relative_risk_aversion)
+    (consumption.powf(1.0 - relative_risk_aversion) - 1.0) / (1.0 - relative_risk_aversion)
 }

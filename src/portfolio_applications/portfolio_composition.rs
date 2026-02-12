@@ -155,7 +155,8 @@ impl ErrorTitle for Asset {
 ///
 /// # Output
 /// - `Portfolio` struct
-pub fn generate_portfolio(financial_instruments: Vec<impl PortfolioInstrument>, n_periods: Option<usize>, returns_method: Option<ReturnsMethod>,
+pub fn generate_portfolio(
+    financial_instruments: Vec<impl PortfolioInstrument>, n_periods: Option<usize>, returns_method: Option<ReturnsMethod>,
     performance_metric: Box<dyn PortfolioPerformanceMetric>
 ) -> Result<Portfolio, DigiFiError> {
     let mut assets: HashMap<String, Asset>  = HashMap::<String, Asset>::new();
@@ -295,7 +296,6 @@ pub struct Portfolio {
 }
 
 impl Portfolio {
-
     /// Creates a new `Portfolio` instance.
     ///
     /// # Input
@@ -309,7 +309,8 @@ impl Portfolio {
     /// - Returns an error if the weight is infinite or `NAN`.
     /// - Returns an error if the assets provided do not have time series of the same length.
     /// - Returns an error if the sum of portfolio weights is not equal to `1` (Subject to `rounding_error_tol`).
-    pub fn build(assets: HashMap<String, Asset>, rounding_error_tol: Option<f64>, n_periods: Option<usize>, returns_method: Option<ReturnsMethod>,
+    pub fn build(
+        assets: HashMap<String, Asset>, rounding_error_tol: Option<f64>, n_periods: Option<usize>, returns_method: Option<ReturnsMethod>,
         performance_metric: Box<dyn PortfolioPerformanceMetric>
     ) -> Result<Self, DigiFiError> {
         let rounding_error_tol: f64 = match rounding_error_tol { Some(v) => v, None => 0.001 };
@@ -337,10 +338,10 @@ impl Portfolio {
             assets_names.push(k);
             assets_.push(v.hist_data);
         }
-        Portfolio::validate_and_clean_weights(&mut weights, rounding_error_tol)?;
+        Self::validate_and_clean_weights(&mut weights, rounding_error_tol)?;
         let n_periods: usize = match n_periods { Some(v) => v, None => 252, };
         let returns_method: ReturnsMethod = match returns_method { Some(v) => v, None => ReturnsMethod::EstimatedFromTotalReturn };
-        Ok(Portfolio { assets_names, assets: assets_, weights, rounding_error_tol, n_periods, returns_method, performance_metric, })
+        Ok(Self { assets_names, assets: assets_, weights, rounding_error_tol, n_periods, returns_method, performance_metric, })
     }
 
     /// Returns the names of the assets in portfolio.
@@ -396,7 +397,7 @@ impl Portfolio {
         if self.assets.len() != new_weights.len() {
             return Err(DigiFiError::ValidationError { title: Self::error_title(), details: "The number of weights does not match the number of assets.".to_owned() });
         }
-        Portfolio::validate_and_clean_weights(&mut new_weights, self.rounding_error_tol)?;
+        Self::validate_and_clean_weights(&mut new_weights, self.rounding_error_tol)?;
         self.weights = new_weights;
         Ok(())
     }
@@ -431,7 +432,7 @@ impl Portfolio {
         }
         // Generate uniform weights
         let weights: Vec<f64> = self.uniform_weights();
-        // Up date Portfolio state
+        // Update portfolio state
         self.change_weights(weights)?;
         self.assets_names.extend(new_assets_names);
         self.assets.extend(new_hist_data);
@@ -477,7 +478,7 @@ impl Portfolio {
     pub fn asset_returns(&self, asset_returns_type: &AssetReturnsType) -> Vec<Array1<f64>> {
         let mut returns: Vec<Array1<f64>> = Vec::<Array1<f64>>::new();
         for a in &self.assets {
-            let extra_returns: Array1<f64> = Portfolio::predictable_income_to_return(&a.price_array, &a.predictable_income);
+            let extra_returns: Array1<f64> = Self::predictable_income_to_return(&a.price_array, &a.predictable_income);
             let returns_: Array1<f64> = percent_change(&a.price_array);
             // Append 0.0 to the front of the arithmetic returns array
             let returns_: Array1<f64> = concatenate![Axis(0), Array1::from_vec(vec![0.0]), returns_];
@@ -594,8 +595,7 @@ impl Portfolio {
             let std_returns: f64 = self.standard_deviation().unwrap();
             self.performance_metric.objective_function(mean_returns, std_returns)
         };
-        let mut weights: Vec<f64> = nelder_mead(f, initial_guess, max_iterations, max_fun_calls, Some(true), None, None)?.to_vec();
-        Portfolio::validate_and_clean_weights(&mut weights, self.rounding_error_tol)?;
+        let weights: Vec<f64> = nelder_mead(f, initial_guess, max_iterations, max_fun_calls, Some(true), None, None)?.to_vec();
         self.change_weights(weights)?;
         let performance: f64 = self.performance()?;
         let expected_return: f64 = self.mean_return()?;
@@ -621,8 +621,7 @@ impl Portfolio {
             // Portfolio optimization
             self.standard_deviation().unwrap()
         };
-        let mut weights: Vec<f64> = nelder_mead(f, initial_guess, max_iterations, max_fun_calls, Some(true), None, None)?.to_vec();
-        Portfolio::validate_and_clean_weights(&mut weights, self.rounding_error_tol)?;
+        let weights: Vec<f64> = nelder_mead(f, initial_guess, max_iterations, max_fun_calls, Some(true), None, None)?.to_vec();
         self.change_weights(weights)?;
         let performance: f64 = self.performance()?;
         let expected_return: f64 = self.mean_return()?;
@@ -653,8 +652,7 @@ impl Portfolio {
             // Combined loss of the objective function and target return constraint (Optimized via straddle payoff function)
             score + StraddleLoss.loss(mean_returns, target_return)
         };
-        let mut weights: Vec<f64> = nelder_mead(f, initial_guess, max_iterations, max_fun_calls, Some(false), None, None)?.to_vec();
-        Portfolio::validate_and_clean_weights(&mut weights, self.rounding_error_tol)?;
+        let weights: Vec<f64> = nelder_mead(f, initial_guess, max_iterations, max_fun_calls, Some(false), None, None)?.to_vec();
         self.change_weights(weights)?;
         let performance: f64 = self.performance()?;
         let expected_return: f64 = self.mean_return()?;

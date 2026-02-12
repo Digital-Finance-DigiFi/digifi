@@ -10,7 +10,6 @@ pub trait PortfolioTaxonomy {
 
 
 impl PortfolioTaxonomy for Portfolio {
-
     /// Computes the minimal-spanning tree for the portfolio of assets based on the distance (i.e., weights) metric provided.
     /// 
     /// # Input

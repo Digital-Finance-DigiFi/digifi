@@ -55,7 +55,7 @@ impl StandardNormalAcceptReject {
                 constraint: "The argument `lap_b` must be positive.".to_owned(),
             });
         }
-        Ok(StandardNormalAcceptReject { max_sample_size, lap_b, seed: seed as f64 })
+        Ok(Self { max_sample_size, lap_b, seed: seed as f64 })
     }
 }
 
@@ -71,7 +71,7 @@ impl RandomGenerator<StandardNormalAcceptReject> for StandardNormalAcceptReject 
     /// # Input
     /// - `sample_size`: The maximum size of the sample to generate
     fn new_shuffle(sample_size: usize) -> Result<Self, DigiFiError> {
-        Ok(StandardNormalAcceptReject { max_sample_size: sample_size, lap_b: 1.0, seed: generate_seed()?, })
+        Ok(Self { max_sample_size: sample_size, lap_b: 1.0, seed: generate_seed()?, })
     }
 
     /// Array of pseudo-random generated numbers based on the Accept-Reject Method and the probability of the Laplace Distribution lap_p.
@@ -129,7 +129,7 @@ impl StandardNormalInverseTransform {
     /// # Input
     /// - `sample_size`: Number of random samples to generate
     pub fn new(sample_size: usize) -> Self {
-        StandardNormalInverseTransform { sample_size }
+        Self { sample_size }
     }
 }
 
@@ -139,7 +139,7 @@ impl RandomGenerator<StandardNormalInverseTransform> for StandardNormalInverseTr
     /// # Input
     /// - `sample_size`: Number of pseudo-random numbers to generate
     fn new_shuffle(sample_size: usize) -> Result<Self, DigiFiError> {
-        Ok(StandardNormalInverseTransform { sample_size })
+        Ok(Self { sample_size })
     }
 
     /// Array of pseudo-random generated numbers based on the Inverse Transform Method.
@@ -147,8 +147,7 @@ impl RandomGenerator<StandardNormalInverseTransform> for StandardNormalInverseTr
     /// # Output
     /// - An array of pseudo-random numbers following a standard normal distribution
     fn generate(&self) -> Result<Array1<f64>, DigiFiError> {
-        let standard_normal_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
-        inverse_transform(&standard_normal_dist, self.sample_size)
+        inverse_transform(&NormalDistribution::build(0.0, 1.0)?, self.sample_size)
     }
 }
 
@@ -195,7 +194,7 @@ impl StandardNormalBoxMuller {
     /// - `sample_size`: Number of random samples to generate
     /// - `seed`: Seed for the uniform random number generator
     pub fn new(sample_size: usize, seed: u32) -> Self {
-        StandardNormalBoxMuller { sample_size, seed: seed as f64 }
+        Self { sample_size, seed: seed as f64 }
     }
 }
 
@@ -205,7 +204,7 @@ impl RandomGenerator<StandardNormalBoxMuller> for StandardNormalBoxMuller {
     /// # Input
     /// - `sample_size`: Number of pseudo-random numbers to generate
     fn new_shuffle(sample_size: usize) -> Result<Self, DigiFiError> {
-        Ok(StandardNormalBoxMuller { sample_size, seed: generate_seed()?, })
+        Ok(Self { sample_size, seed: generate_seed()?, })
     }
 
     /// One of two independent arrays of pseudo-random generated numbers produced using the Box-Muller Algorithm.
@@ -268,7 +267,7 @@ impl StandardNormalMarsaglia {
     /// # Input
     /// - `sample_size`: Number of random samples to generate
     pub fn new(sample_size: usize) -> Self {
-        StandardNormalMarsaglia { sample_size }
+        Self { sample_size }
     }
 }
 
@@ -278,7 +277,7 @@ impl RandomGenerator<StandardNormalMarsaglia> for StandardNormalMarsaglia {
     /// # Input
     /// - `sample_size`: Number of pseudo-random numbers to generate
     fn new_shuffle(sample_size: usize) -> Result<Self, DigiFiError> {
-        Ok(StandardNormalMarsaglia { sample_size })
+        Ok(Self { sample_size })
     }
 
     /// Two independent arrays of pseudo-random generated numbers based on the Marsaglie Method.
@@ -339,7 +338,7 @@ impl StandardNormalZiggurat {
     /// - `regions`: Number of regions for the Ziggurat method
     /// - `max_iterations`: Maximum number of iterations for the algorithm
     pub fn new(sample_size: usize, rectangle_size: f64, max_iterations: usize, dx: f64, limit: f64) -> Self {
-        StandardNormalZiggurat { sample_size, rectangle_size, max_iterations, dx, limit }
+        Self { sample_size, rectangle_size, max_iterations, dx, limit }
     }
 }
 
@@ -349,7 +348,7 @@ impl RandomGenerator<StandardNormalZiggurat> for StandardNormalZiggurat {
     /// # Input
     /// - `sample_size`: Number of pseudo-random numbers to generate
     fn new_shuffle(sample_size: usize) -> Result<Self, DigiFiError> {
-        Ok(StandardNormalZiggurat { sample_size, rectangle_size: 1.0/256.0, max_iterations: 10_000, dx: 0.001, limit: 6.0 })
+        Ok(Self { sample_size, rectangle_size: 1.0/256.0, max_iterations: 10_000, dx: 0.001, limit: 6.0 })
     }
 
     /// Array of pseudo-random generated numbers based on the Ziggurat Algorithm.

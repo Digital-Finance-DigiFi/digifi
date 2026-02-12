@@ -242,7 +242,7 @@ mod tests {
         // Arithmetic Brownian motion
         let abm: ArithmeticBrownianMotion = ArithmeticBrownianMotion::new(1.0, 0.4, 100, 200, 1.0, 100.0);
         let paths: Vec<Array1<f64>> = abm.get_paths().unwrap();
-        let expected_path: Array1<f64> = abm.get_expectations();
+        let expected_path: Array1<f64> = abm.get_expectations().unwrap();
         // Paths plot
         let plot: Plot = plot_stochastic_paths(&paths, Some(&expected_path)).unwrap();
         plot.show()
@@ -255,7 +255,7 @@ mod tests {
         // Geometric Brownian motion
         let gbm: GeometricBrownianMotion = GeometricBrownianMotion::new(0.0, 0.2, 1_000, 200, 1.0, 100.0);
         let paths: Vec<Array1<f64>> = gbm.get_paths().unwrap();
-        let expected_path: Array1<f64> = gbm.get_expectations();
+        let expected_path: Array1<f64> = gbm.get_expectations().unwrap();
         // Paths plot
         let plot: Plot = plot_stochastic_paths(&paths, Some(&expected_path)).unwrap();
         plot.show()
@@ -270,7 +270,7 @@ mod tests {
             0.07, 0.1, 10.0, 100, 200, 1.0, 0.05, true
         );
         let paths: Vec<Array1<f64>> = oup.get_paths().unwrap();
-        let expected_path: Array1<f64> = oup.get_expectations();
+        let expected_path: Array1<f64> = oup.get_expectations().unwrap();
         // Paths plot
         let plot: Plot = plot_stochastic_paths(&paths, Some(&expected_path)).unwrap();
         plot.show()
@@ -283,7 +283,7 @@ mod tests {
         // Brownian bridge
         let bb: BrownianBridge = BrownianBridge::new(1.0, 2.0, 0.5, 100, 200, 1.0);
         let paths: Vec<Array1<f64>> = bb.get_paths().unwrap();
-        let expected_path: Array1<f64> = bb.get_expectations();
+        let expected_path: Array1<f64> = bb.get_expectations().unwrap();
         // Paths plot
         let plot: Plot = plot_stochastic_paths(&paths, Some(&expected_path)).unwrap();
         plot.show()
@@ -297,7 +297,7 @@ mod tests {
         let fsrp: FellerSquareRootProcess = FellerSquareRootProcess::new(0.05, 0.265, 5.0, 100, 200,
                                                                          1.0, 0.03, FSRSimulationMethod::EulerMaruyama);
         let paths: Vec<Array1<f64>> = fsrp.get_paths().unwrap();
-        let expected_path: Array1<f64> = fsrp.get_expectations();
+        let expected_path: Array1<f64> = fsrp.get_expectations().unwrap();
         // Paths plot
         let plot: Plot = plot_stochastic_paths(&paths, Some(&expected_path)).unwrap();
         plot.show()
@@ -312,7 +312,7 @@ mod tests {
             1.0, 0.4, 0.5, 100, 200, 1.0, 100.0
         ).unwrap();
         let paths: Vec<Array1<f64>> = cev.get_paths().unwrap();
-        let expected_path: Array1<f64> = cev.get_expectations();
+        let expected_path: Array1<f64> = cev.get_expectations().unwrap();
         // Paths plot
         let plot: Plot = plot_stochastic_paths(&paths, Some(&expected_path)).unwrap();
         plot.show()
@@ -327,7 +327,7 @@ mod tests {
             0.1, 5.0, 0.07, 0.2, 0.0, 100, 200, 1.0, 100.0, 0.03
         );
         let paths: Vec<Array1<f64>> = hsv.get_paths().unwrap();
-        let expected_path: Array1<f64> = hsv.get_expectations();
+        let expected_path: Array1<f64> = hsv.get_expectations().unwrap();
         // Paths plot
         let plot: Plot = plot_stochastic_paths(&paths, Some(&expected_path)).unwrap();
         plot.show()
@@ -342,7 +342,7 @@ mod tests {
             0.03, 0.2, -0.03, 0.1, 1.5, 100, 200, 1.0, 100.0
         );
         let paths: Vec<Array1<f64>> = mjd.get_paths().unwrap();
-        let expected_path: Array1<f64> = mjd.get_expectations();
+        let expected_path: Array1<f64> = mjd.get_expectations().unwrap();
         // Paths plot
         let plot: Plot = plot_stochastic_paths(&paths, Some(&expected_path)).unwrap();
         plot.show()
@@ -357,7 +357,7 @@ mod tests {
             0.2, 0.3, 0.5, 9.0, 5.0, 0.5, 100, 200, 1.0, 100.0
         ).unwrap();
         let paths: Vec<Array1<f64>> = kjd.get_paths().unwrap();
-        let expected_path: Array1<f64> = kjd.get_expectations();
+        let expected_path: Array1<f64> = kjd.get_expectations().unwrap();
         // Paths plot
         let plot: Plot = plot_stochastic_paths(&paths, Some(&expected_path)).unwrap();
         plot.show()

@@ -78,7 +78,7 @@ impl ArithmeticBrownianMotion {
     pub fn new(mu: f64, sigma: f64, n_paths: usize, n_steps: usize, t_f: f64, s_0: f64) -> Self {
         let dt: f64 = t_f / (n_steps as f64);
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
-        ArithmeticBrownianMotion { mu, sigma, n_paths, n_steps, t_f, s_0, dt, t }
+        Self { mu, sigma, n_paths, n_steps, t_f, s_0, dt, t }
     }
 
     /// Calculates the auto-covariance of the Arithmetic Brownian Motion between two time points.
@@ -234,7 +234,7 @@ impl GeometricBrownianMotion {
     pub fn new(mu: f64, sigma: f64, n_paths: usize, n_steps: usize, t_f: f64, s_0: f64) -> Self {
         let dt: f64 = t_f / (n_steps as f64);
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
-        GeometricBrownianMotion { mu, sigma, n_paths, n_steps, t_f, s_0, dt, t }
+        Self { mu, sigma, n_paths, n_steps, t_f, s_0, dt, t }
     }
 }
 
@@ -372,7 +372,7 @@ impl OrnsteinUhlenbeckProcess {
     pub fn new(mu: f64, sigma: f64, alpha: f64, n_paths: usize, n_steps: usize, t_f: f64, s_0: f64, analytic_em: bool) -> Self {
         let dt: f64 = t_f / (n_steps as f64);
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
-        OrnsteinUhlenbeckProcess { mu, sigma, alpha, n_paths, n_steps, t_f, s_0, dt, t, analytic_em }
+        Self { mu, sigma, alpha, n_paths, n_steps, t_f, s_0, dt, t, analytic_em }
     }
 }
 
@@ -518,7 +518,7 @@ impl BrownianBridge {
     pub fn new(alpha: f64, beta: f64, sigma: f64, n_paths: usize, n_steps: usize, t_f: f64) -> Self {
         let dt: f64 = t_f / (n_steps as f64);
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
-        BrownianBridge { alpha, beta, sigma, n_paths, n_steps, t_f, dt, t }
+        Self { alpha, beta, sigma, n_paths, n_steps, t_f, dt, t }
     }
 }
 
@@ -655,7 +655,7 @@ impl FellerSquareRootProcess {
     pub fn new(mu: f64, sigma: f64, alpha: f64, n_paths: usize, n_steps: usize, t_f: f64, s_0: f64, method: FSRSimulationMethod) -> Self {
         let dt: f64 = t_f / (n_steps as f64);
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
-        FellerSquareRootProcess { mu, sigma, alpha, n_paths, n_steps, t_f, s_0, dt, t, method }
+        Self { mu, sigma, alpha, n_paths, n_steps, t_f, s_0, dt, t, method }
     }
 }
 

@@ -59,7 +59,6 @@ pub enum TTestTwoSampleCase {
 }
 
 impl TTestTwoSampleCase {
-
     /// Returns the ratio of unbiased estimators of standard deviations `s_{1} / s_{2}`.
     fn unbiased_std_ratio(sample_1: &Array1<f64>, sample_2: &Array1<f64>) -> f64 {
         sample_1.std(1.0) / sample_2.std(1.0)
@@ -75,13 +74,13 @@ impl TTestTwoSampleCase {
     /// - Two sample t-test case that best fits the data
     pub fn select_case(sample_1: &Array1<f64>, sample_2: &Array1<f64>) -> Self {
         if sample_1.len() == sample_2.len() {
-            TTestTwoSampleCase::EqualVariance
+            Self::EqualVariance
         } else {
-            let unbiased_std_ratio: f64 = TTestTwoSampleCase::unbiased_std_ratio(sample_1, sample_2);
+            let unbiased_std_ratio: f64 = Self::unbiased_std_ratio(sample_1, sample_2);
             if 0.5 <= unbiased_std_ratio && unbiased_std_ratio <= 2.0 {
-                TTestTwoSampleCase::SimilarVariance
+                Self::SimilarVariance
             } else {
-                TTestTwoSampleCase::UnequalVariance
+                Self::UnequalVariance
             }
         }
     }
@@ -94,14 +93,14 @@ impl TTestTwoSampleCase {
                 constraint: "Both samples must contain at least one data point.".to_owned(),
             });
         }
-        let unbiased_std_ratio: f64 = TTestTwoSampleCase::unbiased_std_ratio(sample_1, sample_2);
+        let unbiased_std_ratio: f64 = Self::unbiased_std_ratio(sample_1, sample_2);
         match self {
-            TTestTwoSampleCase::EqualVariance => {
+            Self::EqualVariance => {
                 if sample_1.len() != sample_2.len() {
                     return Err(DigiFiError::UnmatchingLength { array_1: "sample_1".to_owned(), array_2: "sample_2".to_owned(), })
                 }
             },
-            TTestTwoSampleCase::SimilarVariance => {
+            Self::SimilarVariance => {
                 if unbiased_std_ratio < 0.5 || 2.0 < unbiased_std_ratio {
                     return Err(DigiFiError::ParameterConstraint {
                         title: Self::error_title(),
@@ -109,7 +108,7 @@ impl TTestTwoSampleCase {
                     })
                 }
             },
-            TTestTwoSampleCase::UnequalVariance => {
+            Self::UnequalVariance => {
                 if 0.5 <= unbiased_std_ratio && unbiased_std_ratio <= 2.0 {
                     return Err(DigiFiError::ParameterConstraint {
                         title: Self::error_title(),
@@ -131,9 +130,9 @@ impl ErrorTitle for TTestTwoSampleCase {
 impl Display for TTestTwoSampleCase {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TTestTwoSampleCase::EqualVariance => write!(f, "Equal Variance"),
-            TTestTwoSampleCase::SimilarVariance => write!(f, "Similar Variance"),
-            TTestTwoSampleCase::UnequalVariance => write!(f, "Unequal Variance"),
+            Self::EqualVariance => write!(f, "Equal Variance"),
+            Self::SimilarVariance => write!(f, "Similar Variance"),
+            Self::UnequalVariance => write!(f, "Unequal Variance"),
         }
     }
 }

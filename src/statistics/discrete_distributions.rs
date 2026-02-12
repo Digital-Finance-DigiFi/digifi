@@ -58,7 +58,7 @@ impl BernoulliDistribution {
                 constraint: "The argument `p` must be in the range `[0, 1]`.".to_owned(),
             });
         }
-        Ok(BernoulliDistribution { p, })
+        Ok(Self { p, })
     }
 }
 
@@ -210,7 +210,7 @@ impl BinomialDistribution {
                 constraint: "The argument `p` must be in the range `[0, 1]`.".to_owned(),
             });
         }
-        Ok(BinomialDistribution { n, p, })
+        Ok(Self { n, p, })
     }
 }
 
@@ -371,7 +371,7 @@ impl DiscreteUniformDistribution {
                 constraint: "The argument `a` must be smaller or equal to the argument `b`.".to_owned(),
             });
         }
-        Ok(DiscreteUniformDistribution { a, b, n: ((b - a + 1) as f64), })
+        Ok(Self { a, b, n: ((b - a + 1) as f64), })
     }
 }
 
@@ -511,7 +511,7 @@ impl PoissonDistribution {
                 constraint: "The argument `lambda` must be positive.".to_owned(),
             });
         }
-        Ok(PoissonDistribution { lambda, })
+        Ok(Self { lambda, })
     }
 }
 

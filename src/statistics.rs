@@ -106,11 +106,7 @@ pub trait ProbabilityDistribution {
         T: Iterator<Item = I> + ExactSizeIterator,
         I: Borrow<f64>,
     {
-        let mut p: Vec<f64> = Vec::with_capacity(x.len());
-        for i in x {
-            p.push(self.pdf(*i.borrow())?);
-        }
-        Ok(Array1::from_vec(p))
+        x.map(|x_| self.pdf(*x_.borrow()) ).collect()
     }
 
     /// Cumulative distribution function (CDF) applied to the array of values.
@@ -119,11 +115,7 @@ pub trait ProbabilityDistribution {
         T: Iterator<Item = I> + ExactSizeIterator,
         I: Borrow<f64>,
     {
-        let mut p: Vec<f64> = Vec::with_capacity(x.len());
-        for i in x {
-            p.push(self.cdf(*i.borrow())?);
-        }
-        Ok(Array1::from_vec(p))
+        x.map(|x_| self.cdf(*x_.borrow()) ).collect()
     }
 
     /// Inverse cumulative distribution function (CDF) applied to the array of values.
@@ -132,21 +124,16 @@ pub trait ProbabilityDistribution {
         T: Iterator<Item = I> + ExactSizeIterator,
         I: Borrow<f64>,
     {
-        let mut xs: Vec<f64> = Vec::with_capacity(p.len());
-        for i in p {
-            xs.push(self.inverse_cdf(*i.borrow())?);
-        }
-        Ok(Array1::from_vec(xs))
+        p.map(|p_| self.inverse_cdf(*p_.borrow()) ).collect()
     }
 
     /// Moment generating function (MGF) applied to the array of values.
-    fn mgf_iter<T, I>(&self, t: T) -> Result<Array1<f64>, DigiFiError>
+    fn mgf_iter<T, I>(&self, t: T) -> Array1<f64>
     where
         T: Iterator<Item = I>,
         I: Borrow<usize>
     {
-        let ts: Vec<f64> = t.map(|t| self.mgf(*t.borrow()) ).collect();
-        Ok(Array1::from_vec(ts))
+        t.map(|t_| self.mgf(*t_.borrow()) ).collect()
     }
 }
 

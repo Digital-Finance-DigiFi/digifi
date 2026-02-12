@@ -77,18 +77,17 @@ pub struct FeatureCollection {
 }
 
 impl FeatureCollection {
-
     /// Creates a new instance  of `FeatureCollection`.
     pub fn new() -> Self {
-        FeatureCollection::default()
+        Self::default()
     }
 
-    fn validate_feature<T, I>(&self, feature: &T, feature_name: &String) -> Result<(), DigiFiError>
+    fn validate_feature<T, I>(&self, feature: &T, feature_name: &str) -> Result<(), DigiFiError>
     where
         T: Iterator<Item = I> + ExactSizeIterator,
         I: Borrow<f64>,
     {
-        if self.feature_names.contains(&feature_name) {
+        if self.feature_names.contains(&feature_name.to_owned()) {
             return Err(DigiFiError::Other { title: Self::error_title(), details: format!("Feature `{}` already exists in the collection.", feature_name), });
         }
         if let Some(feature_size) =  self.feature_size {
@@ -100,8 +99,8 @@ impl FeatureCollection {
     }
 
     /// Checks that the feature exists in the collection.
-    fn feature_exists(&self, feature_name: &String) -> Result<(), DigiFiError> {
-        if !self.feature_names.contains(feature_name) {
+    fn feature_exists(&self, feature_name: &str) -> Result<(), DigiFiError> {
+        if !self.feature_names.contains(&feature_name.to_owned()) {
             return Err(DigiFiError::Other { title: Self::error_title(), details: format!("Feature `{}` doesn't exists in the collection.", feature_name), });
         }
         Ok(())

@@ -41,7 +41,6 @@ pub struct ValuationByComparablesParams {
 }
 
 impl ValuationByComparablesParams {
-
     /// Parameters for valuation by comparables.
     ///
     /// # Input
@@ -56,10 +55,10 @@ impl ValuationByComparablesParams {
         if valuations.len() < 5 {
             return Err(DigiFiError::ValidationError { title: Self::error_title(), details: "Minimum number of datapoints required is `5`.".to_owned(), });
         }
-        ValuationByComparablesParams::validate_array(&valuations, &pe_ratios, "pe_ratios")?;
-        ValuationByComparablesParams::validate_array(&valuations, &pb_ratios, "pb_ratios")?;
-        ValuationByComparablesParams::validate_array(&valuations, &ev_to_ebitda, "ev_to_ebitda")?;
-        Ok(ValuationByComparablesParams { valuations, pe_ratios, pb_ratios, ev_to_ebitda })
+        Self::validate_array(&valuations, &pe_ratios, "pe_ratios")?;
+        Self::validate_array(&valuations, &pb_ratios, "pb_ratios")?;
+        Self::validate_array(&valuations, &ev_to_ebitda, "ev_to_ebitda")?;
+        Ok(Self { valuations, pe_ratios, pb_ratios, ev_to_ebitda })
     }
 
     /// Validates an array against the valuations array.
@@ -212,7 +211,6 @@ pub struct Stock {
 }
 
 impl Stock {
-
     /// Creates a new `Stock` instance.
     ///
     /// # Input:
@@ -232,12 +230,13 @@ impl Stock {
     /// - `financial_instrument_id`: Parameters for defining regulatory categorization of an instrument
     /// - `asset_historical_data`: Time series asset data
     /// - `stochastic_model`: Stochastic model to use for price paths generation
-    pub fn new(price_per_share: f64, n_shares_outstanding: i32, dividend_per_share: f64, earnings_per_share: f64, quote_values: QuoteValues, initial_price: f64,
+    pub fn new(
+        price_per_share: f64, n_shares_outstanding: i32, dividend_per_share: f64, earnings_per_share: f64, quote_values: QuoteValues, initial_price: f64,
         compounding_type: CompoundingType, dividend_growth_rate: f64, stock_valuation_type: StockValuationType, pe: Option<f64>, pb: Option<f64>,
         ev_to_ebitda: Option<f64>, t_f: f64, financial_instrument_id: FinancialInstrumentId, asset_historical_data: AssetHistData,
         stochastic_model: Option<Box<dyn StochasticProcess>>
     ) -> Self {
-        Stock {
+        Self {
             price_per_share, n_shares_outstanding: n_shares_outstanding as f64, dividend_per_share, earnings_per_share, quote_values, initial_price,
             compounding_type, dividend_growth_rate, stock_valuation_type, pe, pb, ev_to_ebitda, t_f, financial_instrument_id, asset_historical_data,
             stochastic_model,

@@ -70,7 +70,7 @@ impl AMMLiquidityPool {
                 details: "The argument `char_number` must be the product of supplies of the tokens.".to_owned(),
             });
         }
-        Ok(AMMLiquidityPool { token_1, token_2, char_number, tolerance })
+        Ok(Self { token_1, token_2, char_number, tolerance })
     }
 
     pub fn token_1(&self) -> AMMToken {
@@ -140,10 +140,10 @@ impl AMMTransactionData {
         if percent_fee < 0.0 {
             return Err(DigiFiError::ParameterConstraint { title: Self::error_title(), constraint: "The argument `percent_fee` must be non-negative.".to_owned(), });
         }
-        Ok(AMMTransactionData { token_id, quantity, percent_fee })
+        Ok(Self { token_id, quantity, percent_fee })
     }
 
-    pub fn token_id(&self) -> &String {
+    pub fn token_id(&self) -> &str {
         &self.token_id
     }
 
@@ -211,13 +211,12 @@ pub struct SimpleAMM {
 }
 
 impl SimpleAMM {
-
     /// Creates a new `SimpleAMM` instance.
     /// 
     /// # Input
     /// - `liquidity_pool`: State of the liquidity pool to initiate the AMM with
     pub fn new(liquidity_pool: AMMLiquidityPool) -> Self {
-        SimpleAMM { liquidity_pool }
+        Self { liquidity_pool, }
     }
 
     /// Buy a quntity of a token from the AMM by submitting the buy order quoted in terms of the token to putchase.
@@ -293,7 +292,7 @@ impl SimpleAMM {
     pub fn get_liquidity_curve(&self, n_points: usize, token_1_start: f64, token_1_end: f64) -> LiquidityCurve {
         let x: Array1<f64> = Array1::linspace(token_1_start, token_1_end, n_points);
         let y: Array1<f64> = self.liquidity_pool.char_number() / &x;
-        LiquidityCurve { x, y }
+        LiquidityCurve { x, y, }
     }
 }
 

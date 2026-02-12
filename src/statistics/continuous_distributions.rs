@@ -62,7 +62,7 @@ impl ContinuousUniformDistribution {
                 constraint: "The argument `a` must be smaller or equal to the argument `b`.".to_owned(),
             });
         }
-        Ok(ContinuousUniformDistribution { a, b, })
+        Ok(Self { a, b, })
     }
 }
 
@@ -217,7 +217,7 @@ impl NormalDistribution {
                 constraint: "The argument `sigma` must be non-negative.".to_owned(),
             });
         }
-        Ok(NormalDistribution { mu, sigma, })
+        Ok(Self { mu, sigma, })
     }
 }
 
@@ -374,7 +374,7 @@ impl ExponentialDistribution {
                 constraint: "The argument `lambda` must be positive.".to_owned(),
             });
         }
-        Ok(ExponentialDistribution { lambda, })
+        Ok(Self { lambda, })
     }
 }
 
@@ -531,7 +531,7 @@ impl LaplaceDistribution {
                 constraint: "The argument `b` must be positive.".to_owned(),
             });
         }
-        Ok(LaplaceDistribution { mu, b, })
+        Ok(Self { mu, b, })
     }
 }
 
@@ -698,7 +698,7 @@ impl GammaDistribution {
         if theta <= 0.0 {
             return Err(DigiFiError::ParameterConstraint { title: Self::error_title(), constraint: "The argument `theta` must be positive.".to_owned(), });
         }
-        Ok(GammaDistribution { k, theta, })
+        Ok(Self { k, theta, })
     }
 }
 
@@ -904,7 +904,7 @@ impl StudentsTDistribution {
                 constraint: "The argument `v` must be positive.".to_owned(),
             });
         }
-        Ok(StudentsTDistribution { v, })
+        Ok(Self { v, })
     }
 }
 
@@ -1095,7 +1095,6 @@ pub struct ParetoDistribution {
 }
 
 impl ParetoDistribution {
-
     /// Creates a new `ParetoDistribution` instance.
     ///
     /// # Input
@@ -1118,7 +1117,7 @@ impl ParetoDistribution {
                 constraint: "The argument `a` must be positive.".to_owned(),
             });
         }
-        Ok(ParetoDistribution { scale, a, } )
+        Ok(Self { scale, a, } )
     }
 }
 
@@ -1271,7 +1270,6 @@ pub struct LogNormalDistribution {
 }
 
 impl LogNormalDistribution {
-
     /// Creates a new `LogNormalDistribution` instance.
     ///
     /// # Input
@@ -1287,7 +1285,7 @@ impl LogNormalDistribution {
                 constraint: "The argument `sigma` must be positive.".to_owned(),
             });
         }
-        Ok(LogNormalDistribution { mu, sigma, })
+        Ok(Self { mu, sigma, })
     }
 }
 
@@ -1430,7 +1428,6 @@ pub struct FDistribution {
 }
 
 impl FDistribution {
-
     /// Creates a new `FDistribution` instance.
     ///
     /// # Input
@@ -1446,7 +1443,7 @@ impl FDistribution {
                 constraint: "Both degrees of freedom `dof_1` and `dof_2` must be positive.".to_owned(),
             });
         }
-        Ok(FDistribution { dof_1, dof_2, })
+        Ok(Self { dof_1, dof_2, })
     }
 
     /// Returns degrees of freedom converted to `f64` in order (i.e., `dof_1`, `dof_2`).

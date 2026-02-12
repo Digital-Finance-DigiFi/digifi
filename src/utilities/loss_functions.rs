@@ -42,7 +42,6 @@ pub trait LossFunction {
 pub struct MAE;
 
 impl LossFunction for MAE {
-
     fn loss(&self, observation: f64, prediction: f64) -> f64 {
         (observation - prediction).abs()
     }
@@ -81,7 +80,6 @@ impl LossFunction for MAE {
 pub struct MSE;
 
 impl LossFunction for MSE {
-
     fn loss(&self, observation: f64, prediction: f64) -> f64 {
         (observation - prediction).powi(2)
     }
@@ -120,7 +118,6 @@ impl LossFunction for MSE {
 pub struct SSE;
 
 impl LossFunction for SSE {
-
     fn loss(&self, observation: f64, prediction: f64) -> f64 {
         (observation - prediction).powi(2)
     }
@@ -158,7 +155,6 @@ impl LossFunction for SSE {
 pub struct StraddleLoss;
 
 impl LossFunction for StraddleLoss {
-
     fn loss(&self, observation: f64, prediction: f64) -> f64 {
         2.0 * (prediction / observation - 1.0).abs()
     }

@@ -18,14 +18,13 @@ pub enum CompoundingType {
 }
 
 impl CompoundingType {
-
     /// Returns the  compounding frequency for the compounding type.
     /// 
     /// Note: For continuous compounding the frequency is set to `1` by default.
     pub fn frequency(&self) -> u32 {
         match self {
-            CompoundingType::Periodic { frequency } => *frequency,
-            CompoundingType::Continuous => 1,
+            Self::Periodic { frequency } => *frequency,
+            Self::Continuous => 1,
         }
     }
 }
@@ -321,14 +320,13 @@ pub struct Compounding {
 }
 
 impl Compounding {
-
     /// Creates a new `Compounding` instance.
     /// 
     /// # Input
     /// - `rate`: Discount rate
     /// - `compounding_type`: Type of compounding to use when computing the discount term
     pub fn new(rate: f64, compounding_type: &CompoundingType) -> Self {
-        Compounding { rate, compounding_type: *compounding_type }
+        Self { rate, compounding_type: *compounding_type }
     }
 
     /// Defines a compounding term with either continuous or periodic compounding.
@@ -463,7 +461,6 @@ pub struct Cashflow {
 }
 
 impl Cashflow {
-
     /// Creates a new `Cashflow` instance.
     /// 
     /// # Input
@@ -495,12 +492,12 @@ impl Cashflow {
                 } else {
                     vec![value; array_size]
                 };
-                Ok(Cashflow { cashflow: Array1::from_vec(cashflow), time })
+                Ok(Self { cashflow: Array1::from_vec(cashflow), time })
             },
             // Cashflow array is provided
             ParameterType::TimeSeries { values } => {
                 compare_len(&values.iter(), &time.time_array().iter(), "cashflow", "time_array")?;
-                Ok(Cashflow { cashflow: values, time })
+                Ok(Self { cashflow: values, time })
             },
         }
     }
@@ -577,7 +574,7 @@ impl Perpetuity {
                 constraint: "The `rate` cannot be smaller or equal to the `perpetuity_growth_rate`.".to_owned(),
             });
         }
-        Ok(Perpetuity { cashflow, rate, growth_rate, compounding_type })
+        Ok(Self { cashflow, rate, growth_rate, compounding_type })
     }
 
     /// Present value of the perpetuity.
@@ -675,7 +672,7 @@ impl Annuity {
                 constraint: "The `rate` must be larger the `annuity_growth_rate`.".to_owned(),
             });
         }
-        Ok(Annuity { cashflow, rate, t_f, growth_rate, compounding_type })
+        Ok(Self { cashflow, rate, t_f, growth_rate, compounding_type })
     }
     
     /// Present value of the annuity.

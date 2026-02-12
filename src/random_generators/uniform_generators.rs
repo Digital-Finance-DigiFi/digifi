@@ -49,7 +49,7 @@ impl LinearCongruentialGenerator {
     /// - `a`: Multiplierof the linear congruential generator
     /// - `b`: Increment of the linear congruential generator
     pub fn new(seed: u32, sample_size: usize, m: u32, a: u32, b: u32) -> Self {
-        LinearCongruentialGenerator { seed: seed as f64, sample_size, m: m as f64, a: a as f64, b: b as f64, }
+        Self { seed: seed as f64, sample_size, m: m as f64, a: a as f64, b: b as f64, }
     }
 }
 
@@ -63,7 +63,7 @@ impl RandomGenerator<LinearCongruentialGenerator> for LinearCongruentialGenerato
         let m: f64 = seed * 1_234.0;
         let a: f64 = seed / 10.0;
         let b: f64 = m / 10.0;
-        Ok(LinearCongruentialGenerator { seed, sample_size, m, a, b })
+        Ok(Self { seed, sample_size, m, a, b })
     }
 
     /// Array of pseudo-random generated numbers based on Linear Congruential Generator.
@@ -148,7 +148,7 @@ impl FibonacciGenerator {
                 constraint: "Parameter `nu` must be larger than parameter `mu`".to_owned(),
             })
         }
-        Ok(FibonacciGenerator { seed: seed as f64, sample_size, mu, nu, m: m as f64, a: a as f64, b: b as f64, })
+        Ok(Self { seed: seed as f64, sample_size, mu, nu, m: m as f64, a: a as f64, b: b as f64, })
     }
 }
 
@@ -168,7 +168,7 @@ impl RandomGenerator<FibonacciGenerator> for FibonacciGenerator {
         let m: f64 = seed * 1_234.0;
         let a: f64 = seed / 10.0;
         let b: f64 = m / 10.0;
-        Ok(FibonacciGenerator { seed, sample_size, mu: 5, nu: 17, m, a, b })
+        Ok(Self { seed, sample_size, mu: 5, nu: 17, m, a, b })
     }
 
     /// Array of pseudo-random generated numbers based on Fibonacci Generator.

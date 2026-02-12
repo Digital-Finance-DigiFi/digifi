@@ -112,19 +112,19 @@ impl From<&BondType> for BondTypeInfo {
     fn from(value: &BondType) -> Self {
         match value {
             BondType::AnnuityBond { principal, coupon_rate, maturity, first_coupon_time } => {
-                BondTypeInfo {
+                Self {
                     principal: *principal, coupon_rate: *coupon_rate, maturity: *maturity,
                     coupon_growth_rate: 0.0, first_coupon_time: match first_coupon_time { Some(v) => *v, None => 1.0, },
                 }
             },
             BondType::GrowingAnnuityBond { principal, coupon_rate, maturity, coupon_growth_rate, first_coupon_time } => {
-                BondTypeInfo {
+                Self {
                     principal: *principal, coupon_rate: *coupon_rate, maturity: *maturity,
                     coupon_growth_rate: *coupon_growth_rate, first_coupon_time: match first_coupon_time { Some(v) => *v, None => 1.0, },
                 }
             },
             BondType::ZeroCouponBond { principal, maturity } => {
-                BondTypeInfo { principal: *principal, coupon_rate: 0.0, maturity: *maturity, coupon_growth_rate: 0.0, first_coupon_time: 0.0, }
+                Self { principal: *principal, coupon_rate: 0.0, maturity: *maturity, coupon_growth_rate: 0.0, first_coupon_time: 0.0, }
             },
         }
     }
@@ -192,7 +192,6 @@ pub struct Bond {
 }
 
 impl Bond {
-
     /// Creates a new `Bond` instance.
     /// 
     /// # Input
@@ -204,7 +203,8 @@ impl Bond {
     /// - `financial_instrument_id`: Parameters for defining regulatory categorization of an instrument
     /// - `asset_historical_data`: Time series asset data
     /// - `stochastic_model`: Stochastic model to use for price paths generation
-    pub fn build(bond_type: BondType, discount_rate: ParameterType, initial_price: f64, compounding_type: CompoundingType, inflation_rate: Option<f64>,
+    pub fn build(
+        bond_type: BondType, discount_rate: ParameterType, initial_price: f64, compounding_type: CompoundingType, inflation_rate: Option<f64>,
         financial_instrument_id: FinancialInstrumentId, asset_historical_data: AssetHistData, stochastic_model: Option<Box<dyn StochasticProcess>>
     ) -> Result<Self, DigiFiError> {
         let bond_info: BondTypeInfo = (&bond_type).into();
@@ -214,7 +214,7 @@ impl Bond {
         let inflation_rate: f64 = inflation_rate.unwrap_or(0.0);
         let cashflow: Cashflow = Cashflow::build(ParameterType::Value { value: coupon }, time, bond_info.coupon_growth_rate, inflation_rate)?;
         let discount_rate: Array1<f64> = discount_rate.into_array(cashflow.len())?;
-        Ok(Bond {
+        Ok(Self {
             bond_type, principal: bond_info.principal, discount_rate, maturity: bond_info.maturity, initial_price: initial_price, compounding_type, compounding_frequency,
             financial_instrument_id, asset_historical_data: asset_historical_data, stochastic_model: stochastic_model, coupon, cashflow,
         })

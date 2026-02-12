@@ -183,12 +183,11 @@ pub struct LinearRegressionSettings {
 }
 
 impl LinearRegressionSettings {
-
     /// Returns linear regression settings with all settings enabled.
     /// 
     /// Note: This is a short cut to construct the settings for the full linear regression analysis.
     pub fn enable_all() -> Self {
-        LinearRegressionSettings {
+        Self {
             enable_sse: true, enable_r_squared: true, enable_adjusted_r_squared: true, enable_max_likelihood: true, enable_se: true,
             enable_cov: true, enable_pearson_corr: true,
             enable_t_test: true, t_test_cl: Some(stat_tests::ConfidenceLevel::default()), t_test_h0s: None,
@@ -202,7 +201,7 @@ impl LinearRegressionSettings {
     /// 
     /// Note: This is a short cut to construct the settings for the minimalistic linear regression analysis.
     pub fn disable_all() -> Self {
-        LinearRegressionSettings {
+        Self {
             enable_sse: false, enable_r_squared: false, enable_adjusted_r_squared: false, enable_max_likelihood: false, enable_se: false,
             enable_cov: false, enable_pearson_corr: false,
             enable_t_test: false, t_test_cl: None, t_test_h0s: None,
@@ -293,13 +292,12 @@ pub struct LinearRegressionAnalysis {
 }
 
 impl LinearRegressionAnalysis {
-
     /// Constructs a new instance of `LinearRegressionAnalysis`.
     /// 
     /// # Input
     /// - `settings`: Settings of the linear regression analysis (these determine what analysis and tests will be computed)
     pub fn new(settings: LinearRegressionSettings) -> Self {
-        LinearRegressionAnalysis { settings, }
+        Self { settings, }
     }
 
     /// Validates the input data for the linear regression analysis.

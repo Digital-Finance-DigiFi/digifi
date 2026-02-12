@@ -7,7 +7,6 @@ use crate::random_generators::{
 
 
 pub trait CustomSDEComponent {
-
     /// Custom SDE component function.
     ///
     /// # Input
@@ -95,7 +94,6 @@ pub enum SDEComponent {
 }
 
 impl SDEComponent {
-
     /// Validates the parameters of the SDE component type.
     ///
     /// # Input
@@ -107,7 +105,7 @@ impl SDEComponent {
     /// - Returns an error if the custom function does not return an array of the same length as there are number of paths.
     pub fn validate(&self, n_paths: usize) -> Result<(), DigiFiError> {
         match &self {
-            SDEComponent::ConvergenceToValue { final_time, a, b } => {
+            Self::ConvergenceToValue { final_time, a, b } => {
                 if b <= a {
                     return Err(DigiFiError::ParameterConstraint {
                         title: Self::error_title(),
@@ -121,7 +119,7 @@ impl SDEComponent {
                     });
                 }
             },
-            SDEComponent::Custom { f } => { f.validate(n_paths)?; },
+            Self::Custom { f } => { f.validate(n_paths)?; },
             _ => (),
         }
         Ok(())
@@ -145,22 +143,22 @@ impl SDEComponent {
             return Err(DigiFiError::WrongLength { title: Self::error_title(), arg: "stochastic_values".to_owned(), len: n_paths, });
         }
         match &self {
-            SDEComponent::Linear { a } => {
+            Self::Linear { a } => {
                 Ok(Array1::from_vec(vec![*a; n_paths]))
             },
-            SDEComponent::QuadraticTime { a, b } => {
+            Self::QuadraticTime { a, b } => {
                 Ok(Array1::from_vec(vec![2.0 * a + b; n_paths]))
             },
-            SDEComponent::PowerStochastic { a, power } => {
+            Self::PowerStochastic { a, power } => {
                 Ok(*a * stochastic_values.map(|v| v.powf(*power) ))
             },
-            SDEComponent::ConvergenceToValue { final_time, a, b } => {
+            Self::ConvergenceToValue { final_time, a, b } => {
                 Ok(Array1::from_vec(vec![(b - a) / (final_time - t); n_paths]))
             },
-            SDEComponent::RegressionToTrend { scale, trend } => {
+            Self::RegressionToTrend { scale, trend } => {
                 Ok(*scale * (*trend - stochastic_values))
             },
-            SDEComponent::Custom { f } => {
+            Self::Custom { f } => {
                 f.comp_func(n_paths, stochastic_values, t, dt)
             },
         }
@@ -175,7 +173,6 @@ impl ErrorTitle for SDEComponent {
 
 
 pub trait CustomNoise {
-
     /// Custom noise function.
     ///
     /// # Input
@@ -223,7 +220,6 @@ pub enum Noise {
 }
 
 impl Noise {
-
     /// Validates the parameters of the noise type.
     ///
     /// # Input
@@ -232,7 +228,7 @@ impl Noise {
     /// # Errors
     /// - Returns an error if the custom function does not return an array of the same length as there are number of paths.
     pub fn validate(&self, n_paths: usize) -> Result<(), DigiFiError> {
-        if let Noise::Custom { f } = &self { f.validate(n_paths)?; }
+        if let Self::Custom { f } = &self { f.validate(n_paths)?; }
         Ok(())
     }
 
@@ -246,20 +242,19 @@ impl Noise {
     /// - An array of noises for each path at a time step.
     pub fn get_noise(&self, n_paths: usize, dt: f64) -> Result<Array1<f64>, DigiFiError> {
         match &self {
-            Noise::StandardWhiteNoise => {
+            Self::StandardWhiteNoise => {
                 StandardNormalBoxMuller::new_shuffle(n_paths)?.generate()
             },
-            Noise::WeinerProcess => {
+            Self::WeinerProcess => {
                 Ok(dt.sqrt() * StandardNormalBoxMuller::new_shuffle(n_paths)?.generate()?)
             },
-            Noise::Custom { f } => { f.noise_func(n_paths, dt) }
+            Self::Custom { f } => { f.noise_func(n_paths, dt) }
         }
     }
 }
 
 
 pub trait CustomJump {
-
     /// Custom jump function.
     ///
     /// # Input
@@ -321,7 +316,6 @@ pub enum Jump {
 }
 
 impl Jump {
-
     /// Validates the parameters of the jump function type.
     ///
     /// # Input
@@ -333,8 +327,8 @@ impl Jump {
     /// - Returns an error if the rgument `p` of the compound Poisson bilateral jump is not in the range \[0, 1\].
     pub fn validate(&self, n_paths: usize) -> Result<(), DigiFiError> {
         match &self {
-            Jump::NoJumps => Ok(()),
-            Jump::CompoundPoissonNormal { lambda_j, .. } => {
+            Self::NoJumps => Ok(()),
+            Self::CompoundPoissonNormal { lambda_j, .. } => {
                 if lambda_j <= &0.0 {
                     return Err(DigiFiError::ParameterConstraint {
                         title: Self::error_title(),
@@ -343,7 +337,7 @@ impl Jump {
                 }
                 Ok(())
             },
-            Jump::CompoundPoissonBilateral { lambda_j, p, .. } => {
+            Self::CompoundPoissonBilateral { lambda_j, p, .. } => {
                 if lambda_j <= &0.0 {
                     return Err(DigiFiError::ParameterConstraint {
                         title: Self::error_title(),
@@ -358,7 +352,7 @@ impl Jump {
                 }
                 Ok(())
             },
-            Jump::CustomJump { f } => { f.validate(n_paths) },
+            Self::CustomJump { f } => { f.validate(n_paths) },
         }
     }
 
@@ -369,13 +363,13 @@ impl Jump {
     /// - `dt`: Time step increment
     pub fn get_jumps(&self, n_paths: usize, dt: f64) -> Result<Array1<f64>, DigiFiError> {
         match &self {
-            Jump::NoJumps => { Ok(Array1::from_vec(vec![0.0; n_paths])) },
-            Jump::CompoundPoissonNormal { lambda_j, mu_j, sigma_j } => {
+            Self::NoJumps => { Ok(Array1::from_vec(vec![0.0; n_paths])) },
+            Self::CompoundPoissonNormal { lambda_j, mu_j, sigma_j } => {
                 let pois_dist: PoissonDistribution = PoissonDistribution::build(lambda_j * dt)?;
                 let dp: Array1<f64> = inverse_transform(&pois_dist, n_paths)?;
                 Ok(*mu_j * &dp + *sigma_j * dp.map(|v| v.sqrt() ) * StandardNormalBoxMuller::new_shuffle(n_paths)?.generate()?)
             },
-            Jump::CompoundPoissonBilateral { lambda_j, p, eta_d, eta_u } => {
+            Self::CompoundPoissonBilateral { lambda_j, p, eta_d, eta_u } => {
                 let pois_dist: PoissonDistribution = PoissonDistribution::build(lambda_j * dt)?;
                 let dp: Array1<f64> = inverse_transform(&pois_dist, n_paths)?;
                 // Assymetric double exponential distribution
@@ -393,7 +387,7 @@ impl Jump {
                 }
                 Ok(y)
             },
-            Jump::CustomJump { f } => { f.jump_func(n_paths, dt) },
+            Self::CustomJump { f } => { f.jump_func(n_paths, dt) },
         }
     }
 }

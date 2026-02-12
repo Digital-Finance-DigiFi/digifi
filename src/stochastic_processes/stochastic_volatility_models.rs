@@ -78,7 +78,7 @@ impl ConstantElasticityOfVariance {
         }
         let dt: f64 = t_f / (n_steps as f64);
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
-        Ok(ConstantElasticityOfVariance { mu, sigma, gamma, n_paths, n_steps, t_f, s_0, dt, t })
+        Ok(Self { mu, sigma, gamma, n_paths, n_steps, t_f, s_0, dt, t })
     }
 }
 
@@ -216,7 +216,7 @@ impl HestonStochasticVolatility {
     pub fn new(mu: f64, k: f64, theta: f64, epsilon: f64, rho: f64, n_paths: usize, n_steps: usize, t_f: f64, s_0: f64, v_0: f64) -> Self {
         let dt: f64 = t_f / (n_steps as f64);
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
-        HestonStochasticVolatility { mu, k, theta, epsilon, rho, n_paths, n_steps, t_f, s_0, v_0, dt, t }
+        Self { mu, k, theta, epsilon, rho, n_paths, n_steps, t_f, s_0, v_0, dt, t }
     }
 }
 
@@ -349,7 +349,7 @@ impl VarianceGammaProcess {
     pub fn new(mu: f64, sigma: f64, kappa: f64, n_paths: usize, n_steps: usize, t_f: f64, s_0: f64) -> Self {
         let dt: f64 = t_f / (n_steps as f64);
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
-        VarianceGammaProcess { mu, sigma, kappa, n_paths, n_steps, t_f, s_0, dt, t }
+        Self { mu, sigma, kappa, n_paths, n_steps, t_f, s_0, dt, t }
     }
 }
 

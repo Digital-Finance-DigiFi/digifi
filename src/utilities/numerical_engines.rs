@@ -45,7 +45,7 @@ impl NelderMead {
         let adaptive: bool = match adaptive { Some(v) => v, None => false };
         let x_tolerance: f64 = match x_tolerance { Some(v) => v, None => 1e-4f64 };
         let f_tolerance: f64 = match f_tolerance { Some(v) => v, None => 1e-4f64 };
-        NelderMead { max_iterations, max_fun_calls, adaptive, x_tolerance, f_tolerance }
+        Self { max_iterations, max_fun_calls, adaptive, x_tolerance, f_tolerance }
     }
 
     /// Search for the value minimizing `func` given an initial guess in the form of a point. The algorithm will

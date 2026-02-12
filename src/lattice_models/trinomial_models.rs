@@ -260,7 +260,7 @@ impl BrownianMotionTrinomialModel {
         let d: f64 = (-sigma * (2.0*dt).sqrt()).exp();
         let p_u: f64 = (((dt*(r-q)/2.0).exp() - (-sigma*(dt/2.0).sqrt()).exp()) / ((sigma*(dt/2.0).sqrt()).exp() - (-sigma*(dt/2.0).sqrt()).exp())).powi(2);
         let p_d: f64 = (((sigma*(dt/2.0).sqrt()).exp() - ((dt*(r-q)/2.0).exp())) / ((sigma*(dt/2.0).sqrt()).exp() - (-sigma*(dt/2.0).sqrt()).exp())).powi(2);
-        Ok(BrownianMotionTrinomialModel { payoff_object, s_0, time_to_maturity, r, _sigma: sigma, _q: q, n_steps, _dt: dt, u, d, p_u, p_d })
+        Ok(Self { payoff_object, s_0, time_to_maturity, r, _sigma: sigma, _q: q, n_steps, _dt: dt, u, d, p_u, p_d })
     }
 }
 

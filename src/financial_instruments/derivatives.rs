@@ -182,7 +182,6 @@ pub struct Contract {
 }
 
 impl Contract {
-
     /// Creates a new `Contract` instance.
     ///
     /// - `contract_type`: Type of contract
@@ -198,7 +197,8 @@ impl Contract {
     ///
     /// # Errors
     /// - Returns an error if time to maturity is negative.
-    pub fn build(_contract_type: ContractType, current_contract_price: f64, delivery_price: f64, discount_rate: f64, time_to_maturity: f64, spot_price: f64,
+    pub fn build(
+        _contract_type: ContractType, current_contract_price: f64, delivery_price: f64, discount_rate: f64, time_to_maturity: f64, spot_price: f64,
         compounding_type: CompoundingType, financial_instrument_id: FinancialInstrumentId, asset_historical_data: AssetHistData,
         stochastic_model: Option<Box<dyn StochasticProcess>>
     ) -> Result<Self, DigiFiError> {
@@ -208,7 +208,7 @@ impl Contract {
                 constraint: "The argument `time_to_maturity` must be non-negative.".to_owned(),
             });
         }
-        Ok(Contract {
+        Ok(Self {
             _contract_type, current_contract_price, delivery_price, discount_rate, time_to_maturity, spot_price, compounding_type,
             financial_instrument_id, asset_historical_data, stochastic_model,
         })
@@ -398,7 +398,6 @@ pub struct OptionContract {
 }
 
 impl OptionContract {
-
     /// Creates a new `OptionContract` instance.
     ///
     /// # Input
@@ -419,7 +418,8 @@ impl OptionContract {
     /// # Errors
     /// - Returns an error if the maturity is negative.
     /// - Returns an error if Black-Scholes pricing method is used together with any but European option type.
-    pub fn build(asset_price: f64, strike_price: f64, discount_rate: f64, yield_: f64, time_to_maturity: f64, sigma: f64, option_type: OptionType,
+    pub fn build(
+        asset_price: f64, strike_price: f64, discount_rate: f64, yield_: f64, time_to_maturity: f64, sigma: f64, option_type: OptionType,
         payoff: Box<dyn Payoff>, initial_option_price: f64, option_pricing_method: OptionPricingMethod, financial_instrument_id: FinancialInstrumentId,
         asset_historical_data: AssetHistData, stochastic_model: Option<Box<dyn StochasticProcess>>
     ) -> Result<Self, DigiFiError> {
@@ -436,7 +436,7 @@ impl OptionContract {
             }
         }
         payoff.validate_payoff(5)?;
-        Ok(OptionContract {
+        Ok(Self {
             asset_price, strike_price, discount_rate, yield_, time_to_maturity, sigma, option_type, payoff, initial_option_price, option_pricing_method,
             financial_instrument_id, asset_historical_data, stochastic_model,
         })

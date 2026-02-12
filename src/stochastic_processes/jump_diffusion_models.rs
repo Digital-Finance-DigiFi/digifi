@@ -80,7 +80,7 @@ impl MertonJumpDiffusionProcess {
     pub fn new(mu_s: f64, sigma_s: f64, mu_j: f64, sigma_j: f64, lambda_j: f64, n_paths: usize, n_steps: usize, t_f: f64, s_0: f64) -> Self {
         let dt: f64 = t_f / (n_steps as f64);
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
-        MertonJumpDiffusionProcess { mu_s, sigma_s, mu_j, sigma_j, lambda_j, n_paths, n_steps, t_f, s_0, dt, t }
+        Self { mu_s, sigma_s, mu_j, sigma_j, lambda_j, n_paths, n_steps, t_f, s_0, dt, t }
     }
 }
 
@@ -235,7 +235,7 @@ impl KouJumpDiffusionProcess {
         }
         let dt: f64 = t_f / (n_steps as f64);
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
-        Ok(KouJumpDiffusionProcess { mu, sigma, lambda_n, eta_1, eta_2, p, n_paths, n_steps, t_f, s_0, dt, t })
+        Ok(Self { mu, sigma, lambda_n, eta_1, eta_2, p, n_paths, n_steps, t_f, s_0, dt, t })
     }
 }
 

@@ -55,11 +55,11 @@ impl CAPMType {
     /// - Returns an error if the length of any of the arrays do not match in length (i.e., `smb`, `hml`, `rmw`, `cma`)
     pub fn self_validate(&self) -> Result<(), DigiFiError> {
         match self {
-            CAPMType::Standard => Ok(()),
-            CAPMType::ThreeFactorFamaFrench { smb, hml } => {
+            Self::Standard => Ok(()),
+            Self::ThreeFactorFamaFrench { smb, hml } => {
                 compare_len(&smb.iter(), &hml.iter(), "smb", "hml")
             },
-            CAPMType::FiveFactorFamaFrench { smb, hml, rmw, cma } => {
+            Self::FiveFactorFamaFrench { smb, hml, rmw, cma } => {
                 compare_len(&smb.iter(), &hml.iter(), "smb", "hml")?;
                 compare_len(&smb.iter(), &rmw.iter(), "smb", "rmw")?;
                 compare_len(&smb.iter(), &cma.iter(), "smb", "cma")
@@ -168,7 +168,7 @@ impl CAPM {
                 }
             }
         }
-        Ok(CAPM { market_returns, rf, capm_type, solution_type })
+        Ok(Self { market_returns, rf, capm_type, solution_type })
     }
 
     /// Computes the expected return premium of an asset/project given the risk-free rate, expected market return, SMB, HML, RMW, CMA and their betas.

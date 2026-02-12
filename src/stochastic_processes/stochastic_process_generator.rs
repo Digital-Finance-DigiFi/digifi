@@ -129,7 +129,6 @@ pub struct SDE {
 }
 
 impl SDE {
-
     /// Creates a new `SDE` instance.
     ///
     /// # Input
@@ -152,7 +151,7 @@ impl SDE {
         // Definition of SDE parameters
         let dt: f64 = t_f / (n_steps as f64);
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
-        Ok(SDE { t_f, s_0, n_steps, n_paths, drift_component, diffusion_component, noise, jump, dt, t, })
+        Ok(Self { t_f, s_0, n_steps, n_paths, drift_component, diffusion_component, noise, jump, dt, t, })
     }
 }
 
@@ -259,7 +258,6 @@ pub struct StochasticDrift {
 }
 
 impl StochasticDrift {
-
     /// Creates a new `StochasticDrift` instance.
     ///
     /// # Input
@@ -275,7 +273,7 @@ impl StochasticDrift {
         // Definition of SDE parameters
         let dt: f64 = t_f / (n_steps as f64);
         let t: Array1<f64> = Array1::range(0.0, t_f + dt, dt);
-        Ok(StochasticDrift { t_f, n_steps, n_paths, stochastic_drift_type, error, dt, t, })
+        Ok(Self { t_f, n_steps, n_paths, stochastic_drift_type, error, dt, t, })
     }
 }
 

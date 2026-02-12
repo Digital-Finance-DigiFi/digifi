@@ -272,7 +272,6 @@ pub enum TransformationType {
 }
 
 impl TransformationType {
-
     /// Performs specified data transformation on the data passed in.
     /// 
     /// # Input
@@ -282,13 +281,13 @@ impl TransformationType {
     /// - Transformed data array
     pub fn transformation(&self, data: &Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
         let transformed_data: Array1<f64> = match self {
-            TransformationType::MinMaxScaling { a, b } => min_max_scaling(data.clone(), *a, *b),
-            TransformationType::PercentChange => percent_change(data),
-            TransformationType::LogReturnTransformation => log_return_transformation(data),
-            TransformationType::Differencing { order } => differencing(data, *order)?,
-            TransformationType::RankTransformation => rank_transformation(data),
-            TransformationType::UnitVectorNormalization { p } => unit_vector_normalization(data.clone(), *p),
-            TransformationType::No => data.clone(),
+            Self::MinMaxScaling { a, b } => min_max_scaling(data.clone(), *a, *b),
+            Self::PercentChange => percent_change(data),
+            Self::LogReturnTransformation => log_return_transformation(data),
+            Self::Differencing { order } => differencing(data, *order)?,
+            Self::RankTransformation => rank_transformation(data),
+            Self::UnitVectorNormalization { p } => unit_vector_normalization(data.clone(), *p),
+            Self::No => data.clone(),
         };
         Ok(transformed_data)
     }
@@ -299,7 +298,6 @@ impl TransformationType {
 pub struct DataTransformations;
 
 impl DataTransformations {
-
     /// Performs specified data transformation on the data passed in.
     /// 
     /// # Input

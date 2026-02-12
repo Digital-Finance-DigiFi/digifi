@@ -109,7 +109,6 @@ pub enum AROrderMethod {
 }
 
 impl AROrderMethod {
-
     /// Returns the the maximum lag of the AR model. If no order or maximum lag provided, will default to
     /// `min(10 * n.log10(), n // 2 - 1)`
     /// 
@@ -488,7 +487,7 @@ impl AR {
             },
             _ => (),
         }
-        Ok(AR { settings, })
+        Ok(Self { settings, })
     }
 
     /// Validates the order of the AR model.
