@@ -255,7 +255,7 @@ impl GrangerCausalityTest {
         let dof_1: usize = parent_d - nested_d;
         let dof_2: usize = n_data_points - parent_d;
         let p_value: f64 = 1.0 - FDistribution::build(dof_1, dof_2)?.cdf(f_statistic)?;
-        let p_cl: f64 = match self.settings.f_test_cl { Some(v) => v.get_p(), None => ConfidenceLevel::default().get_p() };
+        let p_cl: f64 = self.settings.f_test_cl.unwrap_or_default().get_p();
         let reject_h0: bool = if p_value < p_cl { true } else { false };
         Ok((nested_rss, nested_d, parent_rss, parent_d, f_statistic, dof_1, dof_2, p_value, p_cl, reject_h0))
     }
@@ -617,7 +617,7 @@ pub fn simple_granger_causality_test(x: &Array1<f64>, y: &Array1<f64>, max_lag: 
     let dof_1: usize = parent_d - nested_d;
     let dof_2: usize = n_data_points - parent_d;
     let p_value: f64 = 1.0 - FDistribution::build(dof_1, dof_2)?.cdf(f_statistic)?;
-    let p_cl: f64 = match f_test_cl { Some(v) => v.get_p(), None => ConfidenceLevel::default().get_p() };
+    let p_cl: f64 = f_test_cl.unwrap_or_default().get_p();
     let f_test_reject_h0: bool = if p_value < p_cl { true } else { false };
     if !f_test_reject_h0 { result.failed_reject_h0_reason = Some(GrangerCausalityRejectReason::FTestRejected); }
     // Result

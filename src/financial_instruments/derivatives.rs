@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use ndarray::Array1;
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
@@ -758,6 +759,7 @@ impl OptionContract {
     ///
     /// # Output
     /// - Gamma
+    /// 
     /// # Links
     /// - Wikipedia: <https://en.wikipedia.org/wiki/Greeks_(finance)#Formulae_for_European_option_Greeks>
     /// - Original Source: N/A
@@ -765,6 +767,30 @@ impl OptionContract {
         let (d_1, _) = self.european_option_black_scholes_params()?;
         let normal_dist: NormalDistribution = NormalDistribution::build(0.0, 1.0)?;
         Ok((-self.yield_ * self.time_to_maturity).exp() * normal_dist.cdf(d_1)? / (self.asset_price * self.sigma * self.time_to_maturity.sqrt()))
+    }
+
+    /// Price table that consists of option prices for each respective stike price.
+    /// 
+    /// Note: The entries in the table are in the form `(strike_price, option_price)`.
+    /// 
+    /// # Input
+    /// - `strike_prices`: Iterator of strike prices over which to construct the table.
+    /// 
+    /// # Output
+    /// - Table of option prices for their respective strike prices
+    pub fn present_value_table<T, I>(&mut self, strike_prices: T) -> Result<Vec<(f64, f64)>, DigiFiError>
+    where
+        T: Iterator<Item = I> + ExactSizeIterator,
+        I: Borrow<f64>,
+    {
+        let original_strike_price: f64 = self.strike_price;
+        let mut price_table: Vec<(f64, f64)> = Vec::with_capacity(strike_prices.len());
+        for strike_price in strike_prices {
+            self.strike_price = *strike_price.borrow();
+            price_table.push((self.strike_price, self.present_value()?));
+        }
+        self.strike_price = original_strike_price;
+        Ok(price_table)
     }
 
     /// Surface (i.e., underlying asset price vs option value vs time-to-maturity) of the option price as it approaches maturity.

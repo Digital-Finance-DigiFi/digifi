@@ -224,7 +224,7 @@ pub fn f_test_anova(sample_groups: Vec<&Array1<f64>>, cl: Option<ConfidenceLevel
     // F-test
     let f_score: f64 = f_statistic(explained_variance, unexplained_variance);
     let p_value: f64 = 1.0 - FDistribution::build(dof_1 as usize, dof_2 as usize)?.cdf(f_score)?;
-    let p_cl: f64 = match cl { Some(v) => v.get_p(), None => ConfidenceLevel::default().get_p() };
+    let p_cl: f64 = cl.unwrap_or_default().get_p();
     let reject_h0: bool = if p_value < p_cl { true } else { false };
     Ok(FTestResult {
         reject_h0, f_score, k: k as f64, n, overall_mean, group_means, group_ns, explained_variance, unexplained_variance, dof_1, dof_2, p_value, p_cl, })

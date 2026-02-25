@@ -211,7 +211,7 @@ pub fn t_test_two_sample(sample_1: &Array1<f64>, sample_2: &Array1<f64>, cl: Opt
     };
     // Obtain confidence interval value
     let p_value: f64 = 1.0 - StudentsTDistribution::build(dof)?.cdf(t_score)?;
-    let p_cl: f64 = match cl { Some(v) => 1.0 - v.get_p(), None => 1.0 - ConfidenceLevel::default().get_p() };
+    let p_cl: f64 = 1.0 - cl.unwrap_or_default().get_p();
     let reject_h0: bool = if p_cl < p_value { true } else { false };
     Ok(TTestResult { reject_h0, t_score, dof, p_value, p_cl })
 }
@@ -291,7 +291,7 @@ pub fn t_test_lr(beta: f64, beta_0: Option<f64>, y: &Array1<f64>, y_prediction: 
             details: "There are fewer data points in `y` array than `ddof`.".to_owned(),
         })? as f64;
     let p_value: f64 = 1.0 - StudentsTDistribution::build(dof)?.cdf(t_score)?;
-    let p_cl: f64 = match cl { Some(v) => v.get_p(), None => ConfidenceLevel::default().get_p() };
+    let p_cl: f64 = cl.unwrap_or_default().get_p();
     let reject_h0: bool = if p_value < p_cl { true } else { false };
     Ok(TTestResult { reject_h0, t_score, dof, p_value, p_cl })
 }

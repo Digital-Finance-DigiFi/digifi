@@ -14,7 +14,8 @@ pub use self::continuous_distributions::{
     ParetoDistribution, LogNormalDistribution, FDistribution,
 };
 pub use self::stat_tests::{
-    ConfidenceLevel, ADFType, ADFResult, adf, CointegrationResult, cointegration,
+    ConfidenceLevel, CointegrationResult, cointegration,
+    ADFType, ADFResult, adf,
     TTestResult, TTestTwoSampleCase, t_test_two_sample, t_test_lr,
     nested_f_statistic, FTestResult, f_test_anova,
     GrangerCausalityTestType, GrangerCausalityRejectReason, GrangerCausalityResult, GrangerCausalitySettings,
