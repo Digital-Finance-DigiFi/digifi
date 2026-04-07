@@ -4,11 +4,11 @@ use ndarray::{Array1, Array2, Axis, arr1, concatenate};
 use serde::{Serialize, Deserialize};
 #[cfg(feature = "plotly")]
 use plotly::{Plot, Trace, Scatter, Layout, layout::Axis as PlotAxis, common::{Mode, Marker, MarkerSymbol, HoverInfo, color::NamedColor}};
-use crate::error::{DigiFiError, ErrorTitle};
+use crate::{error::{DigiFiError, ErrorTitle}, utilities::VectorNumericalMinimiser};
 use crate::utilities::{
     data_transformations::percent_change,
     loss_functions::{LossFunction, StraddleLoss},
-    numerical_engines::nelder_mead
+    numerical_engines::NelderMead,
 };
 use crate::statistics::covariance;
 use crate::portfolio_applications::{ReturnsMethod, returns_average, AssetHistData, PortfolioInstrument};
@@ -35,11 +35,11 @@ pub enum PortfolioReturnsType {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// Output produced by the portfolio optimization.
-pub struct PortfolioOptimizationResult {
-    /// The optimized output of the performance metric
+/// Output produced by the portfolio optimisation.
+pub struct PortfolioOptimisationResult {
+    /// The optimised output of the performance metric
     pub performance_score: f64,
-    /// Weights of the portfolio that have optimized the performance metric
+    /// Weights of the portfolio that have optimised the performance metric
     pub weights: Vec<f64>,
     /// Names/labels of the assets in the portfolio (The order matches to the order of weights)
     pub assets_names: Vec<String>,
@@ -49,7 +49,7 @@ pub struct PortfolioOptimizationResult {
     pub std: f64,
 }
 
-impl PortfolioOptimizationResult {
+impl PortfolioOptimisationResult {
 
     /// Returns a list of asset names as a `String`.
     pub fn assets_names_string(&self) -> String {
@@ -86,11 +86,11 @@ impl PortfolioOptimizationResult {
 /// Efficient frontier of the market for a given performance metric.
 pub struct EfficientFrontier {
     /// Portfolio with maximum performance score based on the performance metric
-    pub max_performance: PortfolioOptimizationResult,
+    pub max_performance: PortfolioOptimisationResult,
     /// Efficient frontier
-    pub frontier: Vec<PortfolioOptimizationResult>,
+    pub frontier: Vec<PortfolioOptimisationResult>,
     /// Portfolio with minimum standard deviation of returns
-    pub min_std: PortfolioOptimizationResult,
+    pub min_std: PortfolioOptimisationResult,
 }
 
 impl EfficientFrontier {
@@ -151,7 +151,7 @@ impl ErrorTitle for Asset {
 /// - `financial_instruments`: List of financial instruments that will form the market for the portfolio
 /// - `n_periods`: Number of periods used to estimate the average returns over (e.g., for daily prices n_periods=252 produces annualized average)
 /// - `returns_method`: Method for computing the returns
-/// - `performance_metric`: Performance metric used to optimized the weights of the protfolio
+/// - `performance_metric`: Performance metric used to optimised the weights of the protfolio
 ///
 /// # Output
 /// - `Portfolio` struct
@@ -176,13 +176,13 @@ pub fn generate_portfolio(
 ///
 /// # Examples
 ///
-/// 1. Maximizing the performance of the portfolio (Using Sharpe ratio):
+/// 1. Maximising the performance of the portfolio (Using Sharpe ratio):
 ///
 /// ```rust
 /// use std::collections::HashMap;
 /// use ndarray::Array1;
 /// use digifi::utilities::{TEST_ACCURACY, Time};
-/// use digifi::portfolio_applications::{AssetHistData, SharpeRatio, Asset, EfficientFrontier, Portfolio, PortfolioOptimizationResult};
+/// use digifi::portfolio_applications::{AssetHistData, SharpeRatio, Asset, EfficientFrontier, Portfolio, PortfolioOptimisationResult};
 ///
 /// #[cfg(feature = "sample_data")]
 /// fn test_max_performance() -> () {
@@ -200,9 +200,9 @@ pub fn generate_portfolio(
 ///     }
 ///     let performance_metric: Box<SharpeRatio> = Box::new(SharpeRatio { rf: 0.02 });
 ///
-///     // Portfolio definition and optimization
+///     // Portfolio definition and optimisation
 ///     let mut portfolio: Portfolio = Portfolio::build(assets, None, None, None, performance_metric).unwrap();
-///     let max_sr: PortfolioOptimizationResult = portfolio.maximize_performance(Some(1_000), Some(10_000)).unwrap();
+///     let max_sr: PortfolioOptimisationResult = portfolio.maximise_performance(Some(1_000), Some(10_000)).unwrap();
 ///
 ///     assert!((max_sr.performance_score - 2.010620260010254).abs() < TEST_ACCURACY);
 ///     assert!((max_sr.expected_return - 0.7005606636574792).abs() < TEST_ACCURACY);
@@ -210,13 +210,13 @@ pub fn generate_portfolio(
 /// }
 /// ```
 ///
-/// 2. Minimizing the standard deviation of the portfolio:
+/// 2. Minimising the standard deviation of the portfolio:
 ///
 /// ```rust
 /// use std::collections::HashMap;
 /// use ndarray::Array1;
 /// use digifi::utilities::{TEST_ACCURACY, Time};
-/// use digifi::portfolio_applications::{AssetHistData, SharpeRatio, Asset, EfficientFrontier, Portfolio, PortfolioOptimizationResult};
+/// use digifi::portfolio_applications::{AssetHistData, SharpeRatio, Asset, EfficientFrontier, Portfolio, PortfolioOptimisationResult};
 ///
 /// #[cfg(feature = "sample_data")]
 /// fn test_min_std() -> () {
@@ -234,9 +234,9 @@ pub fn generate_portfolio(
 ///     }
 ///     let performance_metric: Box<SharpeRatio> = Box::new(SharpeRatio { rf: 0.02 });
 ///
-///     // Portfolio definition and optimization
+///     // Portfolio definition and optimisation
 ///     let mut portfolio: Portfolio = Portfolio::build(assets, None, None, None, performance_metric).unwrap();
-///     let min_std: PortfolioOptimizationResult = portfolio.minimize_std(Some(1_000), Some(10_000)).unwrap();
+///     let min_std: PortfolioOptimisationResult = portfolio.minimise_std(Some(1_000), Some(10_000)).unwrap();
 ///
 ///     assert!((min_std.performance_score - 1.1159801330821704).abs() < TEST_ACCURACY);
 ///     assert!((min_std.expected_return - 0.22963237821918314).abs() < TEST_ACCURACY);
@@ -250,7 +250,7 @@ pub fn generate_portfolio(
 /// use std::collections::HashMap;
 /// use ndarray::Array1;
 /// use digifi::utilities::{TEST_ACCURACY, Time};
-/// use digifi::portfolio_applications::{AssetHistData, SharpeRatio, Asset, EfficientFrontier, Portfolio, PortfolioOptimizationResult};
+/// use digifi::portfolio_applications::{AssetHistData, SharpeRatio, Asset, EfficientFrontier, Portfolio, PortfolioOptimisationResult};
 ///
 /// #[cfg(feature = "sample_data")]
 /// fn test_efficient_frontier() -> () {
@@ -268,7 +268,7 @@ pub fn generate_portfolio(
 ///     }
 ///     let performance_metric: Box<SharpeRatio> = Box::new(SharpeRatio { rf: 0.02 });
 ///
-///     // Portfolio definition and optimization
+///     // Portfolio definition and optimisation
 ///     let mut portfolio: Portfolio = Portfolio::build(assets, None, None, None, performance_metric).unwrap();
 ///     let frontier: EfficientFrontier = portfolio.efficient_frontier(30, Some(1_000), Some(10_000)).unwrap();
 ///
@@ -291,7 +291,7 @@ pub struct Portfolio {
     n_periods: usize,
     /// Method for computing the returns
     returns_method: ReturnsMethod,
-    /// Performance metric used to optimized the weights of the protfolio
+    /// Performance metric used to optimised the weights of the protfolio
     performance_metric: Box<dyn PortfolioPerformanceMetric>,
 }
 
@@ -303,7 +303,7 @@ impl Portfolio {
     /// - `rounding_error_tol`: Tolerance for the difference between the cumulative sum of the weights and `1`
     /// - `n_periods`: Number of periods used to estimate the average returns over (e.g., for daily prices `n_periods=252` produces annualized average)
     /// - `returns_method`: Method for computing the returns
-    /// - `performance_metric`: Performance metric used to optimized the weights of the protfolio
+    /// - `performance_metric`: Performance metric used to optimised the weights of the protfolio
     ///
     /// # Errors
     /// - Returns an error if the weight is infinite or `NAN`.
@@ -575,32 +575,32 @@ impl Portfolio {
         Ok(self.performance_metric.performance(mean_returns, std_returns))
     }
 
-    /// Finds the portfolio that optimizes the performance metric.
+    /// Finds the portfolio that optimises the performance metric.
     ///
     /// # Input
     /// - `max_iterations`: Maximum number of iterations the algorithm is allowed to perform
     /// - `max_fun_calls`: Maximum number of function calls the algorithm is allowed to perform
     ///
     /// # Output
-    /// - Portfolio optimization result (i.e., optimized performance score and weights of the protfolio that produce that performance score)
-    pub fn maximize_performance(&mut self, max_iterations: Option<u64>, max_fun_calls: Option<u64>) -> Result<PortfolioOptimizationResult, DigiFiError> {
-        let initial_guess: Vec<f64> = self.uniform_weights();
-        let f = |v: &[f64]| {
+    /// - Portfolio optimisation result (i.e., optimised performance score and weights of the protfolio that produce that performance score)
+    pub fn maximise_performance(&mut self, max_iterations: Option<u64>, max_fun_calls: Option<u64>) -> Result<PortfolioOptimisationResult, DigiFiError> {
+        let initial_guess: Array1<f64> = arr1(&self.uniform_weights());
+        let func = |weights: &Array1<f64>| -> Result<f64, DigiFiError> {
             // Weights constraint
-            let weights: Array1<f64> = arr1(v);
-            let weights: Vec<f64> = (&weights / weights.sum()).to_vec();
-            self.change_weights(weights).unwrap();
-            // Portfolio optimization
-            let mean_returns: f64 = self.mean_return().unwrap();
-            let std_returns: f64 = self.standard_deviation().unwrap();
-            self.performance_metric.objective_function(mean_returns, std_returns)
+            let weights: Vec<f64> = (weights / weights.sum()).to_vec();
+            self.change_weights(weights)?;
+            // Portfolio optimisation
+            let mean_returns: f64 = self.mean_return()?;
+            let std_returns: f64 = self.standard_deviation()?;
+            Ok(self.performance_metric.objective_function(mean_returns, std_returns))
         };
-        let weights: Vec<f64> = nelder_mead(f, initial_guess, max_iterations, max_fun_calls, Some(true), None, None)?.to_vec();
+        let nelder_mead: NelderMead = NelderMead::default().max_iterations(max_iterations).max_fun_calls(max_fun_calls).adaptive(Some(true));
+        let weights: Vec<f64> = nelder_mead.minimise(func.into(), initial_guess)?.argmin.to_vec();
         self.change_weights(weights)?;
         let performance: f64 = self.performance()?;
         let expected_return: f64 = self.mean_return()?;
         let std: f64 = self.standard_deviation()?;
-        Ok(PortfolioOptimizationResult { performance_score: performance, weights: self.weights.clone(), assets_names: self.assets_names.clone(), expected_return, std })
+        Ok(PortfolioOptimisationResult { performance_score: performance, weights: self.weights.clone(), assets_names: self.assets_names.clone(), expected_return, std })
     }
 
     /// Find portfolio with lowest standard deviation.
@@ -610,54 +610,54 @@ impl Portfolio {
     /// - `max_fun_calls`: Maximum number of function calls the algorithm is allowed to perform
     ///
     /// # Output
-    /// - Portfolio optimization result (i.e., optimized performance score and weights of the protfolio that produce minimum standard deviation)
-    pub fn minimize_std(&mut self, max_iterations: Option<u64>, max_fun_calls: Option<u64>) -> Result<PortfolioOptimizationResult, DigiFiError> {
-        let initial_guess: Vec<f64> = self.uniform_weights();
-        let f = |v: &[f64]| {
+    /// - Portfolio optimisation result (i.e., optimised performance score and weights of the protfolio that produce minimum standard deviation)
+    pub fn minimise_std(&mut self, max_iterations: Option<u64>, max_fun_calls: Option<u64>) -> Result<PortfolioOptimisationResult, DigiFiError> {
+        let initial_guess: Array1<f64> = arr1(&self.uniform_weights());
+        let func = |weights: &Array1<f64>| -> Result<f64, DigiFiError> {
             // Weights constraint
-            let weights: Array1<f64> = arr1(v);
-            let weights: Vec<f64> = (&weights / weights.sum()).to_vec();
-            self.change_weights(weights).unwrap();
-            // Portfolio optimization
-            self.standard_deviation().unwrap()
+            let weights: Vec<f64> = (weights / weights.sum()).to_vec();
+            self.change_weights(weights)?;
+            // Portfolio optimisation
+            self.standard_deviation()
         };
-        let weights: Vec<f64> = nelder_mead(f, initial_guess, max_iterations, max_fun_calls, Some(true), None, None)?.to_vec();
+        let nelder_mead: NelderMead = NelderMead::default().max_iterations(max_iterations).max_fun_calls(max_fun_calls).adaptive(Some(true));
+        let weights: Vec<f64> = nelder_mead.minimise(func.into(), initial_guess)?.argmin.to_vec();
         self.change_weights(weights)?;
         let performance: f64 = self.performance()?;
         let expected_return: f64 = self.mean_return()?;
         let std: f64 = self.standard_deviation()?;
-        Ok(PortfolioOptimizationResult { performance_score: performance, weights: self.weights.clone(), assets_names: self.assets_names.clone(), expected_return, std })
+        Ok(PortfolioOptimisationResult { performance_score: performance, weights: self.weights.clone(), assets_names: self.assets_names.clone(), expected_return, std })
     }
 
     /// Find risk level on the efficient frontier for a given target return.
     ///
     /// # Input
-    /// - `target_return`: Expected return to optimize volatility for
+    /// - `target_return`: Expected return to optimise volatility for
     /// - `max_iterations`: Maximum number of iterations the algorithm is allowed to perform
     /// - `max_fun_calls`: Maximum number of function calls the algorithm is allowed to perform
     ///
     /// # Output
-    /// - Portfolio optimization result (i.e., optimized performance score and weights of the protfolio that produce the target return)
-    pub fn efficient_optimization(&mut self, target_return: f64, max_iterations: Option<u64>, max_fun_calls: Option<u64>) -> Result<PortfolioOptimizationResult, DigiFiError> {
-        let initial_guess: Vec<f64> = self.uniform_weights();
-        let f = |v: &[f64]| {
+    /// - Portfolio optimisation result (i.e., optimised performance score and weights of the protfolio that produce the target return)
+    pub fn efficient_optimisation(&mut self, target_return: f64, max_iterations: Option<u64>, max_fun_calls: Option<u64>) -> Result<PortfolioOptimisationResult, DigiFiError> {
+        let initial_guess: Array1<f64> = arr1(&self.uniform_weights());
+        let func = |weights: &Array1<f64>| -> Result<f64, DigiFiError> {
             // Weights constraint
-            let weights: Array1<f64> = arr1(v);
-            let weights: Vec<f64> = (&weights / weights.sum()).to_vec();
-            self.change_weights(weights).unwrap();
-            // Portfolio optimization
-            let mean_returns: f64 = self.mean_return().unwrap();
-            let std_returns: f64 = self.standard_deviation().unwrap();
+            let weights: Vec<f64> = (weights / weights.sum()).to_vec();
+            self.change_weights(weights)?;
+            // Portfolio optimisation
+            let mean_returns: f64 = self.mean_return()?;
+            let std_returns: f64 = self.standard_deviation()?;
             let score: f64 = self.performance_metric.objective_function(mean_returns, std_returns);
-            // Combined loss of the objective function and target return constraint (Optimized via straddle payoff function)
-            score + StraddleLoss.loss(mean_returns, target_return)
+            // Combined loss of the objective function and target return constraint (Optimised via straddle payoff function)
+            Ok(score + StraddleLoss.loss(mean_returns, target_return))
         };
-        let weights: Vec<f64> = nelder_mead(f, initial_guess, max_iterations, max_fun_calls, Some(false), None, None)?.to_vec();
+        let nelder_mead: NelderMead = NelderMead::default().max_iterations(max_iterations).max_fun_calls(max_fun_calls).adaptive(Some(true));
+        let weights: Vec<f64> = nelder_mead.minimise(func.into(), initial_guess)?.argmin.to_vec();
         self.change_weights(weights)?;
         let performance: f64 = self.performance()?;
         let expected_return: f64 = self.mean_return()?;
         let std: f64 = self.standard_deviation()?;
-        Ok(PortfolioOptimizationResult {
+        Ok(PortfolioOptimisationResult {
             performance_score: performance, weights: self.weights.clone(), assets_names: self.assets_names.clone(), expected_return, std
         })
     }
@@ -672,12 +672,12 @@ impl Portfolio {
     /// # Output
     /// - Efficient frontier over the market for a given performance metric
     pub fn efficient_frontier(&mut self, n_points: usize, max_iterations: Option<u64>, max_fun_calls: Option<u64>) -> Result<EfficientFrontier, DigiFiError> {
-        let min_std: PortfolioOptimizationResult = self.minimize_std(max_iterations, max_fun_calls)?;
-        let max_performance: PortfolioOptimizationResult = self.maximize_performance(max_iterations, max_fun_calls)?;
-        let mut frontier: Vec<PortfolioOptimizationResult> = Vec::<PortfolioOptimizationResult>::new();
+        let min_std: PortfolioOptimisationResult = self.minimise_std(max_iterations, max_fun_calls)?;
+        let max_performance: PortfolioOptimisationResult = self.maximise_performance(max_iterations, max_fun_calls)?;
+        let mut frontier: Vec<PortfolioOptimisationResult> = Vec::<PortfolioOptimisationResult>::new();
         let target_returns: Array1<f64> = Array1::linspace(min_std.expected_return, max_performance.expected_return + min_std.expected_return, n_points);
         for target_return in target_returns {
-            frontier.push(self.efficient_optimization(target_return, max_iterations, max_fun_calls)?);
+            frontier.push(self.efficient_optimisation(target_return, max_iterations, max_fun_calls)?);
         } 
         Ok(EfficientFrontier { max_performance, frontier, min_std })
     }
@@ -725,7 +725,7 @@ impl ErrorTitle for Portfolio {
 ///     }
 ///     let performance_metric: Box<SharpeRatio> = Box::new(SharpeRatio { rf: 0.02 });
 ///
-///     // Portfolio definition and optimization
+///     // Portfolio definition and optimisation
 ///     let mut portfolio: Portfolio = Portfolio::build(assets, None, None, None, performance_metric).unwrap();
 ///     let frontier: EfficientFrontier = portfolio.efficient_frontier(30, Some(1_000), Some(10_000)).unwrap();
 ///
@@ -795,11 +795,11 @@ mod tests {
     use std::collections::HashMap;
     use ndarray::Array1;
     use crate::portfolio_applications::{AssetHistData, portfolio_performance::SharpeRatio};
-    use crate::portfolio_applications::portfolio_composition::{Asset, EfficientFrontier, Portfolio, PortfolioOptimizationResult};
+    use crate::portfolio_applications::portfolio_composition::{Asset, EfficientFrontier, Portfolio, PortfolioOptimisationResult};
     use crate::utilities::{TEST_ACCURACY, Time, sample_data::SampleData};
 
     #[test]
-    fn unit_test_portfolio_maximize_performance() -> () {
+    fn unit_test_portfolio_maximise_performance() -> () {
         // Portfolio parameters
         let sample_data: SampleData = SampleData::Portfolio;
         let (time, data) = sample_data.load_sample_data();
@@ -811,16 +811,16 @@ mod tests {
             assets.insert(k, Asset { hist_data, weight, });
         }
         let performance_metric: Box<SharpeRatio> = Box::new(SharpeRatio { rf: 0.02 });
-        // Portfolio definition and optimization
+        // Portfolio definition and optimisation
         let mut portfolio: Portfolio = Portfolio::build(assets, None, None, None, performance_metric).unwrap();
-        let max_sr: PortfolioOptimizationResult = portfolio.maximize_performance(Some(1_000), Some(10_000)).unwrap();
+        let max_sr: PortfolioOptimisationResult = portfolio.maximise_performance(Some(1_000), Some(10_000)).unwrap();
         assert!((max_sr.performance_score - 2.010620260010254).abs() < TEST_ACCURACY);
         assert!((max_sr.expected_return - 0.7005606636574792).abs() < TEST_ACCURACY);
         assert!((max_sr.std - 0.3384829433947951).abs() < TEST_ACCURACY);
     }
 
     #[test]
-    fn unit_test_portfolio_minimize_std() -> () {
+    fn unit_test_portfolio_minimise_std() -> () {
         // Portfolio parameters
         let sample_data: SampleData = SampleData::Portfolio;
         let (time, data) = sample_data.load_sample_data();
@@ -832,9 +832,9 @@ mod tests {
             assets.insert(k, Asset { hist_data, weight, });
         }
         let performance_metric: Box<SharpeRatio> = Box::new(SharpeRatio { rf: 0.02 });
-        // Portfolio definition and optimization
+        // Portfolio definition and optimisation
         let mut portfolio: Portfolio = Portfolio::build(assets, None, None, None, performance_metric).unwrap();
-        let min_std: PortfolioOptimizationResult = portfolio.minimize_std(Some(1_000), Some(10_000)).unwrap();
+        let min_std: PortfolioOptimisationResult = portfolio.minimise_std(Some(1_000), Some(10_000)).unwrap();
         assert!((min_std.performance_score - 1.1159801330821704).abs() < TEST_ACCURACY);
         assert!((min_std.expected_return - 0.22963237821918314).abs() < TEST_ACCURACY);
         assert!((min_std.std - 0.18784597682775037).abs() < TEST_ACCURACY);
@@ -853,7 +853,7 @@ mod tests {
             assets.insert(k, Asset { hist_data, weight, });
         }
         let performance_metric: Box<SharpeRatio> = Box::new(SharpeRatio { rf: 0.02 });
-        // Portfolio definition and optimization
+        // Portfolio definition and optimisation
         let mut portfolio: Portfolio = Portfolio::build(assets, None, None, None, performance_metric).unwrap();
         let frontier: EfficientFrontier = portfolio.efficient_frontier(30, Some(1_000), Some(10_000)).unwrap();
         for point in &frontier.frontier {
@@ -879,7 +879,7 @@ mod tests {
             assets.insert(k, Asset { hist_data, weight, });
         }
         let performance_metric: Box<SharpeRatio> = Box::new(SharpeRatio { rf: 0.02 });
-        // Portfolio definition and optimization
+        // Portfolio definition and optimisation
         let mut portfolio: Portfolio = Portfolio::build(assets, None, None, None, performance_metric).unwrap();
         let frontier: EfficientFrontier = portfolio.efficient_frontier(30, Some(1_000), Some(10_000)).unwrap();
         // Efficient frontier plot

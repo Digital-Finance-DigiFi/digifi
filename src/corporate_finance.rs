@@ -10,6 +10,15 @@ pub use self::capm::{CAPMParams, CAPMType, CAPMSolutionType, CAPM};
 pub mod capm;
 
 
+use ndarray::{Array1, arr1};
+use crate::error::DigiFiError;
+use crate::utilities::{
+    time_value_utils::{Annuity, CompoundingType},
+    loss_functions::{LossFunction, MSE},
+    numerical_engines::{VectorNumericalMinimiser, NelderMead},
+};
+
+
 /// Measure of how revenue growth translates to growth of income.
 /// 
 /// Degree of Operating Leverage = (% Change in Profits) / (% Change in Sales) = 1 + Total Fixed Cost / (Quantity of Goods Sold * (Price per Unit - Variable Cost per Unit) - Total Fixed Cost)
@@ -132,7 +141,7 @@ pub fn pb_ratio(market_cap: f64, book_value: f64) -> f64 {
 /// 
 /// # Input
 /// - `share_price`: Share price of the company
-/// - `dividend`: Amount of dividend Paid out by the company per defined period
+/// - `dividend`: Amount of dividend paid out by the company per defined period
 /// 
 /// # Output
 /// - Dividend yield
@@ -660,7 +669,7 @@ pub fn levered_beta(equity: f64, debt: f64, beta_assets: f64, beta_debt: f64) ->
 }
 
 
-/// Calculates an advantage of debt financing for a company as opposed to equity financing from perspective of tax optimization.
+/// Calculates an advantage of debt financing for a company as opposed to equity financing from perspective of tax optimisation.
 /// 
 /// Relative Tax Advantage of Debt = (1 - Personal Tax on Interest Income) / ((1 - Effective Personal Tax) * (1 - Corporate Tax))
 /// 
@@ -798,4 +807,88 @@ pub fn liquidity_ratio(liquid_assets: f64, current_liabilities: f64) -> f64 {
 /// - Original Source: N/A
 pub fn cash_flow_to_debt(operating_cash_flow: f64, total_debt: f64) -> f64 {
     operating_cash_flow / total_debt
+}
+
+
+/// Discounting cash flow model that is solved for the price at the horizon (i.e., the price of the stock at a certain horizon
+/// after dividends up until that horizon have been issued).
+/// 
+/// # Input
+/// - `share_price`: Share price of the company
+/// - `dividend`: Amount of dividend paid out by the company per defined period
+/// - `horizon`: Time horizon at which to price the stock (i.e., time periods between current share price and the future share price)
+/// - `discount_rate`: Discount rate for future cash flows from period-to-period
+/// - `dividend_growth_rate`: Growth rate of the dividend from period-to-period
+/// 
+/// # Output
+/// - Stock price at the given horizon discounted to today
+/// 
+/// # Examples
+/// 
+/// ```rust
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::corporate_finance::dcf_price_at_horizon;
+/// 
+/// let share_price_at_horizon: f64 = dcf_price_at_horizon(100.0, 2.0, 3.5, 0.03, 0.01).unwrap();
+/// 
+/// assert!((share_price_at_horizon - 103.71078349920816).abs() < TEST_ACCURACY);
+/// ```
+pub fn dcf_price_at_horizon(share_price: f64, dividend: f64, horizon: f64, discount_rate: f64, dividend_growth_rate: f64) -> Result<f64, DigiFiError> {
+    let annuity: Annuity = Annuity::build(dividend, discount_rate, horizon, dividend_growth_rate, CompoundingType::Continuous)?;
+    let annuity_npv: f64 = annuity.net_present_value(share_price);
+    Ok(-annuity_npv * (discount_rate * horizon).exp())
+}
+
+
+/// Discounting cash flow model that is solved for the dividend until horizon (i.e., the dividend that must be paid out for stock price to
+/// reach the price at the horizon).
+/// 
+/// # Input
+/// - `share_price`: Share price of the company
+/// - `share_price_horizon`: Share price of the company at the specified horizon
+/// - `horizon`: Time horizon at which to price the stock (i.e., time periods between current share price and the future share price)
+/// - `discount_rate`: Discount rate for future cash flows from period-to-period
+/// - `dividend_growth_rate`: Growth rate of the dividend from period-to-period
+/// 
+/// # Output
+/// - Dividend that should be paid out to reach the specified stock price at the horizon
+/// 
+/// # Examples
+/// 
+/// ```rust
+/// use digifi::utilities::TEST_ACCURACY;
+/// use digifi::corporate_finance::dcf_dividend_until_horizon;
+/// 
+/// let dividend: f64 = dcf_dividend_until_horizon(100.0, 103.71078349920816, 3.5, 0.03, 0.01).unwrap();
+/// 
+/// assert!((dividend - 2.0).abs() < TEST_ACCURACY);
+/// ```
+pub fn dcf_dividend_until_horizon(share_price: f64, share_price_horizon: f64, horizon: f64, discount_rate: f64, dividend_growth_rate: f64) -> Result<f64, DigiFiError> {
+    let func = |dividend: &Array1<f64>| -> Result<f64, DigiFiError> {
+        dcf_price_at_horizon(share_price, dividend[0], horizon, discount_rate, dividend_growth_rate).map(|v| {
+            MSE.loss(share_price_horizon, v)
+        } )
+    };
+    let proxy = NelderMead::default().minimise(func.into(), arr1(&[0.0]))?;
+    Ok(proxy.argmin[0])
+}
+
+
+#[cfg(test)]
+mod tests {
+    use crate::utilities::TEST_ACCURACY;
+
+    #[test]
+    fn unit_test_dcf_price_at_horizon() -> () {
+        use crate::corporate_finance::dcf_price_at_horizon;
+        let share_price_at_horizon: f64 = dcf_price_at_horizon(100.0, 2.0, 3.5, 0.03, 0.01).unwrap();
+        assert!((share_price_at_horizon - 103.71078349920816).abs() < TEST_ACCURACY);
+    }
+
+    #[test]
+    fn unit_test_dcf_dividend_until_horizon() -> () {
+        use crate::corporate_finance::dcf_dividend_until_horizon;
+        let dividend: f64 = dcf_dividend_until_horizon(100.0, 103.71078349920816, 3.5, 0.03, 0.01).unwrap();
+        assert!((dividend - 2.0).abs() < TEST_ACCURACY);
+    }
 }

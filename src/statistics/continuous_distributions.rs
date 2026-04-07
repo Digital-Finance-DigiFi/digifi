@@ -1,8 +1,9 @@
+use ndarray::{Array1, arr1};
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
 use crate::error::{DigiFiError, ErrorTitle};
 use crate::statistics::inverse_regularized_incomplete_beta;
-use crate::utilities::{maths_utils::{erf, erfinv, derivative}, numerical_engines::nelder_mead};
+use crate::utilities::{maths_utils::{erf, erfinv, derivative}, numerical_engines::{VectorNumericalMinimiser, NelderMead}};
 use crate::statistics::{
     ProbabilityDistributionType, ProbabilityDistribution, RiskMeasure,
     gamma::{ln_gamma, gamma, lower_incomplete_gamma, digamma},
@@ -779,8 +780,8 @@ impl ProbabilityDistribution for GammaDistribution {
     /// - Inverse CDF value for the given probabilities
     fn inverse_cdf(&self, p: f64) -> Result<f64, DigiFiError> {
         if (p < 0.0) || (1.0 < p) { return Ok(f64::NAN) }
-        let f = |x: &[f64]| { (self.cdf(x[0]).unwrap() - p).powi(2) };
-        Ok(nelder_mead(f, vec![0.0], Some(1_000), Some(10_000), None, None, None)?[0])
+        let func = |x: &Array1<f64>| -> Result<f64, DigiFiError> { Ok((self.cdf(x[0])? - p).powi(2)) };
+        Ok(NelderMead::default().minimise(func.into(), arr1(&[0.0]))?.argmin[0])
     }
 
     /// Calculates the Moment Generating Function (MGF) for a Gamma distribution.

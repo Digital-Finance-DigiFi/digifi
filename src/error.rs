@@ -74,7 +74,6 @@ impl From<ShapeError> for DigiFiError {
 
 
 pub trait ErrorTitle {
-
     /// Returns the error title.
     fn error_title() -> String;
 }

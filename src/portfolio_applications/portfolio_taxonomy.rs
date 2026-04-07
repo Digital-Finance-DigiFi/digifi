@@ -41,7 +41,7 @@ impl PortfolioTaxonomy for Portfolio {
     ///     }
     ///     let performance_metric: Box<SharpeRatio> = Box::new(SharpeRatio { rf: 0.02 });
     ///
-    ///     // Portfolio definition and optimization
+    ///     // Portfolio definition and optimisation
     ///     let mut portfolio: Portfolio = Portfolio::build(assets, None, None, None, performance_metric).unwrap();
     ///
     ///     // Minimal-spanning tree

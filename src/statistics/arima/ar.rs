@@ -34,19 +34,19 @@ pub struct ARResult {
     /// 
     /// Note: This will only be computed if `PAC` method is used for finding the order of the AR model
     pub pac_crit: Option<f64>,
-    /// Residual sums of squares for every fitted model when maximizing an information criterion of choice.
+    /// Residual sums of squares for every fitted model when maximising an information criterion of choice.
     /// 
     /// Note: This will only be computed if `AIC` or `BIC` methods are used for finding the order of the AR model.
     pub ic_rss: Option<Vec<f64>>,
-    /// Maximum log-likelihoods for every fitted model when maximizing an information criterion of choice.
+    /// Maximum log-likelihoods for every fitted model when maximising an information criterion of choice.
     /// 
     /// Note: This will only be computed if `AIC` or `BIC` methods are used for finding the order of the AR model.
     pub ic_max_log_likelihood: Option<Vec<f64>>,
-    /// Maximum likelihoods for every fitted model when maximizing an information criterion of choice.
+    /// Maximum likelihoods for every fitted model when maximising an information criterion of choice.
     /// 
     /// Note: This will only be computed if `AIC` or `BIC` methods are used for finding the order of the AR model.
     pub ic_max_likelihood: Option<Vec<f64>>,
-    /// Information criterion values for every fitted model when maximizing an information criterion of choice.
+    /// Information criterion values for every fitted model when maximising an information criterion of choice.
     /// 
     /// Note: This will only be computed if `AIC` or `BIC` methods are used for finding the order of the AR model.
     pub ic_values: Option<Vec<f64>>,
@@ -94,14 +94,14 @@ pub enum AROrderMethod {
     },
     /// Akaike Information Criterion
     AIC {
-        /// Maximum lag used in the AR model when optimizing Akaike information criterion
+        /// Maximum lag used in the AR model when optimising Akaike information criterion
         /// 
         /// Note: This may not be the actual order of the model, it is the maximum for what the order of the model may be.
         max_lag: Option<usize>,
     },
     /// Bayesion Information Criterion
     BIC {
-        /// Maximum lag used in the AR model when optimizing Akaike information criterion
+        /// Maximum lag used in the AR model when optimising Akaike information criterion
         /// 
         /// Note: This may not be the actual order of the model, it is the maximum for what the order of the model may be.
         max_lag: Option<usize>,
@@ -113,7 +113,7 @@ impl AROrderMethod {
     /// `min(10 * n.log10(), n // 2 - 1)`
     /// 
     /// Note: In the case of `PAC`, `AIC` and `BIC` the maximum lag corresponds to the potential maximum lag of the model,
-    /// but once the model is fitted and optimized, its order might be smaller than the maximum lag returned by this function.
+    /// but once the model is fitted and optimised, its order might be smaller than the maximum lag returned by this function.
     /// To set the exact order of the AR model use `Manual` enum variant.
     ///  
     /// 
@@ -208,7 +208,7 @@ impl AROrderMethod {
     /// Returns the value for the specified information criterion.
     /// 
     /// # Input
-    /// - `ll`: Maximized value of the log-likelihood function for the model
+    /// - `ll`: Maximised value of the log-likelihood function for the model
     /// - `k`: Number of estimated parameters in the model
     /// - `n`: Number of data points, number of observations, or the sample size
     /// 
@@ -540,7 +540,7 @@ impl AR {
         Ok((fc, lra_result))
     }
 
-    /// Trains the AR model to maximize the provided information criterion.
+    /// Trains the AR model to maximise the provided information criterion.
     fn ic_iter_ar(&self, y: &Array1<f64>) -> Result<(ARResult, Option<FeatureCollection>), DigiFiError> {
         let mut result: ARResult = ARResult::default();
         let y_len: usize = y.len();
@@ -554,7 +554,7 @@ impl AR {
         let mut ic_max_log_likelihood: Vec<f64> = Vec::with_capacity(max_lag_minus_one);
         let mut ic_max_likelihood: Vec<f64> = Vec::with_capacity(max_lag_minus_one);
         let mut ic_values: Vec<f64> = Vec::with_capacity(max_lag_minus_one);
-        // Iterator over models with different lag to find the model that maximizes the information criterion
+        // Iterator over models with different lag to find the model that maximises the information criterion
         for order in (1..=max_lag).into_iter() {
             // Feature collection must not be recycled due to different lengths of feeatures for every `order`
             let (_, lra_result) = self.complete_ar(y, order)?;

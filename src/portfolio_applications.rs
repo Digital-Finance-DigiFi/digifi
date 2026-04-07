@@ -1,6 +1,6 @@
 //! # Portfolio Applications
 //! 
-//! Provides functionality for portfolio selection and optimization. The module contains functionality for performing portfolio selection,
+//! Provides functionality for portfolio selection and optimisation. The module contains functionality for performing portfolio selection,
 //! measuring portfolio performance and risk.
 
 
@@ -9,7 +9,7 @@ pub use self::portfolio_performance::{PortfolioPerformanceMetric, SharpeRatio, I
 pub use self::portfolio_taxonomy::PortfolioTaxonomy;
 pub use self::risk_measures::{value_at_risk, expected_shortfall};
 pub use self::utility_functions::{cara, crra};
-pub use self::portfolio_composition::{AssetReturnsType, PortfolioReturnsType, PortfolioOptimizationResult, EfficientFrontier, Asset, generate_portfolio, Portfolio};
+pub use self::portfolio_composition::{AssetReturnsType, PortfolioReturnsType, PortfolioOptimisationResult, EfficientFrontier, Asset, generate_portfolio, Portfolio};
 
 
 pub mod portfolio_performance;

@@ -82,7 +82,7 @@ pub struct GrangerCausalityResult {
     /// Actual order (i.e., maximum lag) of the autoregressive terms of `Y`.
     /// Applicable only for Full Granger causality test.
     pub y_order: Option<usize>,
-    /// Minimized Akaike information criterion that produces the maximum lag of `X`.
+    /// Minimised Akaike information criterion that produces the maximum lag of `X`.
     /// Applicable only for Full Granger causality test.
     pub min_aic: Option<f64>,
     /// Maximum lag of the autoregressive terms of `X`.
@@ -133,7 +133,7 @@ impl Display for GrangerCausalityResult {
                     + &format!("Critical Value (Partial Autocorrelation): {}\n", self.pac_crit.unwrap_or(f64::NAN))
                     + &format!("Order of Y (i.e., order of AR model of Y): {}\n", match &self.y_order { Some(v) => v.to_string(), None => "".to_owned(), })
                     + LARGE_TEXT_BREAK
-                    + &format!("Minimized AIC for Selecting the Maximum Lag of X: {}\n", self.min_aic.unwrap_or(f64::NAN))
+                    + &format!("Minimised AIC for Selecting the Maximum Lag of X: {}\n", self.min_aic.unwrap_or(f64::NAN))
                     + &format!("Maximum Lag of X (i.e., upper limit for the order of X): {}\n", match &self.x_max_lag { Some(v) => v.to_string(), None => "".to_owned(), })
             },
         };
@@ -308,8 +308,8 @@ impl GrangerCausalityTest {
         lra.run(fc, y)
     }
 
-    /// Finds the order of the autoregressive terms of `X` that minimizes Akaike information criterion.
-    fn optimize_aic_x_lr(&self, fc: &mut FeatureCollection, x: &Array1<f64>, y: &Array1<f64>, x_max_lag: usize, y_order: usize, fc_order: usize) -> Result<(usize, f64), DigiFiError> {
+    /// Finds the order of the autoregressive terms of `X` that minimises Akaike information criterion.
+    fn optimise_aic_x_lr(&self, fc: &mut FeatureCollection, x: &Array1<f64>, y: &Array1<f64>, x_max_lag: usize, y_order: usize, fc_order: usize) -> Result<(usize, f64), DigiFiError> {
         let x_len: usize = y.len();
         let n_parameters: usize = y_order + 1;
         let mut min_aic: f64 = f64::INFINITY;
@@ -352,7 +352,7 @@ impl GrangerCausalityTest {
         // Determine the maximum number of autoregressive terms for `X` (Akaike information criterion)
         let x_max_lag: usize = self.settings.x_max_lag.unwrap_or(y_order);
         let fc_order: usize = y_order.max(x_max_lag);
-        let (x_order, min_aic) = self.optimize_aic_x_lr(&mut fc, x, y, x_max_lag, y_order, fc_order)?;
+        let (x_order, min_aic) = self.optimise_aic_x_lr(&mut fc, x, y, x_max_lag, y_order, fc_order)?;
         result.min_aic = Some(min_aic);
         result.x_max_lag = Some(x_max_lag);
         if x_max_lag == 0 {
@@ -361,7 +361,7 @@ impl GrangerCausalityTest {
             if self.settings.return_nested_result { result.nested_model_result = Some(ar_result); }
             return Ok(result)
         }
-        // Format the feature collection to contain only the terms from `X` that minimize the AIC
+        // Format the feature collection to contain only the terms from `X` that minimise the AIC
         let over_x_max_lag: usize = x_order + 1;
         if over_x_max_lag <= x_max_lag {
             for lag in (over_x_max_lag..=x_max_lag).into_iter() {
@@ -720,7 +720,7 @@ mod tests {
         assert!((gcr.f_test_p_value.unwrap() - 0.9111).abs() < 10_000.0 * TEST_ACCURACY);
         assert_eq!(gcr.reject_h0, false);
         assert!(match gcr.failed_reject_h0_reason.unwrap() { GrangerCausalityRejectReason::FTestRejected => true, _ => false,});
-        assert_eq!(gcr.parent_y_lags.len(), nested_coef.len());
+        assert_eq!(gcr.parent_y_lags.len(), nested_coefs.len());
         assert_eq!(gcr.parent_y_lags.len() + gcr.parent_x_lags.len(), parent_coefs.len());
     }
 }

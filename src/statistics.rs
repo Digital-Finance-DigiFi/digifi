@@ -620,7 +620,7 @@ pub fn variance_inflation_factor(xis: &mut FeatureCollection, xi: &Array1<f64>) 
 /// AIC provides a means for model selection.
 /// 
 /// # Input
-/// - `l`: Maximized value of the likelihood function for the model
+/// - `l`: Maximised value of the likelihood function for the model
 /// - `k`: Number of estimated parameters in the model
 /// 
 /// # Ouput
@@ -640,10 +640,10 @@ pub fn akaike_information_criterion(l: f64, k: usize) -> f64 {
 /// Akaike Information Criterion (AIC) is an estimator of prediction error and therefby relative quality of statistical models for a given set of data.
 /// AIC provides a means for model selection.
 /// 
-/// Note: This version of AIC takes in the maximized log-likelihood as an input.
+/// Note: This version of AIC takes in the maximised log-likelihood as an input.
 /// 
 /// # Input
-/// - `ll`: Maximized value of the log-likelihood function for the model
+/// - `ll`: Maximised value of the log-likelihood function for the model
 /// - `k`: Number of estimated parameters in the model
 /// 
 /// # Ouput
@@ -664,7 +664,7 @@ pub fn akaike_information_criterion_log(ll:f64, k: usize) -> f64 {
 /// models with lower BIC are generally preferred.
 /// 
 /// # Input
-/// - `l`: Maximized value of the likelihood function for the model
+/// - `l`: Maximised value of the likelihood function for the model
 /// - `k`: Number of estimated parameters in the model
 /// - `n`: Number of data points, number of observations, or the sample size
 /// 
@@ -685,10 +685,10 @@ pub fn bayesian_information_criterion(l: f64, k: usize, n: usize) -> f64 {
 /// Bayesian Information Criterion (BIC), or Schwarz Information Criterion, is a criterion for model selection among finite set of models;
 /// models with lower BIC are generally preferred.
 /// 
-/// Note: This version of BIC takes in the maximized log-likelihood as an input.
+/// Note: This version of BIC takes in the maximised log-likelihood as an input.
 /// 
 /// # Input
-/// - `ll`: Maximized value of the log-likelihood function for the model
+/// - `ll`: Maximised value of the log-likelihood function for the model
 /// - `k`: Number of estimated parameters in the model
 /// - `n`: Number of data points, number of observations, or the sample size
 /// 

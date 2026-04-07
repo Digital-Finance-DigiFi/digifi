@@ -7,6 +7,7 @@ pub use self::granger_causality::{
     granger_causality_test, simple_granger_causality_test,
 };
 
+
 mod adf_test;
 mod f_test;
 mod t_test;
@@ -145,11 +146,10 @@ pub fn cointegration(x: &Array1<f64>, y: &Array1<f64>, cl: Option<ConfidenceLeve
 
 #[cfg(test)]
 mod tests {
-    use ndarray::Array1;
-
     #[cfg(all(test, feature = "sample_data"))]
     #[test]
     fn unit_test_cointegration() -> () {
+        use ndarray::Array1;
         use crate::utilities::sample_data::SampleData;
         use crate::statistics::stat_tests::{ConfidenceLevel, CointegrationResult, cointegration};
         let sample: SampleData = SampleData::Portfolio; 

@@ -10,7 +10,7 @@ pub trait PortfolioPerformanceMetric: {
     /// - `portfolio_std`: Standard deviation of portfolio returns
     fn performance(&self, portfolio_return: f64, portfolio_std: f64) -> f64;
 
-    /// Objective function that will be minimized to find the optimal weights distribution of the portfolio.
+    /// Objective function that will be minimised to find the optimal weights distribution of the portfolio.
     ///
     /// # Input
     /// - `portfolio_return`: Expected return of the portfolio

@@ -1,9 +1,11 @@
 use std::borrow::Borrow;
-use ndarray::Array1;
+use ndarray::{Array1, arr1};
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
 use crate::error::{DigiFiError, ErrorTitle};
-use crate::utilities::{ParameterType, Time, compare_len, loss_functions::{LossFunction, MSE}, numerical_engines::nelder_mead};
+use crate::utilities::{
+    ParameterType, Time, compare_len, loss_functions::{LossFunction, MSE}, numerical_engines::{VectorNumericalMinimiser, NelderMead},
+};
 
 
 #[derive(Clone, Copy, Debug)]
@@ -208,16 +210,15 @@ where
     I: Borrow<f64>,
 {
     compare_len(&cashflow, &time.time_array().iter(), "cashflow", "time_array")?;
-    let pv_closure = | rate: &[f64] | {
+    let pv_closure = |rate: &Array1<f64>| -> Result<f64, DigiFiError> {
         let present_value: f64 = cashflow.clone().zip(time.time_array().iter())
             .fold(0.0, |pv, (cash, time)| {
                 let discount_term: Compounding = Compounding::new(rate[0], &compounding_type);
                 pv + cash.borrow() * discount_term.compounding_term(*time)
             } );
-        MSE.loss(present_value, initial_cashflow)
+        Ok(MSE.loss(present_value, initial_cashflow))
     };
-    let rate: Array1<f64> = nelder_mead(pv_closure, vec![0.0], Some(1_000), Some(1_000), None, None, None)?;
-    Ok(rate[0])
+    Ok(NelderMead::default().minimise(pv_closure.into(), arr1(&[0.0]))?.argmin[0])
 }
 
 
@@ -647,7 +648,7 @@ pub struct Annuity {
     rate: f64,
     /// Final time for annuity cashflows
     t_f: f64,
-    /// Growth rate of the cashflow at eadch time step
+    /// Growth rate of the cashflow at each time step
     growth_rate: f64,
     /// Compounding type used to discount cashflows
     compounding_type: CompoundingType,
@@ -660,7 +661,7 @@ impl Annuity {
     /// - `cashflow`: Constant cashflow of the annuity (Initial cashflow for an annuity with non-zero growth rate)
     /// - `rate`: Discount rate
     /// - `t_f`: Final time for annuity cashflows
-    /// - `growth_rate`: Growth rate of the cashflow at eadch time step
+    /// - `growth_rate`: Growth rate of the cashflow at each time step
     /// - `compounding_type`: Compounding type used to discount cashflows
     /// 
     /// # Errors
@@ -698,7 +699,7 @@ impl Annuity {
     /// # Output
     /// - Net present value of the annuity
     pub fn net_present_value(&self, initial_cashflow: f64) -> f64 {
-        - initial_cashflow * self.present_value()
+        - initial_cashflow + self.present_value()
     }
 
     /// Future value of the annuity.

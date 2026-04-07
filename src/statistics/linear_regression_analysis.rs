@@ -119,9 +119,9 @@ pub struct LinearRegressionResult {
     pub r_squared: Option<f64>,
     /// Adjusted R-squared for the upward bias in the R-squared due to estimated values of the parameters used
     pub adjusted_r_squared: Option<f64>,
-    /// Maximized likelihood of the model
+    /// Maximised likelihood of the model
     pub max_likelihood: Option<f64>,
-    /// Maximized log-likelihood of the model
+    /// Maximised log-likelihood of the model
     pub max_log_likelihood: Option<f64>,
 }
 
@@ -138,8 +138,8 @@ impl Display for LinearRegressionResult {
             + &format!("Sum of Squared Estimate of Errors: {}\n", self.sse.unwrap_or(f64::NAN))
             + &format!("Coefficient of Determination (R-Squared): {}\n", self.r_squared.unwrap_or(f64::NAN))
             + &format!("Adjusted Coefficient of Determination (Adjusted R-Squared): {}\n", self.adjusted_r_squared.unwrap_or(f64::NAN))
-            + &format!("Maximized Likelihood: {}\n", self.max_likelihood.unwrap_or(f64::NAN))
-            + &format!("Maximized Log Likelihood: {}\n", self.max_log_likelihood.unwrap_or(f64::NAN))
+            + &format!("Maximised Likelihood: {}\n", self.max_likelihood.unwrap_or(f64::NAN))
+            + &format!("Maximised Log Likelihood: {}\n", self.max_log_likelihood.unwrap_or(f64::NAN))
             + LARGE_TEXT_BREAK;
         write!(f, "{}", result)
     }
@@ -156,7 +156,7 @@ pub struct LinearRegressionSettings {
     pub enable_r_squared: bool,
     /// Whether to compute adjusted R-squared
     pub enable_adjusted_r_squared: bool,
-    /// Whether to compute maximized likelihood and log-likelihood of the model
+    /// Whether to compute maximised likelihood and log-likelihood of the model
     pub enable_max_likelihood: bool,
     /// Whetehr to compute standard error for individual features
     pub enable_se: bool,

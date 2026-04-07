@@ -1,13 +1,16 @@
 //! # Utilities
 //! 
-//! Contains general utility tools such as different data transformation functions, loss functions, numerical optimization engine, minimal spanning tree,
+//! Contains general utility tools such as different data transformation functions, loss functions, numerical optimisation engine, minimal spanning tree,
 //! and utilities for doing time-value of money calculations.
 
 
 // Re-Exports
 pub use self::maths_utils::{factorial, rising_factorial, erf, erfinv, euclidean_distance, derivative, definite_integral};
 pub use self::minimal_spanning_tree::{MSTDistance, MSTNode, MSTEdge, MST};
-pub use self::numerical_engines::nelder_mead;
+pub use self::numerical_engines::{
+    ScalarFunctionWrapper, VectorFunctionWrapper, ScalarNumericalMinimiser, VectorNumericalMinimiser, NumericalOptimisationResult,
+    GoldenRatio, LineSearch, GradientDescent, LBFGS, NelderMead,
+};
 pub use self::loss_functions::{LossFunction, MAE, MSE, SSE, StraddleLoss};
 pub use self::data_transformations::{
     min_max_scaling, percent_change, log_return_transformation, differencing, rank_transformation, unit_vector_normalization,

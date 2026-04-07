@@ -1,231 +1,282 @@
-use std::cmp::PartialOrd;
-use ndarray::{Array, Array1, Array2, s};
+// Re-Exports
+pub use self::golden_ratio::GoldenRatio;
+pub use self::gradient_descent::{LineSearch, GradientDescent};
+pub use self::l_bfgs::LBFGS;
+pub use self::nelder_mead::NelderMead;
+
+
+mod golden_ratio;
+mod gradient_descent;
+mod l_bfgs;
+mod nelder_mead;
+
+
+use std::{convert::From, fmt::Display, time::Instant};
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
-use crate::error::{DigiFiError, ErrorTitle};
+use ndarray::{Array1, arr1};
+use crate::error::DigiFiError;
+use crate::consts::H;
+use crate::utilities::LARGE_TEXT_BREAK;
 
 
-type Simplex = Vec<(f64, Array1<f64>)>;
-
-
-#[derive(Debug)]
-struct WrappedFunction<F: FnMut(&Array1<f64>) -> f64> {
-    num: u64,
-    func: F,
+#[derive(Clone, Debug)]
+/// Wrapper for a scalar function that is optimised by a numerical engine.
+pub struct ScalarFunctionWrapper<F: FnMut(f64) -> Result<f64, DigiFiError>> {
+    /// Number of function calls.
+    pub num: u64,
+    /// Objective function being minimsed.
+    pub func: F,
+    /// List of values at every call of the wrapped function.
+    pub values: Vec<f64>,
+    /// Whether to save the parameters at every call of the wrapped function.
+    /// 
+    /// Note: For complicated wrapped functions, setting this to `true` may significantly reduce performance.
+    pub save_params: bool,
+    /// List of parameters at every call of the wrapped function.
+    pub params: Vec<f64>,
 }
 
-impl<F: FnMut(&Array1<f64>) -> f64> WrappedFunction<F> {
-    fn call(&mut self, arg: &Array1<f64>) -> f64 {
+impl<F: FnMut(f64) -> Result<f64, DigiFiError>> ScalarFunctionWrapper<F> {
+    pub fn new(func: F, save_params: bool) -> Self {
+        Self { num: 0, func, values: Vec::new(), save_params, params: Vec::new(), }
+    }
+
+    /// Makes a wrapped function call with the provided argument.
+    /// 
+    /// # Input
+    /// -`x`: Argument that is provided to the wrapped function
+    /// 
+    /// # Output
+    /// - Value of the wrapped function with the provided `x`.
+    pub fn call(&mut self, x: f64) -> Result<f64, DigiFiError> {
+        // Save params
+        if self.save_params {
+            self.params.push(x);
+        }
+        // Function evaluation
         self.num += 1;
-        (self.func)(arg)
+        let value: f64 = (self.func)(x)?;
+        self.values.push(value);
+        Ok(value)
+    }
+
+    /// Function call that does not update the state of the wrapper.
+    /// 
+    /// Note: This is used only as a utility.
+    fn quick_call(&mut self, x: f64) -> Result<f64, DigiFiError> {
+        (self.func)(x)
+    }
+}
+
+impl<F: FnMut(f64) -> Result<f64, DigiFiError>> From<F> for ScalarFunctionWrapper<F> {
+    fn from(value: F) -> Self {
+        Self::new(value, false)
     }
 }
 
 
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// A minimizer for a scalar function of one or more variables using the Nelder-Mead algorithm.
-struct NelderMead {
-    /// The maximum number of iterations to optimize.
-    max_iterations: u64,
-    /// The maximum number of function calls used to optimize.
-    max_fun_calls: u64,
-    /// Adapt algorithm parameters to dimensionality of the problem. Useful for high-dimensional minimization.
-    adaptive: bool,
-    /// Absolute error in function parameters between iterations that is acceptable for convergence.
-    x_tolerance: f64,
-    /// Absolute error in function values between iterations that is acceptable for convergence.
-    f_tolerance: f64,
+#[derive(Clone, Debug)]
+/// Wrapper for a vector function that is optimised by a numerical engine.
+pub struct VectorFunctionWrapper<F: FnMut(&Array1<f64>) -> Result<f64, DigiFiError>> {
+    /// Number of function calls.
+    pub num: u64,
+    /// Objective function being minimised.
+    pub func: F,
+    /// List of values at every call of the wrapped function.
+    pub values: Vec<f64>,
+    /// Whether to save the parameters at every call of the wrapped function.
+    /// 
+    /// Note: For complicated wrapped functions, setting this to `true` may significantly reduce performance.
+    pub save_params: bool,
+    /// List of parameters at every call of the wrapped function.
+    pub params: Vec<Array1<f64>>,
 }
 
-impl NelderMead {
-    fn new(max_iterations: Option<u64>, max_fun_calls: Option<u64>, adaptive: Option<bool>, x_tolerance: Option<f64>, f_tolerance: Option<f64>) -> Self {
-        let max_iterations: u64 = match max_iterations { Some(v) => v, None => 100 };
-        let max_fun_calls: u64 = match max_fun_calls { Some(v) => v, None => 100 };
-        let adaptive: bool = match adaptive { Some(v) => v, None => false };
-        let x_tolerance: f64 = match x_tolerance { Some(v) => v, None => 1e-4f64 };
-        let f_tolerance: f64 = match f_tolerance { Some(v) => v, None => 1e-4f64 };
-        Self { max_iterations, max_fun_calls, adaptive, x_tolerance, f_tolerance }
+impl<F: FnMut(&Array1<f64>) -> Result<f64, DigiFiError>> VectorFunctionWrapper<F> {
+    pub fn new(func: F, save_params: bool) -> Self {
+        Self { num: 0, func, values: Vec::new(), save_params, params: Vec::new(), }
     }
 
-    /// Search for the value minimizing `func` given an initial guess in the form of a point. The algorithm will
-    /// explore the variable space without constraints.
-    fn minimize<F>(&self, func: F, x0: Array1<f64>) -> Result<Array1<f64>, DigiFiError>
-    where F: FnMut(&Array1<f64>) -> f64 {
-        let n: usize = x0.len();
-        let eps: f64 = 0.05;
-        let mut init_simplex: Array2<f64> = Array2::default((n+1, n));
-        init_simplex.slice_mut(s![0, ..]).assign(&x0);
-        init_simplex.slice_mut(s![1.., ..]).assign(&(Array::eye(n) * eps + &x0 * (1.0-eps)));
-        self.minimize_simplex(func, init_simplex)
-    }
-
-    /// Search for the value minimizing `func` given an initial guess in the form of a set of coordinates, the `init_simplex`.
-    /// This algorithm only ever explores the space spanned by these initial vectors. If you have parameter restrictions
-    /// that effectively place your parameters in a subspace, you can enforce these restrictions by setting `init_simplex`
-    /// to a basis of this subspace.
-    fn minimize_simplex<F>(&self, func: F, init_simplex: Array2<f64>) -> Result<Array1<f64>, DigiFiError>
-    where F: FnMut(&Array1<f64>) -> f64 {
-        let mut func: WrappedFunction<F> = WrappedFunction { num: 0, func: func };
-        let mut simplex: Simplex = init_simplex.outer_iter().map(|xi| (func.call(&xi.to_owned()), xi.to_owned())).collect::<Simplex>();
-        self.order_simplex(&mut simplex);
-        let mut centroid: Array1<f64> = self.centroid(&simplex);
-        let n: usize = simplex.len();
-        let (max_iterations, max_fun_calls, alpha, beta, gamma, delta) = self.initialize_parameters(n);
-        let mut iterations: u64 = 1;
-        while !self.finished(&simplex, iterations, max_iterations, func.num, max_fun_calls) {
-            let f_n1: f64 = simplex[n-1].0;
-            let f_n: f64 = simplex[n-2].0;
-            let f_0: f64 = simplex[0].0;
-            let reflected: Array1<f64> = &centroid + &(alpha * &(&centroid - &simplex[n-1].1));
-            let f_reflected: f64 = func.call(&reflected);
-            if f_reflected < f_n && f_reflected > f_0 {
-                // Try reflecting the worst point through the centroid.
-                self.lean_update(&mut simplex, &mut centroid, reflected, f_reflected);
-            } else if f_reflected < f_0 {
-                // Try expanding beyond the centroid.
-                let expanded: Array1<f64> = &centroid + &(beta * &(&reflected - &centroid));
-                let f_expanded: f64 = func.call(&expanded);
-                if f_expanded < f_reflected {
-                    self.lean_update(&mut simplex, &mut centroid, expanded, f_expanded);
-                } else {
-                    self.lean_update(&mut simplex, &mut centroid, reflected, f_reflected);
-                }
-            } else if f_reflected < f_n1 && f_reflected >= f_n {
-                // Try a contraction outwards.
-                let contracted: Array1<f64> = &centroid + &(gamma * (&centroid - &simplex[n-1].1));
-                let f_contracted = func.call(&contracted);
-                if f_contracted < f_reflected {
-                    self.lean_update(&mut simplex, &mut centroid, contracted, f_contracted);
-                } else {
-                    // Shrink.
-                    self.shrink(&mut simplex, &mut func, delta, &mut centroid)?;
-                }
-            } else {
-                // Try a contraction inwards.
-                let contracted: Array1<f64> = &centroid - &(gamma * (&centroid - &simplex[n-1].1));
-                let f_contracted: f64 = func.call(&contracted);
-
-                if f_contracted < f_reflected {
-                    self.lean_update(&mut simplex, &mut centroid, contracted, f_contracted);
-                } else {
-                    // Shrink.
-                    self.shrink(&mut simplex, &mut func, delta, &mut centroid)?;
-                }
-            }
-            iterations += 1;
+    #[inline]
+    /// Checks if the value is finite, and if it isn't throws an `DigiFiError`.
+    /// 
+    /// # Input
+    /// - `v`: Variable that must be finite
+    /// - `name`: Name of the variable that will be included in error message
+    /// 
+    /// # Errors
+    /// - Returns an error if the variable `v` is not finite
+    fn check_finite(v: f64, name: &str) -> Result<(), DigiFiError> {
+        if !v.is_finite() {
+            return Err(DigiFiError::ParameterConstraint {
+                title: "Vector Function Wrapper".to_owned(),
+                constraint: format!("Tha parameter `{name}` is not finite."),
+            });
         }
-        Ok(simplex.remove(0).1)
-    }
-
-    /// Resolves default values that can only be known after the minimize function is called.
-    #[inline]
-    fn initialize_parameters(&self, n: usize) -> (u64, u64, f64, f64, f64, f64) {
-        let (alpha, beta, gamma, delta): (f64, f64, f64, f64) = match self.adaptive {
-            true => {
-                let dim: f64 = n as f64;
-                (1.0, 1.0 + 2.0 / dim, 0.75 - 1.0 / (2.0 * dim), 1.0 - 1.0 / dim)
-            },
-            false => (1.0, 2.0, 0.5, 0.5),
-        };
-        (self.max_iterations, self.max_fun_calls, alpha, beta, gamma, delta)
-    }
-
-    #[inline]
-    fn finished(&self, simplex: &Simplex, iterations: u64, max_iterations: u64, nfeval: u64, max_fun_calls: u64) -> bool {
-        let n: usize = simplex.len();
-        iterations > max_iterations 
-        || nfeval > max_fun_calls 
-        || ( simplex[n-1].0 - simplex[0].0 < self.f_tolerance 
-             && (&simplex[n-1].1 - &simplex[0].1).mapv(f64::abs).sum() < n as f64 * self.x_tolerance )
-    }
-
-    /// Update the centroid effiently, knowing only one value changed. The pattern-defeating sort of order_simplex is allready efficient
-    /// given that we inserted a single out-of-place value in a sorted vec. This update is O(n).
-    #[inline]
-    fn lean_update(&self, simplex: &mut Simplex, centroid: &mut Array1<f64>, xnew: Array1<f64>, fnew: f64) -> () {
-        let n: usize = simplex.len();
-        let denominator: f64 = (n - 1) as f64;
-        *centroid += &(&xnew / denominator);
-        simplex[n-1] = (fnew, xnew);
-        self.order_simplex(simplex);
-        *centroid -= &(&simplex[n-1].1 / denominator);
-    }
-
-    /// Shrink all points towards the best point. Assumes the simplex is ordered. The centroid is updated by shrinking
-    /// the centroid directly, then removing the new 'worst x' and adding in the old 'worst x'. This update of `centroid` is O(n). 
-    /// Shrinkage requires n function evaluations.
-    #[inline]
-    fn shrink<F>(&self, simplex: &mut Simplex, f: &mut WrappedFunction<F>, sigma: f64, centroid: &mut Array1<f64>) -> Result<(), DigiFiError>
-        where F: FnMut(&Array1<f64>) -> f64
-    {
-        {
-            let mut iter = simplex.iter_mut();
-            let (_, x0) = iter.next()
-                .ok_or(DigiFiError::Other {
-                    title: Self::error_title(),
-                    details: "Could not grab next element from the simplex.".to_owned(),
-                })?;
-            for (fi, xi) in iter {
-                *xi *= sigma;
-                *xi += &((1.0 - sigma) * &x0.view());
-                *fi = f.call(xi);
-            }
-        }
-        let n: usize = simplex.len() - 1;
-        let old_worst: Array1<f64> = simplex[n - 1].1.to_owned();
-        *centroid *= sigma;
-        *centroid += &((1.0 - sigma) * &simplex[0].1);
-        self.order_simplex(simplex);
-        *centroid += &((&old_worst - &simplex[n - 1].1) / (n - 1) as f64);
         Ok(())
     }
 
-    /// Calculate the centroid of all points but the worst one. Assumes that the simplex is ordered. This calculation is O(n^2).
-    #[inline]
-    fn centroid(&self, simplex: &Simplex) -> Array1<f64> {
-        let n: usize = simplex.len();
-        let mut centroid: Array1<f64> = Array1::zeros(simplex[0].1.len());
-        for (_, xi) in simplex.iter().take(n-1) {
-            centroid += xi;
+    /// Makes a wrapped function call with the provided arguments.
+    /// 
+    /// # Input
+    /// -`x`: Arguments that are provided to the wrapped function
+    /// 
+    /// # Output
+    /// - Value of the wrapped function with the provided `x`.
+    pub fn call(&mut self, x: &Array1<f64>) -> Result<f64, DigiFiError> {
+        // Save params
+        if self.save_params {
+            self.params.push(x.clone());
         }
-        centroid / (n-1) as f64
+        // Function evaluation
+        self.num += 1;
+        let value: f64 = (self.func)(x)?;
+        self.values.push(value);
+        Ok(value)
     }
 
-    /// This sorting algorithm should have a runtime of O(n) if only one new element is inserted. After a shrinkage, the runtime is O(n log n).
+    /// Function call that does not update the state of the wrapper.
+    /// 
+    /// Note: This is used only as a utility.
+    fn quick_call(&mut self, x: &Array1<f64>) -> Result<f64, DigiFiError> {
+        (self.func)(x)
+    }
+
     #[inline]
-    fn order_simplex(&self, simplex: &mut Simplex) -> () {
-        simplex.sort_unstable_by(|&(fa, _), &(fb, _)| fa.partial_cmp(&fb).unwrap());
+    /// Computes the gradient of the objective function at a given position `x` (i.e., `∀ᵢ ∂/∂xᵢ f(x) = ∇f(x)`).
+    /// 
+    /// # Input
+    /// - `x` Arguments that are provided to the wrapped function
+    /// 
+    /// # Output
+    /// - Gradient of the wrapped function at point `x`, and the value of the function at the current point
+    /// 
+    /// # Errors
+    /// - Returns an error if the infinitesimal increment between consequtive points is not finite.
+    /// - Returns an error if the gradient is not finite.
+    pub fn gradient(&mut self, x: &Array1<f64>) -> Result<(Vec<f64>, f64), DigiFiError> {
+        let mut x_: Array1<f64> = x.clone();
+        let current: f64 = self.call(&x)?;
+        let mut gradient: Vec<f64> = Vec::with_capacity(x_.len());
+        for (i, x_i) in x.iter().enumerate() {
+            let h: f64 = if x_i == &0.0_f64 { H } else { (std::f64::EPSILON * x_i.abs()).sqrt() };
+            Self::check_finite(h, "h")?;
+            x_[i] += h;
+            let forward: f64 = self.call(&x_)?;
+            x_[i] -= h;
+            let d_i: f64 = (forward - current) / h;
+            Self::check_finite(d_i, "dy/dx")?;
+            gradient.push(d_i);
+        }
+        Ok((gradient, current))
+    }
+
+    #[inline]
+    /// Tests whether a flat area is reached (i.e., tests if all absolute gradient component lie within the `tolerance`).
+    /// 
+    /// # Input
+    /// - `gradient`: Gradient of the wrapped function at a specific point
+    /// - `tolerance`: Maximum allowed deviation of gradient from `0`, for the point to be a saddle point
+    pub fn is_saddle_point(&self, gradient: &Array1<f64>, tolerance: f64) -> bool {
+        gradient.iter().all(|dx| dx.abs() <= tolerance)
     }
 }
 
-impl ErrorTitle for NelderMead {
-    fn error_title() -> String {
-        String::from("Nelder-Mead Numerical Engine")
+impl<F: FnMut(&Array1<f64>) -> Result<f64, DigiFiError>> From<F> for VectorFunctionWrapper<F> {
+    fn from(value: F) -> Self {
+        Self::new(value, false)
     }
 }
 
 
-/// A minimizer for a scalar function of one or more variables using the Nelder-Mead algorithm.
-///
-/// # Input
-/// - `f`: Closure (objective function) that will be minimized
-/// - `initial_guess`: An array of values where the minimization algorithm will begin
-/// - `max_iterations`: Maximum number of iterations the algorithm is allowed to perform
-/// - `max_fun_calls`: Maximum number of function calls the algorithm is allowed to perform
-/// - `adaptive`: Whether to adapt parameters to the dimensionality of the problem (Useful for high-dimensional minimization)
-/// - `x_tolerance`: Absolute error in function parameters between iterations that is acceptable for convergence
-/// - `f_tolerance`: Absolute error in function values between iterations that is acceptable for convergence
-///
-/// # Output
-/// - An array of parameters that minimize the provided objective function
-///
-/// # Links
-/// - Wikipedia: <https://en.wikipedia.org/wiki/Nelder-Mead_method>
-/// - Original Source: <https://doi.org/10.1093/comjnl/8.1.27>
-pub fn nelder_mead<F: FnMut(&[f64]) -> f64>(
-    mut f: F, initial_guess: Vec<f64>, max_iterations: Option<u64>, max_fun_calls: Option<u64>, adaptive: Option<bool>, xtol: Option<f64>, ftol: Option<f64>
-) -> Result<Array1<f64>, DigiFiError> {
-    let minimizer: NelderMead = NelderMead::new(max_iterations, max_fun_calls, adaptive, xtol, ftol);
-    minimizer.minimize(|x: &Array1<f64>| { f(&x.to_vec()) }, Array1::from_vec(initial_guess))
+pub trait ScalarNumericalMinimiser<F: FnMut(f64) -> Result<f64, DigiFiError>> {
+    fn time_start(&self) -> Instant {
+        Instant::now()
+    }
+
+    fn time_end(&self, start: Instant) -> f64 {
+        start.elapsed().as_secs_f64()
+    }
+
+    fn minimise(&self, func: ScalarFunctionWrapper<F>, x_0: f64) -> Result<NumericalOptimisationResult, DigiFiError>;
+
+    fn minimisation_result(&self, func: ScalarFunctionWrapper<F>, argmin: f64, min_value: f64, runtime: f64) -> NumericalOptimisationResult {
+        let mut params: Option<Vec<Array1<f64>>> = None;
+        if func.save_params {
+            params = Some(func.params.iter().map(|v| arr1(&[*v]) ).collect::<Vec<Array1<f64>>>());
+        }
+        NumericalOptimisationResult {
+            values: func.values,
+            params,
+            argmin: arr1(&[argmin]),
+            min_value,
+            runtime,
+        }
+    }
+}
+
+
+pub trait VectorNumericalMinimiser<F: FnMut(&Array1<f64>) -> Result<f64, DigiFiError>> {
+    fn time_start(&self) -> Instant {
+        Instant::now()
+    }
+
+    fn time_end(&self, start: Instant) -> f64 {
+        start.elapsed().as_secs_f64()
+    }
+
+    /// Search for the argmin minimising `func` given an initial guess `x_0`.
+    /// 
+    /// # Input
+    /// - `func`: Vector function being minimised
+    /// - `x_0`: Initial guess for the numerical method to start at
+    /// 
+    /// # Output
+    /// - Result of the numerical optimisation
+    fn minimise(&self, func: VectorFunctionWrapper<F>, x_0: Array1<f64>) -> Result<NumericalOptimisationResult, DigiFiError>;
+
+    fn minimisation_result(&self, func: VectorFunctionWrapper<F>, argmin: Array1<f64>, min_value: f64, runtime: f64) -> NumericalOptimisationResult {
+        let mut params: Option<Vec<Array1<f64>>> = None;
+        if func.save_params {
+            params = Some(func.params);
+        }
+        NumericalOptimisationResult {
+            values: func.values,
+            params,
+            argmin,
+            min_value,
+            runtime,
+        }
+    }
+}
+
+
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct NumericalOptimisationResult {
+    /// List of values at every call of the wrapped function.
+    pub values: Vec<f64>,
+    /// List of parameters at every call of the wrapped function.
+    pub params: Option<Vec<Array1<f64>>>,
+    /// Parameters that produce the minimum value.
+    pub argmin: Array1<f64>,
+    /// Minimum value of the wrpped function.
+    pub min_value: f64,
+    /// Runtime of the optimisation denominated in seconds.
+    pub runtime: f64,
+}
+
+impl Display for NumericalOptimisationResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let argmin: String = self.argmin.iter().map(|v| v.to_string() ).collect::<Vec<String>>().join(", ");
+        let result: String = LARGE_TEXT_BREAK.to_owned()
+            + "Numerical Optimisation Result\n"
+            + LARGE_TEXT_BREAK
+            + &format!("Minimisation Parameters (Argmin): {argmin}\n")
+            + &format!("Minimised Function Value: {}\n", self.min_value)
+            + &format!("Runtime: {} Seconds\n", self.runtime)
+            + LARGE_TEXT_BREAK;
+        write!(f, "{}", result)
+    }
 }

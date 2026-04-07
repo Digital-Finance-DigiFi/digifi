@@ -449,6 +449,15 @@ impl OptionContract {
         Err(DigiFiError::ValidationError { title: Self::error_title(), details: "The option is not `European`.".to_owned(), })
     }
 
+    fn is_black_scholes(&self) -> Result<(), DigiFiError> {
+        if let OptionPricingMethod::BlackScholes { .. } = &self.option_pricing_method {
+            return Err(DigiFiError::ValidationError {
+                title: Self::error_title(), details: "The option pricing method must be set to `BlackScholes`".to_owned(),
+            });
+        }
+        Ok(())
+    }
+
     /// Measure of sensitivity of the option price to the underlying asset price.
     ///
     /// # Input
@@ -621,6 +630,7 @@ impl OptionContract {
     /// - Returns an error if the option is not European.
     fn european_option_black_scholes_params(&self) -> Result<(f64, f64), DigiFiError> {
         self.is_european()?;
+        self.is_black_scholes()?;
         let d_1_numerator: f64 = (self.asset_price/self.strike_price).ln() + self.time_to_maturity  * (self.discount_rate - self.yield_ + 0.5*self.sigma.powi(2));
         let d_1: f64 = d_1_numerator / (self.sigma * self.time_to_maturity.sqrt());
         let d_2: f64 = d_1 - self.sigma * self.time_to_maturity.sqrt();
@@ -778,11 +788,12 @@ impl OptionContract {
     /// 
     /// # Output
     /// - Table of option prices for their respective strike prices
-    pub fn present_value_table<T, I>(&mut self, strike_prices: T) -> Result<Vec<(f64, f64)>, DigiFiError>
+    pub fn bs_present_value_table<T, I>(&mut self, strike_prices: T) -> Result<Vec<(f64, f64)>, DigiFiError>
     where
         T: Iterator<Item = I> + ExactSizeIterator,
         I: Borrow<f64>,
     {
+        self.is_black_scholes()?;
         let original_strike_price: f64 = self.strike_price;
         let mut price_table: Vec<(f64, f64)> = Vec::with_capacity(strike_prices.len());
         for strike_price in strike_prices {
@@ -842,7 +853,6 @@ impl ErrorTitle for OptionContract {
 }
 
 impl FinancialInstrument for OptionContract {
-
     /// Present values of the option.
     ///
     /// # Output
