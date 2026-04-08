@@ -11,7 +11,7 @@ pub use self::numerical_engines::{
     ScalarFunctionWrapper, VectorFunctionWrapper, ScalarNumericalMinimiser, VectorNumericalMinimiser, NumericalOptimisationResult,
     GoldenRatio, LineSearch, GradientDescent, LBFGS, NelderMead,
 };
-pub use self::loss_functions::{LossFunction, MAE, MSE, SSE, StraddleLoss};
+pub use self::loss_functions::{LossFunction, MSE, MAE, MSLE, MLE, SSE, StraddleLoss};
 pub use self::data_transformations::{
     min_max_scaling, percent_change, log_return_transformation, differencing, rank_transformation, unit_vector_normalization,
     TransformationType, DataTransformations,
