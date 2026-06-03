@@ -572,7 +572,7 @@ impl Perpetuity {
         if rate <= growth_rate {
             return Err(DigiFiError::ParameterConstraint {
                 title: Self::error_title(),
-                constraint: "The `rate` cannot be smaller or equal to the `perpetuity_growth_rate`.".to_owned(),
+                constraint: "The `rate` cannot be smaller or equal to the `growth_rate`.".to_owned(),
             });
         }
         Ok(Self { cashflow, rate, growth_rate, compounding_type })
@@ -670,7 +670,7 @@ impl Annuity {
         if rate <= growth_rate {
             return Err(DigiFiError::ParameterConstraint {
                 title: Self::error_title(),
-                constraint: "The `rate` must be larger the `annuity_growth_rate`.".to_owned(),
+                constraint: "The `rate` must be larger the `growth_rate`.".to_owned(),
             });
         }
         Ok(Self { cashflow, rate, t_f, growth_rate, compounding_type })

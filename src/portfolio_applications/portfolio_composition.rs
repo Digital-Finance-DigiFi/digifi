@@ -4,11 +4,11 @@ use ndarray::{Array1, Array2, Axis, arr1, concatenate};
 use serde::{Serialize, Deserialize};
 #[cfg(feature = "plotly")]
 use plotly::{Plot, Trace, Scatter, Layout, layout::Axis as PlotAxis, common::{Mode, Marker, MarkerSymbol, HoverInfo, color::NamedColor}};
-use crate::{error::{DigiFiError, ErrorTitle}, utilities::VectorNumericalMinimiser};
+use crate::error::{DigiFiError, ErrorTitle};
 use crate::utilities::{
     data_transformations::percent_change,
     loss_functions::{LossFunction, StraddleLoss},
-    numerical_engines::NelderMead,
+    numerical_engines::{VectorNumericalMinimiser, NelderMead},
 };
 use crate::statistics::covariance;
 use crate::portfolio_applications::{ReturnsMethod, returns_average, AssetHistData, PortfolioInstrument};

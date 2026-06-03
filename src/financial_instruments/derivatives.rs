@@ -450,12 +450,12 @@ impl OptionContract {
     }
 
     fn is_black_scholes(&self) -> Result<(), DigiFiError> {
-        if let OptionPricingMethod::BlackScholes { .. } = &self.option_pricing_method {
-            return Err(DigiFiError::ValidationError {
+        match &self.option_pricing_method {
+            OptionPricingMethod::BlackScholes { .. } => Ok(()),
+            _ => Err(DigiFiError::ValidationError {
                 title: Self::error_title(), details: "The option pricing method must be set to `BlackScholes`".to_owned(),
-            });
+            }),
         }
-        Ok(())
     }
 
     /// Measure of sensitivity of the option price to the underlying asset price.

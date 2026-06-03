@@ -156,6 +156,16 @@ impl GradientDescent {
         Ok(Self { max_iterations, max_fun_calls, gradient_tolerance, line_search: *line_search, })
     }
 
+    pub fn max_iterations(mut self, max_iterations: Option<u64>) -> Self {
+        self.max_iterations = max_iterations.unwrap_or(100);
+        self
+    }
+
+    pub fn max_fun_calls(mut self, max_fun_calls: Option<u64>) -> Self {
+        self.max_fun_calls = max_fun_calls.unwrap_or(100);
+        self
+    }
+
     #[inline]
     fn minimise_wrapper<F: FnMut(&Array1<f64>) -> Result<f64, DigiFiError>>(&self, func: &mut VectorFunctionWrapper<F>, mut position: Array1<f64>) -> Result<Array1<f64>, DigiFiError> {
         let mut iteration: u64 = 0;
@@ -177,7 +187,7 @@ impl GradientDescent {
 
 impl Default for GradientDescent {
     fn default() -> Self {
-        Self { max_iterations: 1_000, max_fun_calls: 1_000, gradient_tolerance: 1e-4f64, line_search: LineSearch::default(), }
+        Self { max_iterations: 100, max_fun_calls: 100, gradient_tolerance: 1e-4f64, line_search: LineSearch::default(), }
     }
 }
 
