@@ -21,7 +21,7 @@ serde = { version = "1.0.228", optional = true, features = ["derive"] } # MIT or
 plotly = { version = "0.14.1", optional = true, features = ["plotly_ndarray"] } # MIT
 
 [features]
-default = ["sample_data", "serde", "plotly"]
+# default = ["sample_data", "serde", "plotly"]
 sample_data = []
 serde = ["dep:serde"]
 plotly = ["dep:plotly"]
