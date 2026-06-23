@@ -159,9 +159,10 @@ pub trait PortfolioInstrument {
 
 /// Type of returns calculation.
 pub enum ReturnsMethod {
-    /// Computes returns of the mean returns per interval of the time series (e.g., average daily returns) and then extrapolates it over a specified period
+    /// Computes returns of the mean returns per interval of the time series (e.g., average daily returns)
+    /// and then extrapolates it over a specified period.
     ImpliedAverageReturn,
-    /// Computes compounded return of the time series and then reduces it to the specified period
+    /// Computes compounded return of the time series and then reduces it to the specified period.
     EstimatedFromTotalReturn,
 }
 

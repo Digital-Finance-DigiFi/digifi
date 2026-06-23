@@ -4,7 +4,7 @@
 
 
 // Re-Exports
-pub use self::capm::{CAPMParams, CAPMType, CAPMSolutionType, CAPM};
+pub use self::capm::{capm, capm_beta, CAPMParams, CAPMType, CAPMSolutionType, CAPM};
 
 
 pub mod capm;

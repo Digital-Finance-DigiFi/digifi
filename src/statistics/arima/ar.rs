@@ -26,7 +26,7 @@ pub struct ARResult {
     /// 
     /// Note: This will only be computed if `PAC` method is used for finding the order of the AR model
     pub pac_max_lag: Option<usize>,
-    /// Confidence interval for the partial autocorrelations of `Y`
+    /// Confidence level for the partial autocorrelations of `Y`
     /// 
     /// Note: This will only be computed if `PAC` method is used for finding the order of the AR model
     pub pac_cl: Option<f64>,

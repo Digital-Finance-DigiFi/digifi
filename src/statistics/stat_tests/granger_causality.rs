@@ -60,9 +60,9 @@ impl Display for GrangerCausalityRejectReason {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Result of the Granger causality test.
 pub struct GrangerCausalityResult {
-    /// Type of Granger causality test performed
+    /// Type of Granger causality test performed.
     pub test_type: GrangerCausalityTestType,
-    /// Whether to reject null hypothesis
+    /// Whether to reject null hypothesis.
     pub reject_h0: bool,
     /// Maximum lag that is applied to both `X` and `Y` (i.e., the maximum order of autoregressive terms of `X` and `Y`).
     /// Applicable only for Simple Granger causality test.
@@ -70,11 +70,15 @@ pub struct GrangerCausalityResult {
     /// Reason for failing to reject the null hypothesis.
     /// Applicable only for Full Granger causality test.
     pub failed_reject_h0_reason: Option<GrangerCausalityRejectReason>,
-    /// Maximum lag used in computing partial autocorrelations.
+    /// Maximum lag used in computing partial autocorrelations of `Y`.
     /// Applicable only for Full Granger causality test.
     pub pac_max_lag: Option<usize>,
-    /// Confidence level for the partial autocorrelations of `Y`.
+    /// Confidence level for partial autocorrelation of `Y`. This level is used to find the order of the AR model of `Y`
+    /// such that the order is the lag after which the partial autocorrelations are all within the confidence interval.
     /// Applicable only for Full Granger causality test.
+    /// 
+    /// Note: This confidence level is used to compute the symmetrical critical values (i.e., ± critical values) which act as the cut-off points
+    /// for the order of the autoregressive model of `Y`.
     pub pac_cl: Option<f64>,
     /// Critical value for partial autocorrelations of `Y`, obtained from `pac_ci`.
     /// Applicable only for Full Granger causality test.
@@ -91,33 +95,35 @@ pub struct GrangerCausalityResult {
     /// Note: This may not correspond to the order of `X` in the final Granger causality dependency as some autoregressive terms of `X`
     /// may be filtered out by the t-test.
     pub x_max_lag: Option<usize>,
-    /// All lags of `Y` that remain in the parent model
+    /// Confidence level used to filter out the autoregressive terms of `X`.
+    pub t_test_p_cl: Option<f64>,
+    /// All lags of `Y` that remain in the parent model.
     pub parent_y_lags: Vec<usize>,
-    /// All lags of `X` that remain in the parent model
+    /// All lags of `X` that remain in the parent model.
     pub parent_x_lags: Vec<usize>,
-    /// Residual sum of squares (RSS) of plain autoregressive model of `Y` (i.e., model independent of `X`)
+    /// Residual sum of squares (RSS) of plain autoregressive model of `Y` (i.e., model independent of `X`).
     pub f_test_nested_rss: Option<f64>,
-    /// Number of parameters in the plain autoregressive model of `Y` (i.e., model independent of `X`)
+    /// Number of parameters in the plain autoregressive model of `Y` (i.e., model independent of `X`).
     pub f_test_nested_d: Option<usize>,
-    /// Residual sum of squares (RSS) of augmented autoregressive model of `Y` (i.e., model dependent on autoregressive terms of `X`)
+    /// Residual sum of squares (RSS) of augmented autoregressive model of `Y` (i.e., model dependent on autoregressive terms of `X`).
     pub f_test_parent_rss: Option<f64>,
-    /// Number of parameters in the augmented autoregressive model of `Y` (i.e., model dependent on autoregressive terms of `X`)
+    /// Number of parameters in the augmented autoregressive model of `Y` (i.e., model dependent on autoregressive terms of `X`).
     pub f_test_parent_d: Option<usize>,
-    /// F-statistic of the F-test between plain and augmented autoregressive models
+    /// F-statistic of the F-test between plain and augmented autoregressive models.
     pub f_test_f_statistic: Option<f64>,
-    /// Numerator degrees of freedom used in the F-test (i.e., `parent_d - nested_d`)
+    /// Numerator degrees of freedom used in the F-test (i.e., `parent_d - nested_d`).
     pub f_test_dof_1: Option<usize>,
-    /// Denominator degrees of freedom used in the F-test (i.e., `n - parent_d`, where `n` is the total number of data points inside the feature collection)
+    /// Denominator degrees of freedom used in the F-test (i.e., `n - parent_d`, where `n` is the total number of data points inside the feature collection).
     pub f_test_dof_2: Option<usize>,
-    /// p-value of the F-test
+    /// p-value of the F-test.
     pub f_test_p_value: Option<f64>,
-    /// Confidence level for F-test (Quoted as probability to compare `p_value` against)
+    /// Confidence level for the F-test (Quoted as probability to compare `p_value` against).
     pub f_test_p_cl: Option<f64>,
-    /// Whether to reject the null hypothesis that any of the lagged terms `X` add explanatory power to the model of `Y`
+    /// Whether to reject the null hypothesis that any of the lagged terms `X` add explanatory power to the model of `Y`.
     pub f_test_reject_h0: Option<bool>,
-    /// Result of the nested model (i.e., AR model of `Y`)
+    /// Result of the nested model (i.e., AR model of `Y`).
     pub nested_model_result: Option<ARResult>,
-    /// Result of the parent model (i.e., linear regression of `Y` in terms of autoregressive terms of `Y` and `X`)
+    /// Result of the parent model (i.e., linear regression of `Y` in terms of autoregressive terms of `Y` and `X`).
     pub parent_model_result: Option<LinearRegressionResult>,
 }
 
@@ -171,25 +177,27 @@ impl Display for GrangerCausalityResult {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Settings of the Granger causality test.
 pub struct GrangerCausalitySettings {
-    /// Maximum lag used in computing partial autocorrelations of `Y`
+    /// Maximum lag used in computing partial autocorrelations of `Y`.
     pub pac_max_lag: Option<usize>,
-    /// Confidence interval for partial autocorrelation. This interval is used to find the order of the autoregressive model of `Y`
+    /// Confidence level for partial autocorrelation. This level is used to find the order of the AR model of `Y`
     /// such that the order is the lag after which the partial autocorrelations are all within the confidence interval.
     /// 
-    /// Note: This confidence interval is used to compute the symmetrical critical values (i.e., ± critical values) which act as the cut-off points
+    /// Note: This confidence level is used to compute the symmetrical critical values (i.e., ± critical values) which act as the cut-off points
     /// for the order of the autoregressive model of `Y`.
-    pub pac_ci: Option<f64>,
+    pub pac_cl: Option<f64>,
     /// Maximum lag of `X` used in finding the optimal linear regression model of `Y` in terms of autoregressive terms of `Y` and `X`.
     /// 
     /// Note: If no maximum lag provided, the order of AR model of `Y` will be used as the maximum lag for autoregressive terms of `X`.
     pub x_max_lag:  Option<usize>,
-    /// Confidence level used to filter out the autoregressive terms of `X`
+    /// Confidence level used to filter out the autoregressive terms of `X`.
     pub t_test_cl: Option<ConfidenceLevel>,
-    /// Confidence level that should be used for the F-test (Note: if `None` is provided, then defaults to the `ConfidenceLevel` deafult value)
+    /// Confidence level for the F-test.
+    /// 
+    /// Note: If `None` is provided, then defaults to the `ConfidenceLevel` deafult value).
     pub f_test_cl: Option<ConfidenceLevel>,
-    /// Whether to return the result of the nested model (i.e., AR model of `Y`)
+    /// Whether to return the result of the nested model (i.e., AR model of `Y`).
     pub return_nested_result: bool,
-    /// Whether to return the result of the parent model (i.e., linear regression of `Y` in terms of autoregressive terms of `Y` and `X`)
+    /// Whether to return the result of the parent model (i.e., linear regression of `Y` in terms of autoregressive terms of `Y` and `X`).
     pub return_parent_result: bool,
 }
 
@@ -199,7 +207,7 @@ impl Display for GrangerCausalitySettings {
             + "Linear Regression Settings\n"
             + LARGE_TEXT_BREAK
             + &format!("Maximum Lag (Partial Autocorrelation): {}\n", match &self.pac_max_lag { Some(v) => v.to_string(), None => "".to_owned(), })
-            + &format!("Confidence Interval (Partial Autocorrelation): {}\n", match &self.pac_ci { Some(v) => v.to_string(), None => "".to_owned(), })
+            + &format!("Confidence Level (Partial Autocorrelation): {}\n", match &self.pac_cl { Some(v) => v.to_string(), None => "".to_owned(), })
             + &format!("Maximum Lag of X: {}\n", match &self.x_max_lag { Some(v) => v.to_string(), None => "".to_owned(), })
             + &format!("t-Test Condifence Level: {}\n", self.t_test_cl.unwrap_or_default())
             + &format!("F-test Confidence Level: {}\n", self.f_test_cl.unwrap_or_default())
@@ -336,7 +344,7 @@ impl GrangerCausalityTest {
         result.test_type = GrangerCausalityTestType::Full;
         // Run autoregression model for `Y`
         let ar_settings: ARSettings = ARSettings {
-            order_method: AROrderMethod::PAC { max_lag: self.settings.pac_max_lag, cl: self.settings.pac_ci },
+            order_method: AROrderMethod::PAC { max_lag: self.settings.pac_max_lag, cl: self.settings.pac_cl },
             return_fc: false, add_constant: true, additional_settings: Some(self.lr_settings(false, false)),
         };
         let ar: AR = AR::build(ar_settings)?;
@@ -369,6 +377,7 @@ impl GrangerCausalityTest {
             }
         }
         // Filter out lagged values of `X` by t-test
+        result.t_test_p_cl = Some(self.settings.t_test_cl.unwrap_or_default().get_p());
         let mut filtered: bool = false;
         let mut contains_x: bool = false;
         let mut parent_lra_result: LinearRegressionResult = LinearRegressionResult::default();

@@ -6,6 +6,50 @@ use crate::utilities::{compare_len, FeatureCollection};
 use crate::statistics::{covariance, LinearRegressionSettings, LinearRegressionResult, LinearRegressionAnalysis};
 
 
+/// Basic Capital Asset Pricing Model (CAPM). This function computes risk premium (i.e., E[R_{A}] - R_{rf}).
+/// 
+/// # Input
+/// - `market_returns`: Time series of market returns
+/// - `rf`: Time series of risk-free rate of return
+/// - `alpha`: y-axis intersection of the CAPM
+/// - `beta`: Sensitivity of the asset with respect to premium market returns
+/// 
+/// # Output
+/// - Risk premiums (i.e., asset return premium)
+/// 
+/// # LaTeX Formula
+/// - E[R_{A}] - R_{rf} = \\alpha + \\beta_{M}(E[R_{M}] - R_{rf})
+/// 
+/// # Links
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Capital_asset_pricing_model>
+/// - Original Source: N/A
+pub fn capm(market_return: f64, rf: f64, alpha: f64, beta: f64) -> f64 {
+    (market_return - rf) * beta + alpha
+}
+
+
+/// Basic Capital Asset Pricing Model (CAPM). This function computes beta.
+/// 
+/// # Input
+/// - `market_returns`: Time series of market returns
+/// - `rf`: Time series of risk-free rate of return
+/// - `alpha`: y-axis intersection of the CAPM
+/// - `risk_premium`: Risk premium (i.e., asset return premium)
+/// 
+/// # Output
+/// - Beta (Sensitivity of the asset with respect to premium market returns)
+/// 
+/// # LaTeX Formula
+/// - \\beta_{M} = \\frac{E[R_{A}] - R_{rf} - \\alpha}{E[R_{M}] - R_{rf}}
+/// 
+/// # Links
+/// - Wikipedia: <https://en.wikipedia.org/wiki/Capital_asset_pricing_model>
+/// - Original Source: N/A
+pub fn capm_beta(market_return: f64, rf: f64, alpha: f64, risk_premium: f64) -> f64 {
+    (risk_premium - alpha) / (market_return - rf)
+}
+
+
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Parameters of CAPM model.
@@ -48,7 +92,6 @@ pub enum CAPMType {
 }
 
 impl CAPMType {
-
     /// Validates data inside each of the variants.
     ///
     /// # Errors
