@@ -810,7 +810,7 @@ impl LongButterfly {
         if k2_c < k_p {
             return Err(DigiFiError::ParameterConstraint {
                 title: Self::error_title(),
-                constraint: "The argument `k_p` must be smaller or equal to `k1_c`.".to_owned(),
+                constraint: "The argument `k_p` must be smaller or equal to `k2_c`.".to_owned(),
             });
         }
         if k_p < k1_c {
